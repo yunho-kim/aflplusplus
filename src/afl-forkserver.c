@@ -1021,6 +1021,7 @@ fsrv_run_result_t afl_fsrv_run_target(afl_forkserver_t *fsrv, u32 timeout,
      territory. */
 
   memset(fsrv->trace_bits, 0, fsrv->map_size);
+  memset(fsrv->func_exec_bits, 0, fsrv->num_func);
 
   MEM_BARRIER();
 

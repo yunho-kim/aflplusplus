@@ -966,7 +966,7 @@ int main(int argc, char **argv, char **envp) {
       printf("afl-clang-fast" VERSION " by <lszekeres@google.com> in %s mode\n",
              ptr);
     else
-      printf("afl-clang-lto" VERSION
+      printf("afl-clang-fast (lto mode) " VERSION
              "  by Marc \"vanHauser\" Heuse <mh@mh-sec.de> in %s mode\n",
              ptr);
 
@@ -1078,9 +1078,12 @@ int main(int argc, char **argv, char **envp) {
 
     else
 
-      SAYF(cCYA "afl-clang-lto" VERSION cRST
+      SAYF(cCYA "afl-clang-fast (lto mode) " VERSION cRST
                 " by Marc \"vanHauser\" Heuse <mh@mh-sec.de> in mode %s\n",
            ptr);
+
+
+    SAYF("instrumentation mode : %s\n", instrument_mode_string[instrument_mode]);
 
   }
 

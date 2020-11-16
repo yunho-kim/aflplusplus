@@ -120,6 +120,7 @@ void afl_shm_deinit(sharedmem_t *shm) {
 #else
   shmctl(shm->shm_id, IPC_RMID, NULL);
   if (shm->cmplog_mode) { shmctl(shm->cmplog_shm_id, IPC_RMID, NULL); }
+  if (shm->func_mode) { shmctl(shm->func_shm_id, IPC_RMID, NULL); }
 #endif
 
   shm->map = NULL;
@@ -248,6 +249,17 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
   }
 
+  if (shm->func_mode) {
+    shm->func_shm_id = shmget(IPC_PRIVATE, sizeof(u8) * shm->func_mode, IPC_CREAT | IPC_EXCL | 0600);
+    if (shm->func_shm_id < 0) {
+      shmctl(shm->shm_id, IPC_RMID, NULL);
+      if (shm->cmplog_shm_id > 0) {
+        shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);
+      }
+      PFATAL("shmget() failed - func");
+    }
+  }
+
   shm_str = alloc_printf("%d", shm->shm_id);
 
   /* If somebody is asking us to fuzz instrumented binaries in non-instrumented
@@ -269,19 +281,25 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
   }
 
+  if (shm->func_mode) {
+    shm_str = alloc_printf("%d", shm->func_shm_id);
+    setenv(AFL_FUNC_SHM_ENV_VAR, shm_str, 1);
+    ck_free(shm_str);
+  }
+
   shm->map = shmat(shm->shm_id, NULL, 0);
 
   if (shm->map == (void *)-1 || !shm->map) {
 
     shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
     if (shm->cmplog_mode) {
-
       shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
-
+    }
+    if (shm->func_mode) {
+      shmctl(shm->func_shm_id, IPC_RMID, NULL);
     }
 
     PFATAL("shmat() failed");
-
   }
 
   if (shm->cmplog_mode) {
@@ -292,15 +310,30 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
       shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
       if (shm->cmplog_mode) {
-
         shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
-
+      }
+      if (shm->func_mode) {
+        shmctl(shm->func_shm_id, IPC_RMID, NULL);
       }
 
       PFATAL("shmat() failed");
-
     }
 
+  }
+
+  if (shm->func_mode) {
+    shm->func_map = shmat(shm->func_shm_id, NULL, 0);
+    if (shm->func_map == (void *) -1 || !shm->func_map) {
+      shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
+      if (shm->cmplog_mode) {
+        shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
+      }
+      if (shm->func_mode) {
+        shmctl(shm->func_shm_id, IPC_RMID, NULL);
+      }
+
+      PFATAL("shmat() failed");
+    }
   }
 
 #endif

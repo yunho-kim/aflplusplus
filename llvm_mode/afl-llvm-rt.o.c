@@ -77,12 +77,17 @@
   #define MAP_INITIAL_SIZE MAP_SIZE
 #endif
 
+#define FUNC_MAP_INITIAL_SIZE 10000
+
 u8   __afl_area_initial[MAP_INITIAL_SIZE];
 u8 * __afl_area_ptr = __afl_area_initial;
 u8 * __afl_dictionary;
 u8 * __afl_fuzz_ptr;
 u32  __afl_fuzz_len_dummy;
 u32 *__afl_fuzz_len = &__afl_fuzz_len_dummy;
+
+u8   __afl_func_area_initial[FUNC_MAP_INITIAL_SIZE];
+u8 * __afl_func_area_ptr = __afl_func_area_initial;
 
 u32 __afl_final_loc;
 u32 __afl_map_size = MAP_SIZE;
@@ -402,6 +407,14 @@ static void __afl_map_shm(void) {
 
     if (__afl_cmp_map == (void *)-1) _exit(1);
 
+  }
+
+  id_str = getenv(AFL_FUNC_SHM_ENV_VAR);
+
+  if (id_str) {
+    u32 shm_id = atoi(id_str);
+
+    __afl_func_area_ptr = shmat(shm_id, NULL, 0);
   }
 
 }

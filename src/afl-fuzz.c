@@ -26,6 +26,7 @@
 #include "afl-fuzz.h"
 #include "cmplog.h"
 #include <limits.h>
+#include <stdio.h>
 #ifndef USEMMAP
   #include <sys/mman.h>
   #include <sys/stat.h>
@@ -281,7 +282,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   while ((opt = getopt(
               argc, argv,
-              "+b:c:i:I:o:f:F:m:t:T:dDnCB:S:M:x:QNUWe:p:s:V:E:L:hRP:")) > 0) {
+              "+b:c:i:I:o:f:F:m:t:T:dDnCB:S:M:x:QNUWe:r:p:s:V:E:L:hRP:")) > 0) {
 
     switch (opt) {
 
@@ -809,6 +810,11 @@ int main(int argc, char **argv_orig, char **envp) {
 
         break;
 
+      case 'r':
+        afl->num_func = atoi(optarg);
+        afl->shm.func_mode = afl->num_func;
+        break;
+
       default:
         if (!show_help) { show_help = 1; }
 
@@ -1054,6 +1060,17 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
+  if (afl->num_func) {
+    SAYF("Use function relevance heuristic");
+    afl->func_exec_count_table =
+      (u32 **) calloc (sizeof(u32*), afl->num_func);
+    if (!afl->func_exec_count_table) FATAL("malloc failed");
+    u32 i;
+    for (i = 0; i < afl->num_func ; i++) {
+      afl->func_exec_count_table[i] = (u32 *) calloc(sizeof(u32), afl->num_func);
+    }
+  }
+
   save_cmdline(afl, argc, argv);
 
   fix_up_banner(afl, argv[optind]);
@@ -1099,6 +1116,10 @@ int main(int argc, char **argv_orig, char **envp) {
 
   afl->fsrv.trace_bits =
       afl_shm_init(&afl->shm, afl->fsrv.map_size, afl->non_instrumented_mode);
+  if (afl->num_func) {
+    afl->fsrv.func_exec_bits = afl->shm.func_map;
+    afl->fsrv.num_func = afl->num_func;
+  }
 
   if (!afl->in_bitmap) { memset(afl->virgin_bits, 255, afl->fsrv.map_size); }
   memset(afl->virgin_tmout, 255, afl->fsrv.map_size);
@@ -1536,6 +1557,34 @@ stop_fuzzing:
   ck_free(afl->fsrv.out_file);
   ck_free(afl->sync_id);
   afl_state_deinit(afl);
+
+  if (afl->func_exec_count_table) {
+    u32 idx, idx2;
+    u8 * fn = alloc_printf("func_exec_table.csv");
+    s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+    ck_free(fn);
+  
+    FILE * f = fdopen(fd, "w");
+    fprintf(f, ",");
+    for (idx = 0; idx < afl->num_func; idx++){
+      fprintf(f, "%u,", idx);
+    }
+    fprintf(f,"\n");
+    for (idx = 0; idx < afl->num_func; idx++){
+      fprintf(f, "%u,", idx);
+      for (idx2 = 0; idx2 < afl->num_func ; idx2++){
+        fprintf(f, "%u,", afl->func_exec_count_table[idx][idx2]);
+      }
+      fprintf(f, "\n");
+    }
+    fclose(f);
+
+    for (idx = 0; idx < afl->num_func ; idx ++ ) {
+      free(afl->func_exec_count_table[idx]);
+    }
+    free(afl->func_exec_count_table);
+  }
   free(afl);                                                 /* not tracked */
 
   argv_cpy_free(argv);

@@ -626,6 +626,18 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
     ck_write(fd, mem, len, queue_fn);
     close(fd);
 
+    //func exec record
+    if (afl->func_exec_count_table) {
+      u32 i1,i2;
+      for (i1 = 0; i1 < afl->num_func ; i1++) {
+        if (afl->shm.func_map[i1]) {
+          for (i2 = 0; i2 < afl->num_func ; i2++) {
+            afl->func_exec_count_table[i1][i2] += afl->shm.func_map[i2];
+          }
+        }
+      }
+    }
+
     keeping = 1;
 
   }

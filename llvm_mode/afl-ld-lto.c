@@ -260,7 +260,7 @@ int main(int argc, char **argv) {
 
   if (isatty(2) && !getenv("AFL_QUIET") && !getenv("AFL_DEBUG")) {
 
-    SAYF(cCYA "afl-ld-to" VERSION cRST
+    SAYF(cCYA "afl-ld-lto" VERSION cRST
               " by Marc \"vanHauser\" Heuse <mh@mh-sec.de>\n");
 
   } else

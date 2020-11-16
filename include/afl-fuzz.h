@@ -485,7 +485,7 @@ typedef struct afl_state {
       shmem_testcase_mode,              /* If sharedmem testcases are used  */
       expand_havoc,                /* perform expensive havoc after no find */
       cycle_schedules;                  /* cycle power schedules ?          */
-
+  
   u8 *virgin_bits,                      /* Regions yet untouched by fuzzing */
       *virgin_tmout,                    /* Bits we haven't seen in tmouts   */
       *virgin_crash;                    /* Bits we haven't seen in crashes  */
@@ -556,6 +556,8 @@ typedef struct afl_state {
       stage_cycles[32];                 /* Execs per fuzz stage             */
 
   u32 rand_cnt;                         /* Random number counter            */
+
+  u32 num_func;
 
   u64 rand_seed[4];
   s64 init_seed;
@@ -658,6 +660,8 @@ typedef struct afl_state {
   /* this is a fixed buffer of size map_size that can be used by any function if
    * they do not call another function */
   u8 *map_tmp_buf;
+
+  u32 ** func_exec_count_table;
 
 } afl_state_t;
 
