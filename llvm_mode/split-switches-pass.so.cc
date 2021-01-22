@@ -341,15 +341,15 @@ bool SplitSwitchesTransform::splitSwitches(Module &M) {
     BasicBlock *Default = SI->getDefaultDest();
     unsigned    bitw = Val->getType()->getIntegerBitWidth();
 
-    if (!be_quiet)
-      errs() << "switch: " << SI->getNumCases() << " cases " << bitw
-             << " bit\n";
+    //if (!be_quiet)
+    //  errs() << "switch: " << SI->getNumCases() << " cases " << bitw
+    //         << " bit\n";
 
     /* If there is only the default destination or the condition checks 8 bit or
      * less, don't bother with the code below. */
     if (!SI->getNumCases() || bitw <= 8) {
 
-      if (!be_quiet) errs() << "skip trivial switch..\n";
+      //if (!be_quiet) errs() << "skip trivial switch..\n";
       continue;
 
     }

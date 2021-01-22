@@ -45,7 +45,7 @@ static u8 * obj_path;                  /* Path to runtime libraries         */
 static u8 **cc_params;                 /* Parameters passed to the real CC  */
 static u32  cc_par_cnt = 1;            /* Param count, including argv0      */
 static u8   llvm_fullpath[PATH_MAX];
-static u8  instrument_mode, instrument_opt_mode, ngram_size, lto_mode, cpp_mode;
+static u8  instrument_mode, instrument_opt_mode, ngram_size, lto_mode, cpp_mode, func_mode;
 static u8 *lto_flag = AFL_CLANG_FLTO;
 static u8  debug;
 static u8  cwd[4096];
@@ -192,7 +192,6 @@ static void edit_params(u32 argc, char **argv, char **envp) {
     cpp_mode = 1;
 
   } else if (!strcmp(name, "afl-clang-fast") ||
-
              !strcmp(name, "afl-clang-lto") || !strcmp(name, "afl-clang")) {
 
     u8 *alt_cc = getenv("AFL_CC");
@@ -243,7 +242,7 @@ static void edit_params(u32 argc, char **argv, char **envp) {
 
   }
 
-  // laf
+  // LAF
   if (getenv("LAF_SPLIT_SWITCHES") || getenv("AFL_LLVM_LAF_SPLIT_SWITCHES")) {
 
     if (lto_mode) {
@@ -303,7 +302,7 @@ static void edit_params(u32 argc, char **argv, char **envp) {
 
   }
 
-  // /laf
+  //LAF end
 
   unsetenv("AFL_LD");
   unsetenv("AFL_LD_CALLER");
@@ -358,13 +357,15 @@ static void edit_params(u32 argc, char **argv, char **envp) {
 
     cc_params[cc_par_cnt++] = "-Wl,--allow-multiple-definition";
 
-    if (instrument_mode == INSTRUMENT_CFG)
+    if (func_mode) 
+      cc_params[cc_par_cnt++] = alloc_printf(
+          "-Wl,-mllvm=-load=%s/func-pass.so", obj_path);
+      else if (instrument_mode == INSTRUMENT_CFG)
       cc_params[cc_par_cnt++] =
           alloc_printf("-Wl,-mllvm=-load=%s/SanitizerCoverageLTO.so", obj_path);
-    else
-
-      cc_params[cc_par_cnt++] = alloc_printf(
-          "-Wl,-mllvm=-load=%s/afl-llvm-lto-instrumentation.so", obj_path);
+      else
+        cc_params[cc_par_cnt++] = alloc_printf(
+            "-Wl,-mllvm=-load=%s/afl-llvm-lto-instrumentation.so", obj_path);
     cc_params[cc_par_cnt++] = lto_flag;
 
   } else {
@@ -1120,6 +1121,11 @@ int main(int argc, char **argv, char **envp) {
   cmplog_mode = getenv("AFL_CMPLOG") || getenv("AFL_LLVM_CMPLOG");
   if (!be_quiet && cmplog_mode)
     printf("CmpLog mode by <andreafioraldi@gmail.com>\n");
+
+  func_mode = getenv("AFL_FUNC") != NULL;
+  if (func_mode) {
+    printf("Func mode\n");
+  }
 
 #ifndef __ANDROID__
   find_obj(argv[0]);

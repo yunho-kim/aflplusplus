@@ -27,6 +27,7 @@
 #include "types.h"
 #include "cmplog.h"
 #include "llvm-ngram-coverage.h"
+#include "funclog.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,6 +108,8 @@ __thread u32        __afl_cmp_counter;
 int __afl_sharedmem_fuzzing __attribute__((weak));
 
 struct cmp_map *__afl_cmp_map;
+
+struct cmp_func_list * __afl_func_map;
 
 /* Running in persistent mode? */
 
@@ -414,7 +417,9 @@ static void __afl_map_shm(void) {
   if (id_str) {
     u32 shm_id = atoi(id_str);
 
-    __afl_func_area_ptr = shmat(shm_id, NULL, 0);
+    __afl_func_map = shmat(shm_id, NULL, 0);
+
+    if (__afl_func_map == (void *)-1) _exit(1);
   }
 
 }
@@ -1071,6 +1076,19 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
 
   }
 
+}
+
+// record cmp id, condition, func id
+void __func_log_hook(uint32_t cmpid, uint32_t condition) {
+  
+    //Use SHM to pass cmp information
+  if (unlikely(!__afl_func_map)) return;
+
+  uintptr_t k = (CMP_FUNC_MAP_SIZE - 1) & cmpid;
+
+  condition = condition ? 2 : 1;
+  __afl_func_map->entries[k].executed = 1; //mark executed
+  __afl_func_map->entries[k].condition |= condition;
 }
 
 ///// CmpLog instrumentation

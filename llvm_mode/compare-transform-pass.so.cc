@@ -425,12 +425,13 @@ bool CompareTransform::transformCmps(Module &M, const bool processStrcmp,
     else
       unrollLen = constStrLen;
 
+/*
     if (!be_quiet)
       errs() << callInst->getCalledFunction()->getName() << ": unroll len "
              << unrollLen
              << ((isSizedcmp && !isConstSized) ? ", variable n" : "") << ": "
              << ConstStr << "\n";
-
+*/
     /* split before the call instruction */
     BasicBlock *bb = callInst->getParent();
     BasicBlock *end_bb = bb->splitBasicBlock(BasicBlock::iterator(callInst));

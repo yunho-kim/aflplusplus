@@ -25,6 +25,7 @@
 
 #include "afl-fuzz.h"
 #include "cmplog.h"
+#include "funclog.h"
 #include <limits.h>
 #include <stdio.h>
 #ifndef USEMMAP
@@ -282,7 +283,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   while ((opt = getopt(
               argc, argv,
-              "+b:c:i:I:o:f:F:m:t:T:dDnCB:S:M:x:QNUWe:r:p:s:V:E:L:hRP:")) > 0) {
+              "+b:c:i:I:o:f:F:m:t:T:dDnCB:S:M:x:QNUWe:r:a:p:s:V:E:L:hRP:")) > 0) {
 
     switch (opt) {
 
@@ -355,7 +356,6 @@ int main(int argc, char **argv_orig, char **envp) {
           afl->schedule = SEEK;
 
         } else if (!stricmp(optarg, "explore") || !stricmp(optarg, "default") ||
-
                    !stricmp(optarg, "normal") || !stricmp(optarg, "afl")) {
 
           afl->schedule = EXPLORE;
@@ -810,9 +810,14 @@ int main(int argc, char **argv_orig, char **envp) {
 
         break;
 
-      case 'r':
-        afl->num_func = atoi(optarg);
-        afl->shm.func_mode = afl->num_func;
+      case 'r':  //func executable
+        afl->shm.func_mode = 1;
+        afl->func_binary = ck_strdup(optarg);
+        break;
+
+      //func information text file
+      case 'a':
+        afl->func_info_txt = ck_strdup(optarg);
         break;
 
       default:
@@ -1060,17 +1065,6 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  if (afl->num_func) {
-    SAYF("Use function relevance heuristic");
-    afl->func_exec_count_table =
-      (u32 **) calloc (sizeof(u32*), afl->num_func);
-    if (!afl->func_exec_count_table) FATAL("malloc failed");
-    u32 i;
-    for (i = 0; i < afl->num_func ; i++) {
-      afl->func_exec_count_table[i] = (u32 *) calloc(sizeof(u32), afl->num_func);
-    }
-  }
-
   save_cmdline(afl, argc, argv);
 
   fix_up_banner(afl, argv[optind]);
@@ -1116,10 +1110,6 @@ int main(int argc, char **argv_orig, char **envp) {
 
   afl->fsrv.trace_bits =
       afl_shm_init(&afl->shm, afl->fsrv.map_size, afl->non_instrumented_mode);
-  if (afl->num_func) {
-    afl->fsrv.func_exec_bits = afl->shm.func_map;
-    afl->fsrv.num_func = afl->num_func;
-  }
 
   if (!afl->in_bitmap) { memset(afl->virgin_bits, 255, afl->fsrv.map_size); }
   memset(afl->virgin_tmout, 255, afl->fsrv.map_size);
@@ -1146,6 +1136,8 @@ int main(int argc, char **argv_orig, char **envp) {
   for (counter = 0; counter < 100000; counter++)
     printf("DEBUG: rand %06d is %u\n", counter, rand_below(afl, 65536));
   #endif
+
+  init_func(afl);
 
   setup_custom_mutators(afl);
 
@@ -1246,6 +1238,10 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
+  if (afl->func_binary) {
+    check_binary(afl, afl->func_binary);
+  }
+
   check_binary(afl, argv[optind]);
 
   if (afl->shmem_testcase_mode) { setup_testcase_shmem(afl); }
@@ -1287,6 +1283,19 @@ int main(int argc, char **argv_orig, char **envp) {
                    afl->afl_env.afl_debug_child_output);
     OKF("Cmplog forkserver successfully started");
 
+  }
+
+  if (afl->func_binary) {
+    ACTF("Spawning func forkserver");
+    afl_fsrv_init_dup(&afl->func_fsrv, &afl->fsrv);
+    // TODO: this is semi-nice
+    afl->func_fsrv.trace_bits = afl->fsrv.trace_bits;
+    afl->func_fsrv.qemu_mode = afl->fsrv.qemu_mode;
+    afl->func_fsrv.func_binary = afl->func_binary;
+    afl->func_fsrv.init_child_func = func_exec_child;
+    afl_fsrv_start(&afl->func_fsrv, afl->argv, &afl->stop_soon,
+                   afl->afl_env.afl_debug_child_output);
+    OKF("Func forkserver successfully started");
   }
 
   perform_dry_run(afl);
@@ -1481,6 +1490,31 @@ int main(int argc, char **argv_orig, char **envp) {
     afl->queue_cur = afl->queue_cur->next;
     ++afl->current_entry;
 
+    //FRIEND style branch selection and mutation
+    if (likely(afl->cmp_queue)) {
+      if (unlikely(afl->cmp_queue_cur == NULL)) {
+        afl->cmp_queue_cur = afl->cmp_queue;
+      }
+
+      while((afl->cmp_queue_cur != NULL) && (afl->cmp_queue_cur->num_bytes == 0)) {
+        afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+      }
+      
+      if (afl->cmp_queue_cur == NULL) {
+        continue;
+      }
+      
+      //TODO : fuzz
+
+      if (afl->cmp_queue_cur->next != NULL) {
+        if (afl->cmp_queue_cur->next->condition == 3) {
+          //remove target
+          afl->cmp_queue_cur->next = afl->cmp_queue_cur->next->next;
+          afl->cmp_queue_size--;
+        }
+      }
+      afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+    }
   }
 
   write_bitmap(afl);
@@ -1558,33 +1592,11 @@ stop_fuzzing:
   ck_free(afl->sync_id);
   afl_state_deinit(afl);
 
-  if (afl->func_exec_count_table) {
-    u32 idx, idx2;
-    u8 * fn = alloc_printf("func_exec_table.csv");
-    s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (fd < 0) PFATAL("Unable to create '%s'", fn);
-    ck_free(fn);
-  
-    FILE * f = fdopen(fd, "w");
-    fprintf(f, ",");
-    for (idx = 0; idx < afl->num_func; idx++){
-      fprintf(f, "%u,", idx);
-    }
-    fprintf(f,"\n");
-    for (idx = 0; idx < afl->num_func; idx++){
-      fprintf(f, "%u,", idx);
-      for (idx2 = 0; idx2 < afl->num_func ; idx2++){
-        fprintf(f, "%u,", afl->func_exec_count_table[idx][idx2]);
-      }
-      fprintf(f, "\n");
-    }
-    fclose(f);
+  ck_free(afl->func_binary);
+  ck_free(afl->func_info_txt);
+  free(afl->cmp_func_map);
+  free(afl->cmp_queue_entries);
 
-    for (idx = 0; idx < afl->num_func ; idx ++ ) {
-      free(afl->func_exec_count_table[idx]);
-    }
-    free(afl->func_exec_count_table);
-  }
   free(afl);                                                 /* not tracked */
 
   argv_cpy_free(argv);

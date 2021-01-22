@@ -714,6 +714,10 @@ void read_testcases(afl_state_t *afl) {
 
     add_to_queue(afl, fn2, st.st_size, passed_det);
 
+    // execute funclog binary and record cmp information
+    // TODO : add initial input's information
+    //run_func_get_cmp(afl);
+
   }
 
   free(nl);                                                  /* not tracked */

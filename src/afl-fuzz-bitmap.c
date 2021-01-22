@@ -24,6 +24,7 @@
  */
 
 #include "afl-fuzz.h"
+#include "funclog.h"
 #include <limits.h>
 
 /* Write bitmap to file. The bitmap is useful mostly for the secret
@@ -625,18 +626,9 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
     if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", queue_fn); }
     ck_write(fd, mem, len, queue_fn);
     close(fd);
-
-    //func exec record
-    if (afl->func_exec_count_table) {
-      u32 i1,i2;
-      for (i1 = 0; i1 < afl->num_func ; i1++) {
-        if (afl->shm.func_map[i1]) {
-          for (i2 = 0; i2 < afl->num_func ; i2++) {
-            afl->func_exec_count_table[i1][i2] += afl->shm.func_map[i2];
-          }
-        }
-      }
-    }
+    
+    // execute funclog binary and record cmp information
+    run_func_get_cmp(afl);
 
     keeping = 1;
 

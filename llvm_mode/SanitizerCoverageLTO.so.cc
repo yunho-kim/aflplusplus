@@ -235,7 +235,6 @@ class ModuleSanitizerCoverage {
   uint32_t                         inst = 0;
   uint32_t                         afl_global_id = 0;
   uint64_t                         map_addr = 0;
-  unsigned int                     func_id = 0;
   char *                           skip_nozero = NULL;
   std::vector<BasicBlock *>        BlockList;
   DenseMap<Value *, std::string *> valueMap;
@@ -248,7 +247,6 @@ class ModuleSanitizerCoverage {
   LLVMContext *                    Ct = NULL;
   Module *                         Mo = NULL;
   GlobalVariable *                 AFLMapPtr = NULL;
-  GlobalVariable *                 AFLFuncMapPtr = NULL;
   Value *                          MapPtrFixed = NULL;
   FILE *                           documentFile = NULL;
   // afl++ END
@@ -491,10 +489,6 @@ bool ModuleSanitizerCoverage::instrumentModule(
     AFLMapPtr =
         new GlobalVariable(M, PointerType::get(Int8Tyi, 0), false,
                            GlobalValue::ExternalLinkage, 0, "__afl_area_ptr");
-                        
-    AFLFuncMapPtr =
-        new GlobalVariable(M, PointerType::get(Int8Ty, 0), false,
-                         GlobalValue::ExternalLinkage, 0, "__afl_func_area_ptr");
 
   } else {
 
@@ -1095,7 +1089,6 @@ static bool shouldInstrumentBlock(const Function &F, const BasicBlock *BB,
 void ModuleSanitizerCoverage::instrumentFunction(
     Function &F, DomTreeCallback DTCallback, PostDomTreeCallback PDTCallback) {
 
-  SAYF("func id : %d, func name : %s\n", func_id, F.getName().str().c_str());
   if (F.empty()) return;
   if (F.getName().find(".module_ctor") != std::string::npos)
     return;  // Should not instrument sanitizer init functions.
@@ -1135,11 +1128,6 @@ void ModuleSanitizerCoverage::instrumentFunction(
   const PostDominatorTree *PDT = PDTCallback(F);
   bool                     IsLeafFunc = true;
 
-  std::ofstream func;
-  func.open("afl_func_id", std::ofstream::out | std::ofstream::app);
-  func << func_id << "," << F.getName().str().c_str() << "\n";
-  func.close();
-
   for (auto &BB : F) {
 
     if (shouldInstrumentBlock(F, &BB, DT, PDT, Options))
@@ -1159,21 +1147,6 @@ void ModuleSanitizerCoverage::instrumentFunction(
 
   InjectCoverage(F, BlocksToInstrument, IsLeafFunc);
   InjectCoverageForIndirectCalls(F, IndirCalls);
-
-  //record function execution
-  BasicBlock & BB = F.getEntryBlock();
-  BasicBlock::iterator IP = BB.getFirstInsertionPt();
-  IRBuilder<>          IRB(&(*IP));
-  LoadInst *FuncMapPtr = IRB.CreateLoad(AFLFuncMapPtr);
-  FuncMapPtr->setMetadata(Mo->getMDKindID("nosanitize"), MDNode::get(*C, None));
-  ConstantInt *Func_id = ConstantInt::get(Int32Tyi, func_id);
-
-  Value *FuncMapPtrIdx = IRB.CreateGEP(FuncMapPtr, Func_id);
-
-  IRB.CreateStore(One, FuncMapPtrIdx)
-    ->setMetadata(Mo->getMDKindID("nosanitize"), MDNode::get(*C, None));
-
-  func_id ++;
 
 }
 

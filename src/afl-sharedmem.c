@@ -37,6 +37,7 @@
 #include "sharedmem.h"
 #include "cmplog.h"
 #include "list.h"
+#include "funclog.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -138,6 +139,7 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
   shm->map = NULL;
   shm->cmp_map = NULL;
+  shm->func_map = NULL;
 
 #ifdef USEMMAP
 
@@ -250,7 +252,7 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
   }
 
   if (shm->func_mode) {
-    shm->func_shm_id = shmget(IPC_PRIVATE, sizeof(u8) * shm->func_mode, IPC_CREAT | IPC_EXCL | 0600);
+    shm->func_shm_id = shmget(IPC_PRIVATE, sizeof(struct cmp_func_list), IPC_CREAT | IPC_EXCL | 0600);
     if (shm->func_shm_id < 0) {
       shmctl(shm->shm_id, IPC_RMID, NULL);
       if (shm->cmplog_shm_id > 0) {

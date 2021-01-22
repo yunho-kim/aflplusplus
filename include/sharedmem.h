@@ -55,7 +55,7 @@ typedef struct sharedmem {
   struct cmp_map *cmp_map;
 
   u32 func_mode;
-  u8 *func_map;
+  struct cmp_func_list *func_map;
 
 } sharedmem_t;
 

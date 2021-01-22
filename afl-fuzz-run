@@ -1,0 +1,23 @@
+#!/bin/bash
+
+set -e
+
+BIN_PATH=$(readlink -f "$0")
+FUZZ_DIR=$(dirname $BIN_PATH)
+
+FUZZER="${FUZZ_DIR}/afl-fuzz"
+
+JOBS=${JOBS:-4}
+
+cmd="${FUZZER} -M 1 -d $* &> /dev/null &"
+
+echo $cmd
+eval $cmd
+
+while [ $JOBS != 1 ]
+do
+  cmd="${FUZZER} -S $JOBS $*"
+  echo $cmd
+  ((JOBS--))
+  eval $cmd
+done

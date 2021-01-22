@@ -569,6 +569,10 @@ u8 fuzz_one_original(afl_state_t *afl) {
 
   }
 
+  if (afl->func_binary) {
+    func_shm_init(afl);
+  }
+
   /* Skip right away if -d is given, if it has not been chosen sufficiently
      often to warrant the expensive deterministic stage (fuzz_level), or
      if it has gone through deterministic testing in earlier, resumed runs
@@ -1872,11 +1876,8 @@ havoc_stage:
               "has to be in the range 0-100.");
 
         }
-
       }
-
     });
-
   }
 
   /* We essentially just do several thousand runs (depending on perf_score)
@@ -1900,44 +1901,33 @@ havoc_stage:
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
 
     u32 use_stacking = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2));
-
+    u32 rand_value;
     afl->stage_cur_val = use_stacking;
 
+    afl->cur_num_bytes = 0;
+
     for (i = 0; i < use_stacking; ++i) {
-
       if (afl->custom_mutators_count) {
-
         LIST_FOREACH(&afl->custom_mutator_list, struct custom_mutator, {
-
           if (el->stacked_custom &&
               rand_below(afl, 100) < el->stacked_custom_prob) {
-
             u8 *   custom_havoc_buf = NULL;
             size_t new_len = el->afl_custom_havoc_mutation(
                 el->data, out_buf, temp_len, &custom_havoc_buf, MAX_FILE);
             if (unlikely(!custom_havoc_buf)) {
-
               FATAL("Error in custom_havoc (return %zd)", new_len);
-
             }
 
             if (likely(new_len > 0 && custom_havoc_buf)) {
-
               temp_len = new_len;
               if (out_buf != custom_havoc_buf) {
-
                 afl_realloc(AFL_BUF_PARAM(out), temp_len);
                 if (unlikely(!afl->out_buf)) { PFATAL("alloc"); }
                 memcpy(out_buf, custom_havoc_buf, temp_len);
-
               }
-
             }
-
           }
-
         });
-
       }
 
       switch ((r = rand_below(afl, r_max))) {
@@ -1945,15 +1935,18 @@ havoc_stage:
         case 0:
 
           /* Flip a single bit somewhere. Spooky! */
-
-          FLIP_BIT(out_buf, rand_below(afl, temp_len << 3));
+          
+          rand_value = rand_below(afl, temp_len << 3);
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value >> 3;
+          FLIP_BIT(out_buf, rand_value);
           break;
 
         case 1:
 
           /* Set byte to interesting value. */
-
-          out_buf[rand_below(afl, temp_len)] =
+          rand_value = rand_below(afl, temp_len);
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          out_buf[rand_value] =
               interesting_8[rand_below(afl, sizeof(interesting_8))];
           break;
 
@@ -1964,16 +1957,19 @@ havoc_stage:
           if (temp_len < 2) { break; }
 
           if (rand_below(afl, 2)) {
-
-            *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) =
+            rand_value = rand_below(afl, temp_len - 1);
+            *(u16 *)(out_buf + rand_value) =
                 interesting_16[rand_below(afl, sizeof(interesting_16) >> 1)];
 
           } else {
-
-            *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) = SWAP16(
+            rand_value = rand_below(afl, temp_len - 1);
+            *(u16 *)(out_buf + rand_value) = SWAP16(
                 interesting_16[rand_below(afl, sizeof(interesting_16) >> 1)]);
 
           }
+
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
 
           break;
 
@@ -1985,15 +1981,22 @@ havoc_stage:
 
           if (rand_below(afl, 2)) {
 
-            *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) =
+            rand_value = rand_below(afl, temp_len - 3);
+            *(u32 *)(out_buf + rand_value) =
                 interesting_32[rand_below(afl, sizeof(interesting_32) >> 2)];
 
           } else {
-
-            *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) = SWAP32(
+            
+            rand_value = rand_below(afl, temp_len - 3);
+            *(u32 *)(out_buf + rand_value) = SWAP32(
                 interesting_32[rand_below(afl, sizeof(interesting_32) >> 2)]);
 
           }
+
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 2;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 3;
 
           break;
 
@@ -2001,14 +2004,18 @@ havoc_stage:
 
           /* Randomly subtract from byte. */
 
-          out_buf[rand_below(afl, temp_len)] -= 1 + rand_below(afl, ARITH_MAX);
+          rand_value = rand_below(afl, temp_len);
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          out_buf[rand_value] -= 1 + rand_below(afl, ARITH_MAX);
           break;
 
         case 5:
 
           /* Randomly add to byte. */
 
-          out_buf[rand_below(afl, temp_len)] += 1 + rand_below(afl, ARITH_MAX);
+          rand_value = rand_below(afl, temp_len);
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          out_buf[rand_value] += 1 + rand_below(afl, ARITH_MAX);
           break;
 
         case 6:
@@ -2019,19 +2026,21 @@ havoc_stage:
 
           if (rand_below(afl, 2)) {
 
-            u32 pos = rand_below(afl, temp_len - 1);
-
-            *(u16 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX);
+            rand_value = rand_below(afl, temp_len - 1);
+            *(u16 *)(out_buf + rand_value) -= 1 + rand_below(afl, ARITH_MAX);
 
           } else {
 
-            u32 pos = rand_below(afl, temp_len - 1);
+            rand_value = rand_below(afl, temp_len - 1);
             u16 num = 1 + rand_below(afl, ARITH_MAX);
 
-            *(u16 *)(out_buf + pos) =
-                SWAP16(SWAP16(*(u16 *)(out_buf + pos)) - num);
+            *(u16 *)(out_buf + rand_value) =
+                SWAP16(SWAP16(*(u16 *)(out_buf + rand_value)) - num);
 
           }
+
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
 
           break;
 
@@ -2043,19 +2052,22 @@ havoc_stage:
 
           if (rand_below(afl, 2)) {
 
-            u32 pos = rand_below(afl, temp_len - 1);
+            rand_value = rand_below(afl, temp_len - 1);
 
-            *(u16 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX);
+            *(u16 *)(out_buf + rand_value) += 1 + rand_below(afl, ARITH_MAX);
 
           } else {
 
-            u32 pos = rand_below(afl, temp_len - 1);
+            rand_value = rand_below(afl, temp_len - 1);
             u16 num = 1 + rand_below(afl, ARITH_MAX);
 
-            *(u16 *)(out_buf + pos) =
-                SWAP16(SWAP16(*(u16 *)(out_buf + pos)) + num);
+            *(u16 *)(out_buf + rand_value) =
+                SWAP16(SWAP16(*(u16 *)(out_buf + rand_value)) + num);
 
           }
+
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
 
           break;
 
@@ -2067,19 +2079,24 @@ havoc_stage:
 
           if (rand_below(afl, 2)) {
 
-            u32 pos = rand_below(afl, temp_len - 3);
+            rand_value = rand_below(afl, temp_len - 3);
 
-            *(u32 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX);
+            *(u32 *)(out_buf + rand_value) -= 1 + rand_below(afl, ARITH_MAX);
 
           } else {
 
-            u32 pos = rand_below(afl, temp_len - 3);
+            rand_value = rand_below(afl, temp_len - 3);
             u32 num = 1 + rand_below(afl, ARITH_MAX);
 
-            *(u32 *)(out_buf + pos) =
-                SWAP32(SWAP32(*(u32 *)(out_buf + pos)) - num);
+            *(u32 *)(out_buf + rand_value) =
+                SWAP32(SWAP32(*(u32 *)(out_buf + rand_value)) - num);
 
           }
+
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 2;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 3;
 
           break;
 
@@ -2091,19 +2108,23 @@ havoc_stage:
 
           if (rand_below(afl, 2)) {
 
-            u32 pos = rand_below(afl, temp_len - 3);
-
-            *(u32 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX);
+            rand_value = rand_below(afl, temp_len - 3);
+            *(u32 *)(out_buf + rand_value) += 1 + rand_below(afl, ARITH_MAX);
 
           } else {
 
-            u32 pos = rand_below(afl, temp_len - 3);
+            rand_value = rand_below(afl, temp_len - 3);
             u32 num = 1 + rand_below(afl, ARITH_MAX);
 
-            *(u32 *)(out_buf + pos) =
-                SWAP32(SWAP32(*(u32 *)(out_buf + pos)) + num);
+            *(u32 *)(out_buf + rand_value) =
+                SWAP32(SWAP32(*(u32 *)(out_buf + rand_value)) + num);
 
           }
+
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 2;
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 3;
 
           break;
 
@@ -2113,7 +2134,9 @@ havoc_stage:
              why not. We use XOR with 1-255 to eliminate the
              possibility of a no-op. */
 
-          out_buf[rand_below(afl, temp_len)] ^= 1 + rand_below(afl, 255);
+          rand_value = rand_below(afl, temp_len);
+          afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          out_buf[rand_value] ^= 1 + rand_below(afl, 255);
           break;
 
         case 11 ... 12: {
@@ -2146,6 +2169,7 @@ havoc_stage:
           if (temp_len + HAVOC_BLK_XL < MAX_FILE) {
 
             /* Clone bytes (75%) or insert a block of constant bytes (25%). */
+            // TODO : which bytes to record?
 
             u8  actually_clone = rand_below(afl, 4);
             u32 clone_from, clone_to, clone_len;
@@ -2206,6 +2230,8 @@ havoc_stage:
           /* Overwrite bytes with a randomly selected chunk (75%) or fixed
              bytes (25%). */
 
+          // TODO : which bytes to record?
+
           u32 copy_from, copy_to, copy_len;
 
           if (temp_len < 2) { break; }
@@ -2260,6 +2286,12 @@ havoc_stage:
                 if ((s32)extra_len > temp_len) { break; }
 
                 insert_at = rand_below(afl, temp_len - extra_len + 1);
+                
+                u32 i1;
+                for (i1 = 0; i1 < extra_len; i1++) {
+                  afl->cur_bytes[afl->cur_num_bytes++] = insert_at + i1;
+                }
+
                 memcpy(out_buf + insert_at, afl->a_extras[use_extra].data,
                        extra_len);
 
@@ -2273,6 +2305,7 @@ havoc_stage:
 
                 if ((s32)extra_len > temp_len) { break; }
 
+                //TODO: how many bytes to record?
                 insert_at = rand_below(afl, temp_len - extra_len + 1);
                 memcpy(out_buf + insert_at, afl->extras[use_extra].data,
                        extra_len);
@@ -2304,6 +2337,8 @@ havoc_stage:
                 ptr = afl->extras[use_extra].data;
 
               }
+
+              //TODO : how many bytes to record?
 
               if (temp_len + extra_len >= MAX_FILE) { break; }
 
@@ -2393,6 +2428,8 @@ havoc_stage:
               copy_from = rand_below(afl, new_len - copy_len + 1);
               copy_to = rand_below(afl, temp_len - copy_len + 1);
 
+              //TODO: how many bytes to record?
+
               memmove(out_buf + copy_to, new_buf + copy_from, copy_len);
 
             } else {
@@ -2412,6 +2449,7 @@ havoc_stage:
 
               memcpy(temp_buf, out_buf, clone_to);
 
+              //TODO: how many bytes to record?
               /* Inserted part */
 
               memcpy(temp_buf + clone_to, new_buf + clone_from, clone_len);

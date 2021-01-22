@@ -242,6 +242,33 @@ void write_stats_file(afl_state_t *afl, double bitmap_cvg, double stability,
 
   fclose(f);
 
+  if (afl->func_exec_count_table) {
+    u32 idx, idx2;
+    snprintf(fn, PATH_MAX, "%s/func_exec_table.csv", afl->out_dir);
+    s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  
+    f = fdopen(fd, "w");
+    fprintf(f, ",");
+    for (idx = 0; idx < afl->num_func; idx++){
+      fprintf(f, "%u,", idx);
+    }
+    fprintf(f,"\n");
+    for (idx = 0; idx < afl->num_func; idx++){
+      fprintf(f, "%u,", idx);
+      for (idx2 = 0; idx2 < afl->num_func ; idx2++){
+        fprintf(f, "%u,", afl->func_exec_count_table[idx][idx2]);
+      }
+      fprintf(f, "\n");
+    }
+    fclose(f);
+
+    for (idx = 0; idx < afl->num_func ; idx ++ ) {
+      free(afl->func_exec_count_table[idx]);
+    }
+    free(afl->func_exec_count_table);
+  }
+
 }
 
 /* Update the plot file if there is a reason to. */
@@ -719,6 +746,22 @@ void show_stats(afl_state_t *afl) {
 
   SAYF(bSTG bV bSTOP "  total tmouts : " cRST "%-22s" bSTG bV "\n", tmp);
 
+  //TODO:
+  //  branch coverage, size of cmp queue, cur_num_bytes
+  SAYF(bVR bH cCYA bSTOP
+       " func relevance metrics " bSTG bH bH10 bX bH10 bH5 bH bH10 bH10 bH2 bH bVL "\n");
+
+  sprintf(tmp, "%u/%u (%.1f%%)", afl->covered_branch, 
+    afl->num_cmp * 2,  (double) afl->covered_branch * 100.0 / afl->num_cmp / 2.0);
+
+
+  SAYF(bV bSTOP "  cur # of bytes : " cRST "%-17d" bSTG  bV , afl->cur_num_bytes);
+  SAYF(bSTOP "  cmp queue size : " cRST "%-18d  " bSTG  bV "\n", afl->cmp_queue_size);
+
+  SAYF(bV bSTOP " avg. # of bytes : " cRST "%-16.1f " bSTG bV , (double) afl->total_num_bytes / afl->num_queued_cmps );
+  SAYF(bSTOP "      branch cov : " cRST "%-18s  " bSTG bV "\n", tmp);
+
+  SAYF(bV bSTOP "  cur target cmp : " cRST "%-17lu" bSTG  bV "\n" , afl->cmp_queue_cur - afl->cmp_queue_entries);
   /* Aaaalmost there... hold on! */
 
   SAYF(bVR bH cCYA                                                     bSTOP

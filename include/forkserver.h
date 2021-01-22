@@ -94,8 +94,7 @@ typedef struct afl_forkserver {
 
   void (*add_extra_func)(void *afl_ptr, u8 *mem, u32 len);
 
-  u8 * func_exec_bits;
-  u32 num_func;
+  char * func_binary;
 
 } afl_forkserver_t;
 

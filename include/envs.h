@@ -141,6 +141,7 @@ static char *afl_environment_variables[] = {
     "AFL_WINE_PATH",
     "AFL_NO_SNAPSHOT",
     "AFL_EXPAND_HAVOC_NOW",
+    "AFL_FUNC",
     NULL
 
 };

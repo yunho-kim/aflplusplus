@@ -183,6 +183,14 @@ struct auto_extra_data {
 
 };
 
+struct cmp_queue_entry {
+  u32 bytes [MAX_NUM_BYTES];
+  u32 num_bytes;
+  struct cmp_queue_entry * next;
+  //2 bits, MSB : true, LSB : false,  true | false covered
+  u8 condition : 2;
+};
+
 /* Fuzzing stages */
 
 enum {
@@ -557,8 +565,6 @@ typedef struct afl_state {
 
   u32 rand_cnt;                         /* Random number counter            */
 
-  u32 num_func;
-
   u64 rand_seed[4];
   s64 init_seed;
 
@@ -661,7 +667,44 @@ typedef struct afl_state {
    * they do not call another function */
   u8 *map_tmp_buf;
 
+  char * func_binary;
+  afl_forkserver_t func_fsrv;
   u32 ** func_exec_count_table;
+  u8 * func_exec_list;
+
+  struct cmp_queue_entry * cmp_queue_entries;
+  struct cmp_queue_entry * cmp_queue, *cmp_queue_top, *cmp_queue_cur;
+  u32 cmp_queue_size;
+
+  //List of mutated bytes indexes
+  u32 cur_bytes[CUR_BYTES_SIZE];
+
+  //number of mutated bytes
+  u32 cur_num_bytes;
+
+  //cmpid (index) -> funcid
+  u32 * cmp_func_map;
+
+  //function cmp information text file name
+  u8 * func_info_txt;
+
+  //Total number of function
+  u32 num_func;
+
+  //Total number of cmp instructions
+  u32 num_cmp;
+  
+  //Total number of collected bytes
+  u32 total_num_bytes;
+
+  //Total number of covered branches respect to cmp instructions
+  u32 covered_branch;
+
+  u32 num_queued_cmps;
+
+  u32 num_new_path_havoc[20];
+
+  u32 cur_havoc_strategy;
 
 } afl_state_t;
 
@@ -1004,6 +1047,12 @@ void   read_foreign_testcases(afl_state_t *, int);
 /* CmpLog */
 
 u8 common_fuzz_cmplog_stuff(afl_state_t *afl, u8 *out_buf, u32 len);
+
+
+/* Func */
+void init_func(afl_state_t * afl);
+void func_shm_init(afl_state_t * afl);
+void run_func_get_cmp(afl_state_t * afl);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len,

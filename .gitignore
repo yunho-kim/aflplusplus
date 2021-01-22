@@ -81,3 +81,5 @@ afl-clang-lto++.8
 afl-gotcpu
 
 *.swp
+
+out_*
