@@ -1281,7 +1281,7 @@ int main(int argc, char **argv_orig, char **envp) {
     afl->cmplog_fsrv.init_child_func = cmplog_exec_child;
     afl_fsrv_start(&afl->cmplog_fsrv, afl->argv, &afl->stop_soon,
                    afl->afl_env.afl_debug_child_output);
-    OKF("Cmplog forkserver successfully started");
+    OKF("Cmplog forkserver successfully started, out_file : %s", afl->cmplog_fsrv.out_file);
 
   }
 
@@ -1295,8 +1295,10 @@ int main(int argc, char **argv_orig, char **envp) {
     afl->func_fsrv.init_child_func = func_exec_child;
     afl_fsrv_start(&afl->func_fsrv, afl->argv, &afl->stop_soon,
                    afl->afl_env.afl_debug_child_output);
-    OKF("Func forkserver successfully started");
+    OKF("Func forkserver successfully started, out_file : %s", afl->func_fsrv.out_file);
   }
+
+
 
   perform_dry_run(afl);
 

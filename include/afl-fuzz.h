@@ -679,6 +679,9 @@ typedef struct afl_state {
   //List of mutated bytes indexes
   u32 cur_bytes[CUR_BYTES_SIZE];
 
+  //some buffer space..
+  u32 garbage_offset[20];
+
   //number of mutated bytes
   u32 cur_num_bytes;
 

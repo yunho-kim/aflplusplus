@@ -24,6 +24,7 @@
 #define _HAVE_DEBUG_H
 
 #include <errno.h>
+#include <signal.h>
 
 #include "types.h"
 #include "config.h"
@@ -253,6 +254,7 @@
     SAYF(cLRD "\n    Stop location : " cRST "%s(), %s:%u\n", __func__, \
          __FILE__, __LINE__);                                          \
     SAYF(cLRD "       OS message : " cRST "%s\n", strerror(errno));    \
+    raise(SIGSEGV); \
     exit(1);                                                           \
                                                                        \
   } while (0)

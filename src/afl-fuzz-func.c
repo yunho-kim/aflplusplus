@@ -17,6 +17,11 @@ void init_func(afl_state_t* afl) {
   res = fscanf(f, "%u,%u\n", &afl->num_func, &afl->num_cmp);
   if (res == EOF) PFATAL("Can't read func txt file");
 
+  if (afl->num_cmp > CMP_FUNC_MAP_SIZE) {
+    WARNF("# of cmp is bigger than CMP_FUNC_MAP_SIZE");
+    afl->num_cmp = CMP_FUNC_MAP_SIZE;
+  }
+
   afl->cmp_func_map = malloc(sizeof(u32) * afl->num_cmp);
 
   OKF("Number of function : %u, cmp Instr. : %u", afl->num_func, afl->num_cmp);
@@ -55,7 +60,7 @@ void func_shm_init(afl_state_t * afl) {
   //assume input is already written
 
   u32 i1;
-  for (i1 = 0; i1 < CMP_FUNC_MAP_SIZE ; i1++) {
+  for (i1 = 0; i1 < afl->num_cmp ; i1++) {
     afl->shm.func_map->entries[i1].condition = 0;
     afl->shm.func_map->entries[i1].precondition = 0;
   }
@@ -70,7 +75,7 @@ void func_shm_init(afl_state_t * afl) {
   }
   afl->get_func_info = 1;
 
-  for (i1 = 0; i1 < CMP_FUNC_MAP_SIZE; i1++) {
+  for (i1 = 0; i1 < afl->num_cmp; i1++) {
     afl->shm.func_map->entries[i1].precondition = afl->shm.func_map->entries[i1].condition;
   }
 }
@@ -84,7 +89,7 @@ void run_func_get_cmp(afl_state_t * afl) {
   if (!afl->get_func_info) return;
 
   u32 i1,i2,cmp_id;
-  for (i1 = 0; i1 < CMP_FUNC_MAP_SIZE ; i1++) {
+  for (i1 = 0; i1 < afl->num_cmp ; i1++) {
     afl->shm.func_map->entries[i1].condition = 0;
     afl->shm.func_map->entries[i1].executed = 0;
   }
@@ -96,13 +101,13 @@ void run_func_get_cmp(afl_state_t * afl) {
     return ;
   }
 
-  memset(afl->func_exec_list, 0, FUNC_MAP_SIZE);
+  memset(afl->func_exec_list, 0, sizeof(u8) * afl->num_func);
   u8 precondition, postcondition;
 
   struct cmp_func_entry * entries = afl->shm.func_map->entries;
   struct cmp_queue_entry * queue_entries = afl->cmp_queue_entries;
 
-  for (cmp_id = 0; cmp_id < CMP_FUNC_MAP_SIZE; cmp_id++) {
+  for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id++) {
 
     if (entries[cmp_id].executed) {
       precondition = entries[cmp_id].precondition;

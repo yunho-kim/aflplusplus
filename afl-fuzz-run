@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "-i -o -r funcexec -a funcinfo -- *  required"
+echo "-i -o -- *  required"
 
 set -e
 
@@ -9,27 +9,29 @@ FUZZ_DIR=$(dirname $BIN_PATH)
 
 FUZZER="${FUZZ_DIR}/afl-fuzz"
 
-cmd="${FUZZER} -M 1 -d $* &> /dev/null &"
-
-echo $cmd
-eval $cmd
-
 sancmd=$(echo $* | sed 's,\.afl,\.san,g')
-cmpexe=$(echo $* | sed 's,.*-- ,,g')
-cmpexe=$(echo ${cmpexe} | sed 's,\.afl.*,,g')
+subject=$(echo $* | sed 's,.*subjects\/,,g')
+subject=$(echo ${subject} | sed 's,\.afl.*,,g')
 
-cmd="${FUZZER} -S 2 ${sancmd} &> /dev/null &"
+
+cmd="${FUZZER} -M 1 -d -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &> /dev/null &"
+
 echo $cmd
 eval $cmd
 
-cmd="${FUZZER} -S 3 -c ${cmpexe}.cmp $* &> /dev/null &"
+
+cmd="${FUZZER} -S 2 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} ${sancmd} &> /dev/null &"
 echo $cmd
 eval $cmd
 
-cmd="${FUZZER} -S 4 $* &> /dev/null &"
+cmd="${FUZZER} -S 3 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} -c ./subjects/${subject}.cmp $* &> /dev/null &"
 echo $cmd
 eval $cmd
 
-cmd="${FUZZER} -S 5 $*"
+cmd="${FUZZER} -S 4 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &> /dev/null &"
+echo $cmd
+eval $cmd
+
+cmd="${FUZZER} -S 5 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $*"
 echo $cmd
 eval $cmd

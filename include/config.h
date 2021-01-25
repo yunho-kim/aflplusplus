@@ -429,7 +429,7 @@
 
 //# of cmp instructions, used for shm.func_map->entries to
 //fetch runtime information of cmp instructions
-#define CMP_FUNC_MAP_SIZE (1 << 15)
+#define CMP_FUNC_MAP_SIZE (1 << 16)
 
 //# of function, used for func_exec_list, func_exec_table
 #define FUNC_MAP_SIZE (1 << 11)
@@ -439,8 +439,5 @@
 
 //buffer size
 #define CUR_BYTES_SIZE (1 << 8)
-//actual limit
-#define CUR_BYTES_LIMIT (CUR_BYTES_SIZE -  100)
-
 
 #endif                                                  /* ! _HAVE_CONFIG_H */

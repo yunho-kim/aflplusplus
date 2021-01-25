@@ -1941,6 +1941,10 @@ havoc_stage:
           
           rand_value = rand_below(afl, temp_len << 3);
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value >> 3;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
           FLIP_BIT(out_buf, rand_value);
           break;
 
@@ -1949,6 +1953,10 @@ havoc_stage:
           /* Set byte to interesting value. */
           rand_value = rand_below(afl, temp_len);
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
           out_buf[rand_value] =
               interesting_8[rand_below(afl, sizeof(interesting_8))];
           break;
@@ -1973,6 +1981,10 @@ havoc_stage:
 
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
 
           break;
 
@@ -2000,6 +2012,10 @@ havoc_stage:
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 2;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 3;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
 
           break;
 
@@ -2009,6 +2025,10 @@ havoc_stage:
 
           rand_value = rand_below(afl, temp_len);
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
           out_buf[rand_value] -= 1 + rand_below(afl, ARITH_MAX);
           break;
 
@@ -2018,6 +2038,10 @@ havoc_stage:
 
           rand_value = rand_below(afl, temp_len);
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
           out_buf[rand_value] += 1 + rand_below(afl, ARITH_MAX);
           break;
 
@@ -2044,6 +2068,10 @@ havoc_stage:
 
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
 
           break;
 
@@ -2071,6 +2099,10 @@ havoc_stage:
 
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
 
           break;
 
@@ -2100,6 +2132,10 @@ havoc_stage:
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 2;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 3;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
 
           break;
 
@@ -2128,6 +2164,10 @@ havoc_stage:
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 2;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 3;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
 
           break;
 
@@ -2139,6 +2179,10 @@ havoc_stage:
 
           rand_value = rand_below(afl, temp_len);
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
           out_buf[rand_value] ^= 1 + rand_below(afl, 255);
           break;
 
@@ -2161,6 +2205,10 @@ havoc_stage:
           u32 i1;
           for (i1 = 0; i1 < del_len; i1++) {
             afl->cur_bytes[afl->cur_num_bytes++] = del_from + i1;
+            if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+            afl->cur_num_bytes = 0;
+            afl->is_bytes_max = 1;
+          }
           }
 
           memmove(out_buf + del_from, out_buf + del_from + del_len,
@@ -2204,6 +2252,10 @@ havoc_stage:
             u32 i1;
             for (i1 = 0; i1 < clone_len; i1++) {
               afl->cur_bytes[afl->cur_num_bytes++] = clone_to + i1;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+          }
             }
 
             /* Head */
@@ -2257,6 +2309,10 @@ havoc_stage:
           u32 i1;
           for (i1 = 0; i1 < copy_len; i1++) {
             afl->cur_bytes[afl->cur_num_bytes++] = copy_to + i1;
+            if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+              afl->cur_num_bytes = 0;
+              afl->is_bytes_max = 1;
+          }
           }
 
           if (likely(rand_below(afl, 4))) {
@@ -2308,6 +2364,10 @@ havoc_stage:
                 u32 i1;
                 for (i1 = 0; i1 < extra_len; i1++) {
                   afl->cur_bytes[afl->cur_num_bytes++] = insert_at + i1;
+                  if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                    afl->cur_num_bytes = 0;
+                    afl->is_bytes_max = 1;
+          }
                 }
 
                 memcpy(out_buf + insert_at, afl->a_extras[use_extra].data,
@@ -2328,6 +2388,10 @@ havoc_stage:
                 u32 i1;
                 for (i1 = 0; i1 < extra_len; i1++) {
                   afl->cur_bytes[afl->cur_num_bytes++] = insert_at + i1;
+                  if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                    afl->cur_num_bytes = 0;
+                    afl->is_bytes_max = 1;
+          }
                 }
 
                 memcpy(out_buf + insert_at, afl->extras[use_extra].data,
@@ -2366,6 +2430,10 @@ havoc_stage:
               u32 i1;
               for (i1 = 0; i1 < extra_len; i1++) {
                 afl->cur_bytes[afl->cur_num_bytes++] = insert_at + i1;
+                if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                  afl->cur_num_bytes = 0;
+                  afl->is_bytes_max = 1;
+                }
               }
 
               out_buf = afl_realloc(AFL_BUF_PARAM(out), temp_len + extra_len);
@@ -2457,6 +2525,10 @@ havoc_stage:
               u32 i1;
               for (i1 = 0; i1 < copy_len; i1++) {
                 afl->cur_bytes[afl->cur_num_bytes++] = copy_to + i1;
+                if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                  afl->cur_num_bytes = 0;
+                  afl->is_bytes_max = 1;
+                }
               }
 
               memmove(out_buf + copy_to, new_buf + copy_from, copy_len);
@@ -2481,6 +2553,10 @@ havoc_stage:
               u32 i1;
               for (i1 = 0; i1 < clone_len; i1++) {
                 afl->cur_bytes[afl->cur_num_bytes++] = clone_to + i1;
+                if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                  afl->cur_num_bytes = 0;
+                  afl->is_bytes_max = 1;
+                }
               }
               /* Inserted part */
 
@@ -2502,11 +2578,6 @@ havoc_stage:
 
           // end of default:
 
-      }
-
-      if (unlikely(afl->cur_num_bytes >= CUR_BYTES_LIMIT)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
       }
 
     }
@@ -4079,6 +4150,10 @@ pacemaker_fuzzing:
               /* Flip a single bit somewhere. Spooky! */
               rand_value = rand_below(afl, temp_len << 3);
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value >> 3;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
               FLIP_BIT(out_buf, rand_value);
               MOpt_globals.cycles_v2[STAGE_FLIP1] += 1;
               break;
@@ -4087,6 +4162,10 @@ pacemaker_fuzzing:
               if (temp_len < 2) { break; }
               temp_len_puppet = rand_below(afl, (temp_len << 3) - 1);
               afl->cur_bytes[afl->cur_num_bytes++] = temp_len_puppet >> 3;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
               FLIP_BIT(out_buf, temp_len_puppet);
               FLIP_BIT(out_buf, temp_len_puppet + 1);
               MOpt_globals.cycles_v2[STAGE_FLIP2]++;
@@ -4096,6 +4175,10 @@ pacemaker_fuzzing:
               if (temp_len < 2) { break; }
               temp_len_puppet = rand_below(afl, (temp_len << 3) - 3);
               afl->cur_bytes[afl->cur_num_bytes++] = temp_len_puppet >> 3;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
               FLIP_BIT(out_buf, temp_len_puppet);
               FLIP_BIT(out_buf, temp_len_puppet + 1);
               FLIP_BIT(out_buf, temp_len_puppet + 2);
@@ -4107,6 +4190,10 @@ pacemaker_fuzzing:
               if (temp_len < 4) { break; }
               rand_value = rand_below(afl, temp_len);
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
               out_buf[rand_value] ^= 0xFF;
               MOpt_globals.cycles_v2[STAGE_FLIP8] += 1;
               break;
@@ -4116,6 +4203,10 @@ pacemaker_fuzzing:
               rand_value =  rand_below(afl, temp_len - 1);
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
               *(u16 *)(out_buf + rand_value) ^= 0xFFFF;
               MOpt_globals.cycles_v2[STAGE_FLIP16] += 1;
               break;
@@ -4127,6 +4218,10 @@ pacemaker_fuzzing:
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 2;
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 3;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
               *(u32 *)(out_buf + rand_value) ^= 0xFFFFFFFF;
               MOpt_globals.cycles_v2[STAGE_FLIP32] += 1;
               break;
@@ -4141,6 +4236,10 @@ pacemaker_fuzzing:
               out_buf[rand_value] +=
                   1 + rand_below(afl, ARITH_MAX);
               MOpt_globals.cycles_v2[STAGE_ARITH8]++;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
               break;
 
             case 7:
@@ -4164,6 +4263,10 @@ pacemaker_fuzzing:
 
               afl->cur_bytes[afl->cur_num_bytes++] = pos;
               afl->cur_bytes[afl->cur_num_bytes++] = pos+1;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
 
               /* Randomly add to word, random endian. */
               if (rand_below(afl, 2)) {
@@ -4182,6 +4285,10 @@ pacemaker_fuzzing:
 
               afl->cur_bytes[afl->cur_num_bytes++] = pos;
               afl->cur_bytes[afl->cur_num_bytes++] = pos+1;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
 
               MOpt_globals.cycles_v2[STAGE_ARITH16] += 1;
               break;
@@ -4208,6 +4315,10 @@ pacemaker_fuzzing:
               afl->cur_bytes[afl->cur_num_bytes++] = pos+1;
               afl->cur_bytes[afl->cur_num_bytes++] = pos+2;
               afl->cur_bytes[afl->cur_num_bytes++] = pos+3;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
 
               /* Randomly add to dword, random endian. */
               // if (temp_len < 4) break;
@@ -4230,6 +4341,11 @@ pacemaker_fuzzing:
               afl->cur_bytes[afl->cur_num_bytes++] = pos+2;
               afl->cur_bytes[afl->cur_num_bytes++] = pos+3;
 
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
+
               MOpt_globals.cycles_v2[STAGE_ARITH32] += 1;
               break;
 
@@ -4238,6 +4354,10 @@ pacemaker_fuzzing:
               if (temp_len < 4) { break; }
               rand_value = rand_below(afl, temp_len);
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
               out_buf[rand_value] =
                   interesting_8[rand_below(afl, sizeof(interesting_8))];
               MOpt_globals.cycles_v2[STAGE_INTEREST8] += 1;
@@ -4263,6 +4383,10 @@ pacemaker_fuzzing:
 
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
 
               MOpt_globals.cycles_v2[STAGE_INTEREST16] += 1;
               break;
@@ -4292,6 +4416,10 @@ pacemaker_fuzzing:
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value+1;
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value+2;
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value+3;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
 
               MOpt_globals.cycles_v2[STAGE_INTEREST32] += 1;
               break;
@@ -4304,6 +4432,10 @@ pacemaker_fuzzing:
 
               rand_value = rand_below(afl, temp_len);
               afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
+              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                afl->cur_num_bytes = 0;
+                afl->is_bytes_max = 1;
+              }
               out_buf[rand_value] ^= 1 + rand_below(afl, 255);
               MOpt_globals.cycles_v2[STAGE_RANDOMBYTE] += 1;
               break;
@@ -4327,6 +4459,10 @@ pacemaker_fuzzing:
               u32 i1;
               for (i1 = 0; i1 < del_len; i1++) {
                 afl->cur_bytes[afl->cur_num_bytes++] = del_from + i1;
+                if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                  afl->cur_num_bytes = 0;
+                  afl->is_bytes_max = 1;
+                }
               }
 
               memmove(out_buf + del_from, out_buf + del_from + del_len,
@@ -4366,6 +4502,10 @@ pacemaker_fuzzing:
                 u32 i1;
                 for (i1 = 0; i1 < clone_len; i1++) {
                   afl->cur_bytes[afl->cur_num_bytes++] = clone_to + i1;
+                  if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                    afl->cur_num_bytes = 0;
+                    afl->is_bytes_max = 1;
+                  }
                 }
 
                 new_buf = afl_realloc(AFL_BUF_PARAM(out_scratch),
@@ -4422,6 +4562,10 @@ pacemaker_fuzzing:
               u32 i1;
               for (i1 = 0; i1 < copy_len; i1++) {
                 afl->cur_bytes[afl->cur_num_bytes++] = copy_to + i1;
+                if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                  afl->cur_num_bytes = 0;
+                  afl->is_bytes_max = 1;
+                }
               }
 
               if (rand_below(afl, 4)) {
@@ -4469,6 +4613,10 @@ pacemaker_fuzzing:
                 u32 i1;
                 for (i1 = 0; i1 < extra_len; i1++) {
                   afl->cur_bytes[afl->cur_num_bytes++] = insert_at + i1;
+                  if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                    afl->cur_num_bytes = 0;
+                    afl->is_bytes_max = 1;
+                  }
                 }
                 memcpy(out_buf + insert_at, afl->a_extras[use_extra].data,
                        extra_len);
@@ -4486,6 +4634,10 @@ pacemaker_fuzzing:
                 u32 i1;
                 for (i1 = 0; i1 < extra_len; i1++) {
                   afl->cur_bytes[afl->cur_num_bytes++] = insert_at + i1;
+                  if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                    afl->cur_num_bytes = 0;
+                    afl->is_bytes_max = 1;
+                  }
                 }
                 memcpy(out_buf + insert_at, afl->extras[use_extra].data,
                        extra_len);
@@ -4531,6 +4683,10 @@ pacemaker_fuzzing:
               u32 i1;
               for (i1 = 0; i1 < extra_len; i1++) {
                 afl->cur_bytes[afl->cur_num_bytes++] = insert_at + i1;
+                if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
+                  afl->cur_num_bytes = 0;
+                  afl->is_bytes_max = 1;
+                }
               }
 
               out_buf = afl_realloc(AFL_BUF_PARAM(out), temp_len + extra_len);
@@ -4551,11 +4707,6 @@ pacemaker_fuzzing:
             }
 
           }                                    /* switch select_algorithm() */
-
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_LIMIT)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
-          }
 
         }                                      /* for i=0; i < use_stacking */
 
