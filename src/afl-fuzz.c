@@ -1570,6 +1570,7 @@ stop_fuzzing:
   }
 
   fclose(afl->fsrv.plot_file);
+  write_func_stats(afl);
   destroy_queue(afl);
   destroy_extras(afl);
   destroy_custom_mutators(afl);

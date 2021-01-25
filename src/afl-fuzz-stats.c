@@ -242,33 +242,6 @@ void write_stats_file(afl_state_t *afl, double bitmap_cvg, double stability,
 
   fclose(f);
 
-  if (afl->func_exec_count_table) {
-    u32 idx, idx2;
-    snprintf(fn, PATH_MAX, "%s/func_exec_table.csv", afl->out_dir);
-    s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (fd < 0) PFATAL("Unable to create '%s'", fn);
-  
-    f = fdopen(fd, "w");
-    fprintf(f, ",");
-    for (idx = 0; idx < afl->num_func; idx++){
-      fprintf(f, "%u,", idx);
-    }
-    fprintf(f,"\n");
-    for (idx = 0; idx < afl->num_func; idx++){
-      fprintf(f, "%u,", idx);
-      for (idx2 = 0; idx2 < afl->num_func ; idx2++){
-        fprintf(f, "%u,", afl->func_exec_count_table[idx][idx2]);
-      }
-      fprintf(f, "\n");
-    }
-    fclose(f);
-
-    for (idx = 0; idx < afl->num_func ; idx ++ ) {
-      free(afl->func_exec_count_table[idx]);
-    }
-    free(afl->func_exec_count_table);
-  }
-
 }
 
 /* Update the plot file if there is a reason to. */
@@ -280,9 +253,6 @@ void maybe_update_plot_file(afl_state_t *afl, double bitmap_cvg, double eps) {
                afl->plot_prev_pnf == afl->pending_not_fuzzed &&
                afl->plot_prev_ce == afl->current_entry &&
                afl->plot_prev_qc == afl->queue_cycle &&
-               afl->plot_prev_uc == afl->unique_crashes &&
-               afl->plot_prev_uh == afl->unique_hangs &&
-               afl->plot_prev_md == afl->max_depth &&
                afl->plot_prev_ed == afl->fsrv.total_execs) ||
       unlikely(!afl->queue_cycle) ||
       unlikely(get_cur_time() - afl->start_time <= 60)) {
@@ -296,9 +266,6 @@ void maybe_update_plot_file(afl_state_t *afl, double bitmap_cvg, double eps) {
   afl->plot_prev_pnf = afl->pending_not_fuzzed;
   afl->plot_prev_ce = afl->current_entry;
   afl->plot_prev_qc = afl->queue_cycle;
-  afl->plot_prev_uc = afl->unique_crashes;
-  afl->plot_prev_uh = afl->unique_hangs;
-  afl->plot_prev_md = afl->max_depth;
   afl->plot_prev_ed = afl->fsrv.total_execs;
 
   /* Fields in the file:
@@ -309,12 +276,14 @@ void maybe_update_plot_file(afl_state_t *afl, double bitmap_cvg, double eps) {
 
   fprintf(
       afl->fsrv.plot_file,
-      "%llu, %llu, %u, %u, %u, %u, %0.02f%%, %llu, %llu, %u, %0.02f, %llu\n",
-      get_cur_time() / 1000, afl->queue_cycle - 1, afl->current_entry,
-      afl->queued_paths, afl->pending_not_fuzzed, afl->pending_favored,
-      bitmap_cvg, afl->unique_crashes, afl->unique_hangs, afl->max_depth, eps,
-      afl->plot_prev_ed);                                  /* ignore errors */
-
+      "%llu, %llu, %u, %u, %u, %.1f, %u, %0.02f%%, %llu, %u, %0.02f, %llu\n",
+      (get_cur_time() - afl->start_time) / 1000, afl->queue_cycle - 1,
+      afl->current_entry, afl->queued_paths, afl->covered_branch,
+      (double) afl->total_num_bytes / afl->num_queued_cmps,
+      afl->cmp_queue_size, bitmap_cvg, afl->unique_crashes,
+      afl->max_depth, eps, afl->plot_prev_ed); 
+      /* ignore errors */
+      
   fflush(afl->fsrv.plot_file);
 
 }
@@ -761,7 +730,12 @@ void show_stats(afl_state_t *afl) {
   SAYF(bV bSTOP " avg. # of bytes : " cRST "%-16.1f " bSTG bV , (double) afl->total_num_bytes / afl->num_queued_cmps );
   SAYF(bSTOP "      branch cov : " cRST "%-18s  " bSTG bV "\n", tmp);
 
-  SAYF(bV bSTOP "  cur target cmp : " cRST "%-17lu" bSTG  bV "\n" , afl->cmp_queue_cur - afl->cmp_queue_entries);
+  if (afl->cmp_queue_cur != NULL) 
+    SAYF(bV bSTOP "  cur target cmp : " cRST "%-17lu" bSTG  bV "\n" ,
+      afl->cmp_queue_cur - afl->cmp_queue_entries);
+
+
+      
   /* Aaaalmost there... hold on! */
 
   SAYF(bVR bH cCYA                                                     bSTOP

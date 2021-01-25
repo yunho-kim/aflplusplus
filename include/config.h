@@ -437,6 +437,10 @@
 //Maximun # of byte offsets per cmp instruction
 #define MAX_NUM_BYTES (1 << 8)
 
+//buffer size
 #define CUR_BYTES_SIZE (1 << 8)
+//actual limit
+#define CUR_BYTES_LIMIT (CUR_BYTES_SIZE -  100)
+
 
 #endif                                                  /* ! _HAVE_CONFIG_H */

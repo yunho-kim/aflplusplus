@@ -64,8 +64,11 @@ void func_shm_init(afl_state_t * afl) {
 
   if (fault == FSRV_RUN_TMOUT) {
     //what?
-    FATAL("input in the queue timed out on func log");
+    WARNF("input in the queue timed out on func log");
+    afl->get_func_info = 0;
+    return;
   }
+  afl->get_func_info = 1;
 
   for (i1 = 0; i1 < CMP_FUNC_MAP_SIZE; i1++) {
     afl->shm.func_map->entries[i1].precondition = afl->shm.func_map->entries[i1].condition;
@@ -75,6 +78,10 @@ void func_shm_init(afl_state_t * afl) {
 void run_func_get_cmp(afl_state_t * afl) {
 
   //can we skip write_testcase?
+
+  if (afl->is_spliced) afl->num_new_path_spliced++;
+
+  if (!afl->get_func_info) return;
 
   u32 i1,i2,cmp_id;
   for (i1 = 0; i1 < CMP_FUNC_MAP_SIZE ; i1++) {
@@ -162,4 +169,75 @@ void run_func_get_cmp(afl_state_t * afl) {
       }
     }
   }
+}
+
+void write_func_stats (afl_state_t * afl) {
+  u8    fn[PATH_MAX];
+  FILE *f;
+  u32 idx1, idx2;
+  s32 fd;
+
+  if (afl->func_exec_count_table) {
+    snprintf(fn, PATH_MAX, "%s/func_exec_table.csv", afl->out_dir);
+    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  
+    f = fdopen(fd, "w");
+    fprintf(f, ",");
+    for (idx1 = 0; idx1 < afl->num_func; idx1++){
+      fprintf(f, "%u,", idx1);
+    }
+    fprintf(f,"\n");
+    for (idx1 = 0; idx1 < afl->num_func; idx1++){
+      fprintf(f, "%u,", idx1);
+      for (idx2 = 0; idx2 < afl->num_func ; idx2++){
+        fprintf(f, "%u,", afl->func_exec_count_table[idx1][idx2]);
+      }
+      fprintf(f, "\n");
+    }
+    fclose(f);
+
+    for (idx1 = 0; idx1 < afl->num_func ; idx1 ++ ) {
+      free(afl->func_exec_count_table[idx1]);
+    }
+    free(afl->func_exec_count_table);
+  }
+
+  // FRIEND related stats
+  if (afl->func_binary) {
+    snprintf(fn, PATH_MAX, "%s/FRIEND.stat", afl->out_dir);
+    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+
+    f = fdopen(fd, "w");
+    fprintf(f, "# of func :%u\n", afl->num_func);
+    fprintf(f, "# of cmp :%u\n", afl->num_cmp);
+    fprintf(f, "# of total bytes :%u\n", afl->total_num_bytes);
+    fprintf(f, "# of covered branch:%u\n", afl->covered_branch);
+    fprintf(f, "# of queued_cmps :%u\n", afl->num_queued_cmps);
+    fprintf(f, "Avg. # of bytes :%.1f\n", (double) afl->total_num_bytes / afl->num_queued_cmps);
+    fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
+    fclose(f);
+
+    snprintf(fn, PATH_MAX, "%s/FRIEND_cmp_queue.stat", afl->out_dir);
+    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+    f = fdopen(fd, "w");
+
+    fprintf(f, "cmp queue size :%u\n", afl->num_queued_cmps);
+    struct cmp_queue_entry * q = afl->cmp_queue;
+    fprintf(f, "cmpid, condition, num_bytes, bytes\n");
+    while (q != NULL) {
+      
+      fprintf(f, "%ld,%u,%u\n", q - afl->cmp_queue, q->condition, q->num_bytes);
+      for (idx1 = 0; idx1 < q->num_bytes; idx1 ++) {
+        fprintf(f, "%u,", q->bytes[idx1]);
+      }
+      fprintf(f,"\n");
+      q = q->next;
+    }
+    fclose(f);
+  }
+
+  return;
 }

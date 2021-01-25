@@ -682,6 +682,10 @@ typedef struct afl_state {
   //number of mutated bytes
   u32 cur_num_bytes;
 
+  u8 is_bytes_max : 1;
+  u8 get_func_info : 1;
+  u8 is_spliced : 1;
+
   //cmpid (index) -> funcid
   u32 * cmp_func_map;
 
@@ -700,12 +704,11 @@ typedef struct afl_state {
   //Total number of covered branches respect to cmp instructions
   u32 covered_branch;
 
+  // # of cmp instructions that bytes are given
   u32 num_queued_cmps;
 
-  u32 num_new_path_havoc[20];
-
-  u32 cur_havoc_strategy;
-
+  //# of new path with spliced input
+  u32 num_new_path_spliced;
 } afl_state_t;
 
 struct custom_mutator {
@@ -1053,6 +1056,7 @@ u8 common_fuzz_cmplog_stuff(afl_state_t *afl, u8 *out_buf, u32 len);
 void init_func(afl_state_t * afl);
 void func_shm_init(afl_state_t * afl);
 void run_func_get_cmp(afl_state_t * afl);
+void write_func_stats(afl_state_t * afl);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len,
