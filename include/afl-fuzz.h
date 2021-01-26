@@ -672,7 +672,10 @@ typedef struct afl_state {
   u32 ** func_exec_count_table;
   u8 * func_exec_list;
 
+  //cmp queue alloc location
   struct cmp_queue_entry * cmp_queue_entries;
+
+  //cmp queue head, tail, cur entry
   struct cmp_queue_entry * cmp_queue, *cmp_queue_top, *cmp_queue_cur;
   u32 cmp_queue_size;
 

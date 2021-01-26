@@ -82,7 +82,8 @@ score_split = [0] * 21
 for s in scores:
   score_split[int(s* 20)] += 1
   
-f = open("result.csv", "w")
+f = open("byte_similarity.csv", "w")
+f.write("0-5,5-10,10-15,15-20,20-25,25-30,30-35,35-40,40-45,45-50,50-55,55-60,60-65,65-70,70-75,75-80,80-85,85-90,90-95,95-100\n")
 for s in score_split:
   f.write("{},".format(s))
 

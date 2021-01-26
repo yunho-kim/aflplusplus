@@ -120,17 +120,20 @@ void run_func_get_cmp(afl_state_t * afl) {
         if ( queue_entries[cmp_id].num_bytes == 0 ) afl->num_queued_cmps ++;
 
         if (afl->cur_num_bytes + queue_entries[cmp_id].num_bytes < MAX_NUM_BYTES) {
-          memcpy(queue_entries[cmp_id].bytes, afl->cur_bytes, sizeof(u32) * afl->cur_num_bytes);
+          memcpy(queue_entries[cmp_id].bytes + afl->cur_num_bytes, afl->cur_bytes,
+            sizeof(u32) * afl->cur_num_bytes);
           queue_entries[cmp_id].num_bytes += afl->cur_num_bytes;
           afl->total_num_bytes += afl->cur_num_bytes;
         } else {
           u32 left_len = MAX_NUM_BYTES - queue_entries[cmp_id].num_bytes;
           if (left_len >= afl->cur_num_bytes) {
-            memcpy(queue_entries[cmp_id].bytes, afl->cur_bytes, sizeof(u32) * afl->cur_num_bytes);
+            memcpy(queue_entries[cmp_id].bytes + afl->cur_num_bytes, afl->cur_bytes,
+              sizeof(u32) * afl->cur_num_bytes);
             queue_entries[cmp_id].num_bytes += afl->cur_num_bytes;
             afl->total_num_bytes += afl->cur_num_bytes;
           } else {
-            memcpy(queue_entries[cmp_id].bytes, afl->cur_bytes, sizeof(u32) * left_len);
+            memcpy(queue_entries[cmp_id].bytes + afl->cur_num_bytes, afl->cur_bytes,
+              sizeof(u32) * left_len);
             queue_entries[cmp_id].num_bytes += left_len;
             afl->total_num_bytes += left_len;
           }
@@ -234,7 +237,7 @@ void write_func_stats (afl_state_t * afl) {
     fprintf(f, "cmpid, condition, num_bytes, bytes\n");
     while (q != NULL) {
       
-      fprintf(f, "%ld,%u,%u\n", q - afl->cmp_queue, q->condition, q->num_bytes);
+      fprintf(f, "%ld,%u,%u\n", q - afl->cmp_queue_entries, q->condition, q->num_bytes);
       for (idx1 = 0; idx1 < q->num_bytes; idx1 ++) {
         fprintf(f, "%u,", q->bytes[idx1]);
       }
