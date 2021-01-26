@@ -120,19 +120,19 @@ void run_func_get_cmp(afl_state_t * afl) {
         if ( queue_entries[cmp_id].num_bytes == 0 ) afl->num_queued_cmps ++;
 
         if (afl->cur_num_bytes + queue_entries[cmp_id].num_bytes < MAX_NUM_BYTES) {
-          memcpy(queue_entries[cmp_id].bytes + afl->cur_num_bytes, afl->cur_bytes,
+          memcpy(queue_entries[cmp_id].bytes + queue_entries[cmp_id].num_bytes, afl->cur_bytes,
             sizeof(u32) * afl->cur_num_bytes);
           queue_entries[cmp_id].num_bytes += afl->cur_num_bytes;
           afl->total_num_bytes += afl->cur_num_bytes;
         } else {
           u32 left_len = MAX_NUM_BYTES - queue_entries[cmp_id].num_bytes;
           if (left_len >= afl->cur_num_bytes) {
-            memcpy(queue_entries[cmp_id].bytes + afl->cur_num_bytes, afl->cur_bytes,
+            memcpy(queue_entries[cmp_id].bytes + queue_entries[cmp_id].num_bytes, afl->cur_bytes,
               sizeof(u32) * afl->cur_num_bytes);
             queue_entries[cmp_id].num_bytes += afl->cur_num_bytes;
             afl->total_num_bytes += afl->cur_num_bytes;
           } else {
-            memcpy(queue_entries[cmp_id].bytes + afl->cur_num_bytes, afl->cur_bytes,
+            memcpy(queue_entries[cmp_id].bytes + queue_entries[cmp_id].num_bytes, afl->cur_bytes,
               sizeof(u32) * left_len);
             queue_entries[cmp_id].num_bytes += left_len;
             afl->total_num_bytes += left_len;

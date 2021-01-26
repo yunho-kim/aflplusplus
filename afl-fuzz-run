@@ -20,7 +20,7 @@ echo $cmd
 eval $cmd
 
 
-cmd="${FUZZER} -S 2 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &> /dev/null &"
+cmd="${FUZZER} -S 2 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} ${sancmd} &> /dev/null &"
 echo $cmd
 eval $cmd
 
