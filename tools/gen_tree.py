@@ -36,6 +36,9 @@ class tctree:
     relevants = get_relevants_set(self.id, chonsu)
     return anotherid in relevants
 
+  def __repr__(self):
+    return "{}:{}:{}".format(self.id, ",".join(list(map(str, self.parents))), ",".join(list(map(str,self.children))))
+
 
 if __name__ == "__main__":
   
@@ -68,7 +71,7 @@ if __name__ == "__main__":
       tcs[int(parents[1])].add_child(tcid)
     else:
       tcs[tcid].add_parent(int(parents))
-      tcs[int(parents)].add_parent(tcid)
+      tcs[int(parents)].add_child(tcid)
   
     tcid += 1
   

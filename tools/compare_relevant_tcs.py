@@ -17,6 +17,7 @@ for tcline in tclist:
   if "orig" in tcline or "sync" in tcline:
     continue
   
+  
   tcid = int(tcline.split("/")[-1].split(",")[0][3:])
 
   parents = tcline.split("/")[-1].split(",")[1][4:]
@@ -28,13 +29,17 @@ for tcline in tclist:
     tcs[int(parents[1])].add_child(tcid)
   else:
     tcs[tcid].add_parent(int(parents))
-    tcs[int(parents)].add_parent(tcid)
+    tcs[int(parents)].add_child(tcid)
+  #print("line : {}, id : {}, parents : {}".format(tcline, tcid, parents))
 
 score_sum = 0
 score_idx = 0
 maxscore = 0
 
 scores = []
+
+#for i in range(num_tc):
+  #print(tcs[i])
 
 i = 0
 while i < NUM_PAIR:
@@ -45,10 +50,11 @@ while i < NUM_PAIR:
 
   if not tcs[tc1].is_relevant(tcs, tc2):
     continue
+
   
   tmp1len = 0
   tmp2len = 0
-  f1 = open(tclist[tc1], "rb")
+  f1 = open(glob.glob("./queue/id:{}{}*".format("0" * (6 - len(str(tc1))),tc1))[0], "rb")
   tmp1 = open("tmp1","wb")
   byte = f1.read(1)
   while byte:
@@ -58,7 +64,7 @@ while i < NUM_PAIR:
   tmp1.close()
   f1.close()
 
-  f2 = open(tclist[tc2], "rb")
+  f2 = open(glob.glob("./queue/id:{}{}*".format("0" * (6 - len(str(tc2))),tc2))[0], "rb")
   tmp2 = open("tmp2","wb")
   byte = f2.read(1)
   while byte:
@@ -87,6 +93,8 @@ while i < NUM_PAIR:
     tmp = 0
   else :
     tmp = 1.0 - (num_diff / tmplen)
+
+  #print("{} and {} : {}/{} {:.1f}".format(tc1, tc2, num_diff, tmplen, tmp * 100))
 
   #print ("tmplen : {}, num_diff : {}, score : {:.1f}%".format(tmplen, num_diff, tmp * 100))
   
