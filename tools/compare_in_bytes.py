@@ -3,6 +3,8 @@ import glob
 import random
 
 
+NUM_PAIR = 5000
+
 tclist = glob.glob("./queue/*")
 num_tc = len(tclist)
 
@@ -13,7 +15,7 @@ maxscore = 0
 
 scores = []
 
-for i in range(10000):
+for i in range(5000):
   tc1 = random.randrange(0,num_tc)
   tc2 = random.randrange(0,num_tc)
   if tc1 == tc2:

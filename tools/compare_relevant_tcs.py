@@ -3,7 +3,7 @@ import glob
 import random
 from gen_tree import tctree
 
-NUM_PAIR = 1000
+NUM_PAIR = 5000
 
 tcs = []
 
