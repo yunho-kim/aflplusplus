@@ -833,6 +833,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
+  if (!afl->func_info_txt || !afl->func_binary) FATAL("No func info txt and exectuable");
+
   if (!mem_limit_given && afl->shm.cmplog_mode) afl->fsrv.mem_limit += 260;
 
   OKF("afl++ is maintained by Marc \"van Hauser\" Heuse, Heiko \"hexcoder\" "
@@ -1328,6 +1330,8 @@ int main(int argc, char **argv_orig, char **envp) {
   // real start time, we reset, so this works correctly with -V
   afl->start_time = get_cur_time();
 
+  init_trim_and_func(afl);
+
   while (1) {
 
     u8 skipped_fuzz;
@@ -1493,29 +1497,41 @@ int main(int argc, char **argv_orig, char **envp) {
     ++afl->current_entry;
 
     //FRIEND style branch selection and mutation
-    if (likely(afl->cmp_queue)) {
-      if (unlikely(afl->cmp_queue_cur == NULL)) {
-        afl->cmp_queue_cur = afl->cmp_queue;
-      }
+    if (!skipped_fuzz) {
+      if (likely(afl->cmp_queue)) {
+        if (unlikely(afl->cmp_queue_cur == NULL)) {
+          afl->cmp_queue_cur = afl->cmp_queue;
+        }
 
-      while((afl->cmp_queue_cur != NULL) && (afl->cmp_queue_cur->num_bytes == 0)) {
+        //ITERATE through tcs
+        u32 num_tcs = afl->cmp_queue_cur->exec_tcs_max_reached ? 
+          EXEC_TCS_SIZE : afl->cmp_queue_cur->num_executing_tcs;
+
+        if (!afl->cmp_queue_cur->has_been_fuzzed) {
+          afl->cmp_queue_cur->mutating_tc_idx = rand_below(afl, num_tcs);
+          afl->cmp_queue_cur->has_been_fuzzed = 1;
+        }
+
+        afl->cmp_queue_cur->tc = afl->queue_buf[
+          afl->cmp_queue_cur->executing_tcs[afl->cmp_queue_cur->mutating_tc_idx++]
+        ];
+
+        if (unlikely(afl->cmp_queue_cur->mutating_tc_idx >= num_tcs))
+          afl->cmp_queue_cur->mutating_tc_idx = 0;
+        
+        fuzz_one_func(afl);
+
+        while (afl->cmp_queue_cur->next != NULL) {
+          if (afl->cmp_queue_cur->next->condition == 3) {
+            //remove target
+            afl->cmp_queue_cur->next = afl->cmp_queue_cur->next->next;
+            afl->cmp_queue_size--;
+          } else {
+            break;
+          }
+        }
         afl->cmp_queue_cur = afl->cmp_queue_cur->next;
       }
-      
-      if (afl->cmp_queue_cur == NULL) {
-        continue;
-      }
-      
-      //TODO : fuzz
-
-      if (afl->cmp_queue_cur->next != NULL) {
-        if (afl->cmp_queue_cur->next->condition == 3) {
-          //remove target
-          afl->cmp_queue_cur->next = afl->cmp_queue_cur->next->next;
-          afl->cmp_queue_size--;
-        }
-      }
-      afl->cmp_queue_cur = afl->cmp_queue_cur->next;
     }
   }
 
@@ -1573,6 +1589,7 @@ stop_fuzzing:
 
   fclose(afl->fsrv.plot_file);
   write_func_stats(afl);
+  destroy_func(afl);
   destroy_queue(afl);
   destroy_extras(afl);
   destroy_custom_mutators(afl);
@@ -1594,11 +1611,6 @@ stop_fuzzing:
   ck_free(afl->fsrv.out_file);
   ck_free(afl->sync_id);
   afl_state_deinit(afl);
-
-  ck_free(afl->func_binary);
-  ck_free(afl->func_info_txt);
-  free(afl->cmp_func_map);
-  free(afl->cmp_queue_entries);
 
   free(afl);                                                 /* not tracked */
 

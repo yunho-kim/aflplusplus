@@ -162,6 +162,7 @@ struct queue_entry {
   u8 *trace_mini;                       /* Trace bytes, if kept             */
   u32 tc_ref;                           /* Trace bytes ref count            */
 
+  u32 id;
   struct queue_entry *next,             /* Next element, if any             */
       *next_100;                        /* 100 elements ahead               */
 
@@ -184,11 +185,39 @@ struct auto_extra_data {
 };
 
 struct cmp_queue_entry {
-  u32 bytes [MAX_NUM_BYTES];
-  u32 num_bytes;
+  //u32 bytes [MAX_NUM_BYTES];
+  //u32 num_bytes;
   struct cmp_queue_entry * next;
+  struct queue_entry * tc;
+  u32 * executing_tcs;
+  u32 num_executing_tcs;
+  u32 sel_tc_idx;
+  u32 sel_tc_score;
+  u32 mutating_tc_idx;
   //2 bits, MSB : true, LSB : false,  true | false covered
   u8 condition : 2;
+  u8 tcs_max_reached : 1;
+  u8 exec_tcs_max_reached : 1;
+  u8 has_been_fuzzed : 1;
+  //u8 is_max_bytes : 1;
+};
+
+struct byte_cmp_set {
+  u32 * changed_cmps;
+  u32 * changed_bytes;
+  u32 num_changed_cmps;
+  u32 num_changed_bytes;
+};
+
+struct tc_graph_entry {
+  //At most 2 parents (splicing)
+  u32 parents[2];
+  //change children allocation
+  u32 * children;
+  struct byte_cmp_set * byte_cmp_sets;
+  u32 num_children;
+  u8  num_parents;
+  u8  children_max_reached : 1;
 };
 
 /* Fuzzing stages */
@@ -216,6 +245,7 @@ enum {
   /* 18 */ STAGE_CUSTOM_MUTATOR,
   /* 19 */ STAGE_COLORIZATION,
   /* 20 */ STAGE_ITS,
+  /* 21 */ STAGE_HAVOC_FUNC,
 
   STAGE_NUM_MAX
 
@@ -250,7 +280,6 @@ enum {
 #define period_pilot 50000
 
 enum {
-
   /* 00 */ EXPLORE, /* AFL default, Exploration-based constant schedule */
   /* 01 */ EXPLOIT, /* AFL's exploitation-based const.  */
   /* 02 */ FAST,    /* Exponential schedule             */
@@ -670,7 +699,7 @@ typedef struct afl_state {
   char * func_binary;
   afl_forkserver_t func_fsrv;
   u32 ** func_exec_count_table;
-  u8 * func_exec_list;
+  u8 * func_list;
 
   //cmp queue alloc location
   struct cmp_queue_entry * cmp_queue_entries;
@@ -688,9 +717,12 @@ typedef struct afl_state {
   //number of mutated bytes
   u32 cur_num_bytes;
 
+  u32 func_cur_num_bytes;
+
   u8 is_bytes_max : 1;
   u8 get_func_info : 1;
   u8 is_spliced : 1;
+  u8 is_fuzz_one_func_byte_offsets_max : 1;
 
   //cmpid (index) -> funcid
   u32 * cmp_func_map;
@@ -703,18 +735,21 @@ typedef struct afl_state {
 
   //Total number of cmp instructions
   u32 num_cmp;
-  
-  //Total number of collected bytes
-  u32 total_num_bytes;
 
   //Total number of covered branches respect to cmp instructions
   u32 covered_branch;
 
-  // # of cmp instructions that bytes are given
-  u32 num_queued_cmps;
-
   //# of new path with spliced input
   u32 num_new_path_spliced;
+
+  struct tc_graph_entry * tc_graph;
+  u32 tc_graph_size;
+
+  u32 * fuzz_one_func_byte_offsets;
+  u32 fuzz_one_func_byte_offsets_size;
+
+  //DEBUG
+  FILE * byte_sel_record_file;
 } afl_state_t;
 
 struct custom_mutator {
@@ -1023,6 +1058,7 @@ u8   pilot_fuzzing(afl_state_t *);
 u8   core_fuzzing(afl_state_t *);
 void pso_updating(afl_state_t *);
 u8   fuzz_one(afl_state_t *);
+u32 choose_block_len(afl_state_t *, u32);
 
 /* Init */
 
@@ -1059,10 +1095,12 @@ u8 common_fuzz_cmplog_stuff(afl_state_t *afl, u8 *out_buf, u32 len);
 
 
 /* Func */
-void init_func(afl_state_t * afl);
-void func_shm_init(afl_state_t * afl);
-void run_func_get_cmp(afl_state_t * afl);
-void write_func_stats(afl_state_t * afl);
+void init_func(afl_state_t *);
+void write_func_stats(afl_state_t *);
+void fuzz_one_func(afl_state_t *);
+void destroy_func(afl_state_t *);
+void init_trim_and_func(afl_state_t *);
+void get_byte_cmps_func_rels(afl_state_t *, u8 *, u32, u8);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len,

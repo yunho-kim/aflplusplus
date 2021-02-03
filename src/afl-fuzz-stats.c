@@ -276,10 +276,9 @@ void maybe_update_plot_file(afl_state_t *afl, double bitmap_cvg, double eps) {
 
   fprintf(
       afl->fsrv.plot_file,
-      "%llu, %llu, %u, %u, %u, %.1f, %u, %0.02f%%, %llu, %u, %0.02f, %llu\n",
+      "%llu, %llu, %u, %u, %u, %u, %0.02f%%, %llu, %u, %0.02f, %llu\n",
       (get_cur_time() - afl->start_time) / 1000, afl->queue_cycle - 1,
       afl->current_entry, afl->queued_paths, afl->covered_branch,
-      (double) afl->total_num_bytes / afl->num_queued_cmps,
       afl->cmp_queue_size, bitmap_cvg, afl->unique_crashes,
       afl->max_depth, eps, afl->plot_prev_ed); 
       /* ignore errors */
@@ -726,15 +725,24 @@ void show_stats(afl_state_t *afl) {
 
   SAYF(bV bSTOP "  cur # of bytes : " cRST "%-17d" bSTG  bV , afl->cur_num_bytes);
   SAYF(bSTOP "  cmp queue size : " cRST "%-18d  " bSTG  bV "\n", afl->cmp_queue_size);
-
-  SAYF(bV bSTOP " avg. # of bytes : " cRST "%-16.1f " bSTG bV , (double) afl->total_num_bytes / afl->num_queued_cmps );
-  SAYF(bSTOP "      branch cov : " cRST "%-18s  " bSTG bV "\n", tmp);
-
+  
   if (afl->cmp_queue_cur != NULL) 
-    SAYF(bV bSTOP "  cur target cmp : " cRST "%-17lu" bSTG  bV "\n" ,
+    SAYF(bV bSTOP "  cur target cmp : " cRST "%-17lu" bSTG  bV,
       afl->cmp_queue_cur - afl->cmp_queue_entries);
+  else
+    SAYF(bV bSTOP "                                    " bSTG bV);
+  SAYF(bSTOP "      branch cov : " cRST "%-18s  " bSTG bV "\n", tmp);
+  
+  SAYF(bV bSTOP " # of cur_func_bytes :  " cRST "%-12u" bSTG bV, afl->func_cur_num_bytes);
 
+  if (afl->cmp_queue_cur && afl->cmp_queue_cur->tc) {
+    sprintf(tmp, "%u", afl->cmp_queue_cur->tc->id);
+    SAYF(bSTOP "      cur tc id  : " cRST "%-18s  " bSTG bV "\n", tmp);
+  } else {
+    SAYF(bSTOP "                                       " bSTG bV "\n");
+  }
 
+  
       
   /* Aaaalmost there... hold on! */
 
@@ -854,6 +862,12 @@ void show_stats(afl_state_t *afl) {
                   ? cMGN
                   : cRST),
        tmp);
+
+  sprintf(tmp, "%s/%s      ",
+          u_stringify_int(IB(0), afl->stage_finds[STAGE_HAVOC_FUNC]),
+          u_stringify_int(IB(1), afl->stage_cycles[STAGE_HAVOC_FUNC]));
+
+  SAYF(bV bSTOP " havoc_func  : " cRST "%-36s " bSTG bV "\n", tmp);
 
   if (afl->shm.cmplog_mode) {
 

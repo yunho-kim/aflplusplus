@@ -713,11 +713,6 @@ void read_testcases(afl_state_t *afl) {
     if (!access(dfn, F_OK)) { passed_det = 1; }
 
     add_to_queue(afl, fn2, st.st_size, passed_det);
-
-    // execute funclog binary and record cmp information
-    // TODO : add initial input's information
-    //run_func_get_cmp(afl);
-
   }
 
   free(nl);                                                  /* not tracked */
@@ -1805,7 +1800,7 @@ void setup_dirs_fds(afl_state_t *afl) {
 
   fprintf(afl->fsrv.plot_file,
           "time, cycles, cur_path, paths_total, covered_branch, "
-          "Avg. # bytes, cmp queue size, map_size, unique_crashes, "
+          "cmp queue size, map_size, unique_crashes, "
           "max_depth, execs_per_sec\n");
   fflush(afl->fsrv.plot_file);
 

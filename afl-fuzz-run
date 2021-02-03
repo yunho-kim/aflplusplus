@@ -1,8 +1,8 @@
 #!/bin/bash
+# -i -o -- *  required
 
-echo "-i -o -- *  required"
-
-set -e
+trap "exit" INT TERM ERR
+trap "kill 0" EXIT
 
 BIN_PATH=$(readlink -f "$0")
 FUZZ_DIR=$(dirname $BIN_PATH)
@@ -13,25 +13,28 @@ sancmd=$(echo $* | sed 's,\.afl,\.san,g')
 subject=$(echo $* | sed 's,.*subjects\/,,g')
 subject=$(echo ${subject} | sed 's,\.afl.*,,g')
 
+export AFL_DISABLE_TRIM=1
 
 cmd="${FUZZER} -M 1 -d -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &> /dev/null &"
 
 echo $cmd
-eval $cmd
+AFL_NO_UI=1 eval $cmd
 
 
 cmd="${FUZZER} -S 2 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} ${sancmd} &> /dev/null &"
 echo $cmd
-eval $cmd
+AFL_NO_UI=1 eval $cmd
 
 cmd="${FUZZER} -S 3 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} -c ./subjects/${subject}.cmp $* &> /dev/null &"
 echo $cmd
-eval $cmd
+AFL_NO_UI=1 eval $cmd
 
 cmd="${FUZZER} -S 4 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &> /dev/null &"
 echo $cmd
-eval $cmd
+AFL_NO_UI=1 eval $cmd
 
 cmd="${FUZZER} -S 5 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $*"
 echo $cmd
 eval $cmd
+
+wait

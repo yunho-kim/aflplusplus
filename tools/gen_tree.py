@@ -1,4 +1,4 @@
-CHONSU = 2
+CHONSU = 4
 
 class tctree:
   def __init__(self, id):

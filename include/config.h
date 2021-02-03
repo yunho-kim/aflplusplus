@@ -129,19 +129,19 @@
    In other words, the default (n = 7) produces 2, 4, 8, 16, 32, 64, or
    128 stacked tweaks: */
 
-#define HAVOC_STACK_POW2 7
+#define HAVOC_STACK_POW2 5
 
 /* Caps on block sizes for cloning and deletion operations. Each of these
    ranges has a 33% probability of getting picked, except for the first
    two cycles where smaller blocks are favored: */
 
-#define HAVOC_BLK_SMALL 32
-#define HAVOC_BLK_MEDIUM 128
-#define HAVOC_BLK_LARGE 1500
+#define HAVOC_BLK_SMALL 4
+#define HAVOC_BLK_MEDIUM 16
+#define HAVOC_BLK_LARGE 32
 
 /* Extra-large blocks, selected very rarely (<5% of the time): */
 
-#define HAVOC_BLK_XL 32768
+#define HAVOC_BLK_XL 128
 
 /* Probabilities of skipping non-favored entries in the queue, expressed as
    percentages: */
@@ -171,7 +171,7 @@
 
 /* Maximum size of input file, in bytes (keep under 100MB): */
 
-#define MAX_FILE (1 * 1024 * 1024)
+#define MAX_FILE (1 << 16)
 
 /* The same, for the test case minimizer: */
 
@@ -431,13 +431,42 @@
 //fetch runtime information of cmp instructions
 #define CMP_FUNC_MAP_SIZE (1 << 16)
 
-//# of function, used for func_exec_list, func_exec_table
-#define FUNC_MAP_SIZE (1 << 11)
-
 //Maximun # of byte offsets per cmp instruction
-#define MAX_NUM_BYTES (1 << 8)
+#define MAX_NUM_BYTES 256
 
 //buffer size
-#define CUR_BYTES_SIZE (1 << 8)
+#define CUR_BYTES_SIZE 256
+
+//maximum # of children to record
+#define TC_CHILDREN_MAX 32
+
+//initial size of tc graph
+#define INIT_TC_GRAPH_SIZE 1024
+
+//how close tc is related tc?
+#define CLOSE_TC_THRESHOLD 2
+
+//# of bytes to mutate with function relevance
+#define FUZZ_ONE_FUNC_BYTE_SIZE 1024
+
+//size of executing tcs buffer, used in cmp_queue_entry
+#define EXEC_TCS_SIZE 256
+
+//size of # of changed cmps buffer, used in tc_graph_entry
+#define CHANGED_CMPS_SIZE 256
+
+//size of # of changed bytes buffer, used in tc_graph_entry
+#define CHANGED_BYTES_SIZE 256
+
+#define REL_FUNC_THRESHOLD 0.95
+
+//Maximum # of close tcs for each tc, used in tc_graph_entry
+#define CLOSE_TCS_SIZE 64
+
+//# of bytes set to try, used int tc_graph_entry
+#define NUM_BYTES_SETS 16
+
+#define HAVOC_STACK_POW2_FUNC 4
+
 
 #endif                                                  /* ! _HAVE_CONFIG_H */
