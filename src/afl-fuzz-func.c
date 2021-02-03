@@ -45,11 +45,6 @@ void init_func(afl_state_t* afl) {
     (u32 **) calloc (sizeof(u32*), afl->num_func);
   if (!afl->func_exec_count_table) PFATAL("Can't alloc func_exec_count_table");
 
-  for (i = 0; i < afl->num_func ; i++) {
-    afl->func_exec_count_table[i] = (u32 *) calloc(sizeof(u32), afl->num_func);
-    if (!afl->func_exec_count_table[i]) PFATAL("Can't alloc func_exec_count_table[i]");
-  }
-
   afl->func_list = (u8 *) malloc (sizeof(u8) * afl->num_func);
   if (!afl->func_list) PFATAL("Can't alloc func_exec_exec");
 
@@ -166,30 +161,6 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
   struct cmp_queue_entry * queue_entries = afl->cmp_queue_entries;
   struct cmp_queue_entry * cur_queue_entry ;
 
-/*
-  u32 num_exec_cmps = 0;
-  u32 target_func_id = afl->cmp_func_map[cmp_id];
-  u32 target_func_exec = afl->func_exec_count_table[target_func_id][target_func_id];
-
-
-  memset(afl->func_list, 0, sizeof(u8) * afl->num_func);
-
-  for (i1= 0; i1 < afl->num_func; i1++) {
-    if (((float) afl->func_exec_count_table[target_func][i] / target_func_exec)
-         >= REL_FUNC_THRESHOLD) {
-           afl->func_list[i] = 1;
-    }
-  }
-
-  //get func_rel, update cmp queue
-  for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id++) {
-    if(afl->shm.func_map->entries[cmp_id].executed) {
-      num_exec_cmps++;
-      if(afl->func_list[afl->cmp_func_map[cmp_id]])
-    }
-  }
-  */;
-
   memset(afl->func_list, 0, sizeof(u8) * afl->num_func);
 
   for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id++) {
@@ -231,6 +202,11 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
   
   for (i1 = 0; i1 < afl->num_func; i1++) {
     if (afl->func_list[i1]) {
+      if (unlikely(afl->func_exec_count_table[i1] == NULL)) {
+        afl->func_exec_count_table[i1] = (u32 *) calloc(sizeof (u32), afl->num_func);
+        if (unlikely(afl->func_exec_count_table[i1] == NULL))
+          PFATAL("Can't alloc func_exec_count_table[i1]");
+      }
       for (i2 = 0; i2 < afl->num_func; i2++) {
         afl->func_exec_count_table[i1][i2] += afl->func_list[i2]; 
       }
@@ -965,10 +941,12 @@ void destroy_func(afl_state_t * afl) {
   
   if(afl->func_exec_count_table) {
     for (idx1 = 0; idx1 < afl->num_func ; idx1 ++ ) {
-      free(afl->func_exec_count_table[idx1]);
+      if (afl->func_exec_count_table[idx1])
+        free(afl->func_exec_count_table[idx1]);
     }
     free(afl->func_exec_count_table);
   }
+  
   free(afl->fuzz_one_func_byte_offsets);
 }
 

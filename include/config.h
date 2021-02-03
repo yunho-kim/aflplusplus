@@ -429,10 +429,7 @@
 
 //# of cmp instructions, used for shm.func_map->entries to
 //fetch runtime information of cmp instructions
-#define CMP_FUNC_MAP_SIZE (1 << 16)
-
-//Maximun # of byte offsets per cmp instruction
-#define MAX_NUM_BYTES 256
+#define CMP_FUNC_MAP_SIZE 65536
 
 //buffer size
 #define CUR_BYTES_SIZE 256
@@ -450,7 +447,7 @@
 #define FUZZ_ONE_FUNC_BYTE_SIZE 1024
 
 //size of executing tcs buffer, used in cmp_queue_entry
-#define EXEC_TCS_SIZE 256
+#define EXEC_TCS_SIZE 128
 
 //size of # of changed cmps buffer, used in tc_graph_entry
 #define CHANGED_CMPS_SIZE 256

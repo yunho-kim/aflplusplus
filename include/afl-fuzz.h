@@ -185,8 +185,6 @@ struct auto_extra_data {
 };
 
 struct cmp_queue_entry {
-  //u32 bytes [MAX_NUM_BYTES];
-  //u32 num_bytes;
   struct cmp_queue_entry * next;
   struct queue_entry * tc;
   u32 * executing_tcs;
