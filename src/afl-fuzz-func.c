@@ -691,8 +691,8 @@ do {                                      \
 
     if (is_max || num_changed_cmps == 0) {
       //changed too many cmps instrs!
-      i1--;
       free(new_tc->byte_cmp_sets[i1].changed_cmps);
+      i1--;
       memcpy(out_buf2, out_buf, len);
       continue;
     }
