@@ -1025,7 +1025,7 @@ void fuzz_one_func (afl_state_t *afl) {
       afl->func_list[i] = 1; 
       num_rel_funcs++;
     }
-    if (afl->func_exec_count_table[i][i]) num_exec_funcs ++;
+    if (afl->func_exec_count_table[i]) num_exec_funcs ++;
   }
 
   u32 * close_tcs = (u32 *) malloc(sizeof(u32) * CLOSE_TCS_SIZE);
