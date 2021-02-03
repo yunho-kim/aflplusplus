@@ -1171,14 +1171,14 @@ void fuzz_one_func (afl_state_t *afl) {
           if (rand_below(afl, 2)) {
 
             rand_value = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-            if(unlikely(rand_value >= temp_len - 3)) rand_value -= 3;
+            if(unlikely(rand_value >= temp_len - 3)) rand_value = temp_len - 4;
             *(u32 *)(out_buf + rand_value) =
                 interesting_32[rand_below(afl, sizeof(interesting_32) >> 2)];
 
           } else {
             
             rand_value = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-            if(unlikely(rand_value >= temp_len - 3)) rand_value -= 3;
+            if(unlikely(rand_value >= temp_len - 3)) rand_value = temp_len - 4;
             *(u32 *)(out_buf + rand_value) = SWAP32(
                 interesting_32[rand_below(afl, sizeof(interesting_32) >> 2)]);
 
@@ -1262,14 +1262,14 @@ void fuzz_one_func (afl_state_t *afl) {
           if (rand_below(afl, 2)) {
 
             rand_value = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-            if(unlikely(rand_value >= temp_len - 3)) rand_value -= 3;
+            if(unlikely(rand_value >= temp_len - 3)) rand_value = temp_len - 4;
 
             *(u32 *)(out_buf + rand_value) -= 1 + rand_below(afl, ARITH_MAX);
 
           } else {
 
             rand_value = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-            if(unlikely(rand_value >= temp_len - 3)) rand_value -= 3;
+            if(unlikely(rand_value >= temp_len - 3)) rand_value = temp_len - 4;
             u32 num = 1 + rand_below(afl, ARITH_MAX);
 
             *(u32 *)(out_buf + rand_value) =
@@ -1288,13 +1288,13 @@ void fuzz_one_func (afl_state_t *afl) {
           if (rand_below(afl, 2)) {
 
             rand_value = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-            if(unlikely(rand_value >= temp_len - 3)) rand_value -= 3;
+            if(unlikely(rand_value >= temp_len - 3)) rand_value = temp_len - 4;
             *(u32 *)(out_buf + rand_value) += 1 + rand_below(afl, ARITH_MAX);
 
           } else {
 
             rand_value = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-            if(unlikely(rand_value >= temp_len - 3)) rand_value -= 3;
+            if(unlikely(rand_value >= temp_len - 3)) rand_value = temp_len - 4;
             u32 num = 1 + rand_below(afl, ARITH_MAX);
 
             *(u32 *)(out_buf + rand_value) =
@@ -1423,7 +1423,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
           copy_from = rand_below(afl, temp_len - copy_len + 1);
           copy_to = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-          if(copy_to >= (temp_len - copy_len + 1)) copy_to -= (copy_len - 1);
+          if(copy_to >= (temp_len - copy_len + 1)) copy_to = temp_len - copy_len;
 
           if (likely(rand_below(afl, 4))) {
 
@@ -1470,7 +1470,7 @@ void fuzz_one_func (afl_state_t *afl) {
                 if (extra_len > temp_len) { break; }
 
                 insert_at = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-                if(insert_at >= (temp_len - extra_len + 1)) insert_at -= (extra_len - 1);
+                if(insert_at >= (temp_len - extra_len + 1)) insert_at = temp_len - extra_len;
 
                 memcpy(out_buf + insert_at, afl->a_extras[use_extra].data,
                        extra_len);
@@ -1486,7 +1486,7 @@ void fuzz_one_func (afl_state_t *afl) {
                 if (extra_len > temp_len) { break; }
 
                 insert_at = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-                if(insert_at >= (temp_len - extra_len + 1)) insert_at -= (extra_len - 1);
+                if(insert_at >= (temp_len - extra_len + 1)) insert_at = temp_len - extra_len;
 
                 memcpy(out_buf + insert_at, afl->extras[use_extra].data,
                        extra_len);
@@ -1610,7 +1610,7 @@ void fuzz_one_func (afl_state_t *afl) {
               copy_to = rand_below(afl, temp_len - copy_len + 1);
 
               copy_to = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-              if(copy_to >= (temp_len - copy_len + 1)) copy_to -= (copy_len - 1);
+              if(copy_to >= (temp_len - copy_len + 1)) copy_to = temp_len - copy_len;
 
               memmove(out_buf + copy_to, new_buf + copy_from, copy_len);
 
