@@ -99,7 +99,7 @@ void init_trim_and_func(afl_state_t * afl) {
 
 
 void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init) {
-  
+
   u32 i1, i2, cmp_id;
   for (i1 = 0; i1 < afl->num_cmp ; i1++) {
     afl->shm.func_map->entries[i1].condition = 0;
@@ -700,7 +700,7 @@ do {                                      \
     }
 
     new_tc-> byte_cmp_sets[i1].num_changed_cmps = num_changed_cmps;
-    assert(num_changed_cmps < CHANGED_CMPS_SIZE);
+    //assert(num_changed_cmps < CHANGED_CMPS_SIZE);
 
     u32 num_changed_bytes = afl->is_bytes_max ? CUR_BYTES_SIZE : afl->cur_num_bytes;
     new_tc->byte_cmp_sets[i1].num_changed_bytes = num_changed_bytes;
@@ -713,10 +713,10 @@ do {                                      \
     i1++;
   }
 
-  for (i1 = 0; i1 < NUM_BYTES_SETS; i1++) {
-    assert(new_tc->byte_cmp_sets[i1].num_changed_cmps < CHANGED_CMPS_SIZE);
-    assert(new_tc->byte_cmp_sets[i1].num_changed_bytes < CHANGED_BYTES_SIZE);
-  }
+  //for (i1 = 0; i1 < NUM_BYTES_SETS; i1++) {
+  //  assert(new_tc->byte_cmp_sets[i1].num_changed_cmps < CHANGED_CMPS_SIZE);
+  //  assert(new_tc->byte_cmp_sets[i1].num_changed_bytes < CHANGED_BYTES_SIZE);
+  //}
 
   free(out_buf2);
 
