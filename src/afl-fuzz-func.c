@@ -715,7 +715,7 @@ do {                                      \
 
   //for (i1 = 0; i1 < NUM_BYTES_SETS; i1++) {
   //  assert(new_tc->byte_cmp_sets[i1].num_changed_cmps < CHANGED_CMPS_SIZE);
-  //  assert(new_tc->byte_cmp_sets[i1].num_changed_bytes < CHANGED_BYTES_SIZE);
+  //  assert(new_tc->byte_cmp_sets[i1].num_changed_bytes <= CHANGED_BYTES_SIZE);
   //}
 
   free(out_buf2);
@@ -1530,6 +1530,8 @@ void fuzz_one_func (afl_state_t *afl) {
               }
 
               if (temp_len + extra_len >= MAX_FILE) { break; }
+
+              if (unlikely(insert_at >= temp_len)) insert_at = temp_len;
 
               out_buf = afl_realloc(AFL_BUF_PARAM(out), temp_len + extra_len);
               if (unlikely(!out_buf)) { PFATAL("alloc"); }
