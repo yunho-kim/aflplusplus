@@ -99,8 +99,9 @@ void init_trim_and_func(afl_state_t * afl) {
 
 
 void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init) {
-  u32 i1, i2, cmp_id;
-  for (i1 = 0; i1 < afl->num_cmp ; i1++) {
+  s32 i1;
+  u32 i2, cmp_id;
+  for (i1 = 0; i1 < (s32) afl->num_cmp ; i1++) {
     afl->shm.func_map->entries[i1].condition = 0;
     afl->shm.func_map->entries[i1].precondition = 0;
   }
@@ -116,7 +117,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
   }
 
   //get condition values of the new test input
-  for (i1 = 0; i1 < afl->num_cmp; i1++) {
+  for (i1 = 0; i1 < (s32) afl->num_cmp; i1++) {
     afl->shm.func_map->entries[i1].precondition = afl->shm.func_map->entries[i1].condition;
   }
 
@@ -200,7 +201,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
     }
   }
   
-  for (i1 = 0; i1 < afl->num_func; i1++) {
+  for (i1 = 0; i1 < (s32) afl->num_func; i1++) {
     if (afl->func_list[i1]) {
       if (unlikely(afl->func_exec_count_table[i1] == NULL)) {
         afl->func_exec_count_table[i1] = (u32 *) calloc(sizeof (u32), afl->num_func);
