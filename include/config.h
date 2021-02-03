@@ -129,7 +129,7 @@
    In other words, the default (n = 7) produces 2, 4, 8, 16, 32, 64, or
    128 stacked tweaks: */
 
-#define HAVOC_STACK_POW2 5
+#define HAVOC_STACK_POW2 6
 
 /* Caps on block sizes for cloning and deletion operations. Each of these
    ranges has a 33% probability of getting picked, except for the first
@@ -464,7 +464,7 @@
 #define CLOSE_TCS_SIZE 64
 
 //# of bytes set to try, used int tc_graph_entry
-#define NUM_BYTES_SETS 16
+#define NUM_BYTES_SETS 8
 
 #define HAVOC_STACK_POW2_FUNC 4
 

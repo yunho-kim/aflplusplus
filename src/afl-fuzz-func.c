@@ -697,16 +697,18 @@ do {                                      \
     new_tc->byte_cmp_sets[i1].changed_cmps = (u32 *) malloc (sizeof(u32) * CHANGED_CMPS_SIZE);
 
     for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id ++) {
-      precondition = entries[cmp_id].precondition;
-      postcondition = entries[cmp_id].condition;
+      if(entries[cmp_id].executed) {
+        precondition = entries[cmp_id].precondition;
+        postcondition = entries[cmp_id].condition;
 
-      if(precondition && (precondition != postcondition)) {
-        cur_queue_entry = &(queue_entries[cmp_id]);
+        if(precondition && (precondition != postcondition)) {
+          cur_queue_entry = &(queue_entries[cmp_id]);
 
-        new_tc->byte_cmp_sets[i1].changed_cmps[num_changed_cmps++] = cmp_id;
-        if (unlikely(num_changed_cmps >= CHANGED_CMPS_SIZE)) {
-          is_max = 1;
-          break;
+          new_tc->byte_cmp_sets[i1].changed_cmps[num_changed_cmps++] = cmp_id;
+          if (unlikely(num_changed_cmps >= CHANGED_CMPS_SIZE)) {
+            is_max = 1;
+            break;
+          }
         }
       }
     }
@@ -714,6 +716,7 @@ do {                                      \
     if (is_max || num_changed_cmps == 0) {
       //changed too many cmps instrs!
       i1--;
+      free(new_tc->byte_cmp_sets[i1].changed_cmps);
       memcpy(out_buf2, out_buf, len);
       continue;
     }
@@ -729,6 +732,10 @@ do {                                      \
     
     memcpy(out_buf2, out_buf, len);
   }
+
+  free(out_buf2);
+
+  return;
 }
 
 void get_close_tcs(afl_state_t * afl, u32 target_id, u32 * close_tcs, u32 * num_close_tc, u8 degree) {
@@ -1044,6 +1051,7 @@ void fuzz_one_func (afl_state_t *afl) {
   }
 
   u32 * close_tcs = (u32 *) malloc(sizeof(u32) * CLOSE_TCS_SIZE);
+  memset(close_tcs, 255, sizeof(u32) * CLOSE_TCS_SIZE);
   u32 num_close_tc = 0;
 
   get_close_tcs(afl, afl->cmp_queue_cur->tc->id, close_tcs, &num_close_tc, CLOSE_TC_THRESHOLD);
@@ -1053,7 +1061,7 @@ void fuzz_one_func (afl_state_t *afl) {
   u32 * selected_set_rel  = (u32 *) malloc (sizeof(u32) * num_close_tc);
   u32 * selected_set_size  = (u32 *) malloc (sizeof(u32) * num_close_tc);
 
-  for (i = 0; i < num_close_tc; i++) {
+  for (i = 0; i < num_close_tc; i++) {  
     struct tc_graph_entry * cur_tc = &(afl->tc_graph[close_tcs[i]]);
     u32 contains_rel_cmp = 0;
 
