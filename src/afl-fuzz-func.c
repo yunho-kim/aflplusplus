@@ -99,9 +99,9 @@ void init_trim_and_func(afl_state_t * afl) {
 
 
 void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init) {
-  s32 i1;
-  u32 i2, cmp_id;
-  for (i1 = 0; i1 < (s32) afl->num_cmp ; i1++) {
+  
+  u32 i1, i2, cmp_id;
+  for (i1 = 0; i1 < afl->num_cmp ; i1++) {
     afl->shm.func_map->entries[i1].condition = 0;
     afl->shm.func_map->entries[i1].precondition = 0;
   }
@@ -117,7 +117,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
   }
 
   //get condition values of the new test input
-  for (i1 = 0; i1 < (s32) afl->num_cmp; i1++) {
+  for (i1 = 0; i1 < afl->num_cmp; i1++) {
     afl->shm.func_map->entries[i1].precondition = afl->shm.func_map->entries[i1].condition;
   }
 
@@ -201,7 +201,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
     }
   }
   
-  for (i1 = 0; i1 < (s32) afl->num_func; i1++) {
+  for (i1 = 0; i1 < afl->num_func; i1++) {
     if (afl->func_list[i1]) {
       if (unlikely(afl->func_exec_count_table[i1] == NULL)) {
         afl->func_exec_count_table[i1] = (u32 *) calloc(sizeof (u32), afl->num_func);
@@ -230,7 +230,9 @@ do {                                      \
                                           \
 } while (0)
 
-  for (i1 = 0; i1 < NUM_BYTES_SETS; i1++) {
+
+  i1 = 0;
+  while(i1 < NUM_BYTES_SETS) {
     u32 use_stacking = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2_FUNC));
     u32 rand_value;
     afl->cur_num_bytes = 0;
@@ -693,12 +695,12 @@ do {                                      \
     if (is_max || num_changed_cmps == 0) {
       //changed too many cmps instrs!
       free(new_tc->byte_cmp_sets[i1].changed_cmps);
-      i1--;
       memcpy(out_buf2, out_buf, len);
       continue;
     }
 
     new_tc-> byte_cmp_sets[i1].num_changed_cmps = num_changed_cmps;
+    assert(num_changed_cmps < CHANGED_CMPS_SIZE);
 
     u32 num_changed_bytes = afl->is_bytes_max ? CUR_BYTES_SIZE : afl->cur_num_bytes;
     new_tc->byte_cmp_sets[i1].num_changed_bytes = num_changed_bytes;
@@ -708,6 +710,12 @@ do {                                      \
     //fprintf(afl->byte_sel_record_file,"**,%u,%u\n",num_changed_bytes, num_changed_cmps);
     
     memcpy(out_buf2, out_buf, len);
+    i1++;
+  }
+
+  for (i1 = 0; i1 < NUM_BYTES_SETS; i1++) {
+    assert(new_tc->byte_cmp_sets[i1].num_changed_cmps < CHANGED_CMPS_SIZE);
+    assert(new_tc->byte_cmp_sets[i1].num_changed_bytes < CHANGED_BYTES_SIZE);
   }
 
   free(out_buf2);
