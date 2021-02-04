@@ -217,6 +217,7 @@ struct tc_graph_entry {
   u8  num_parents;
   u8  num_byte_cmp_sets;
   u8  children_max_reached : 1;
+  u8  initialized : 1;
 };
 
 /* Fuzzing stages */

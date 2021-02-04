@@ -194,6 +194,16 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
     entries[i1].executed = 0;
   }
 
+  u32 tc_idx = afl->queued_paths - 1;
+  if ((tc_idx >= afl->tc_graph_size) || (afl->current_entry >= afl->tc_graph_size)
+    || ((afl->splicing_with >= 0) && (((u32) afl->splicing_with) >= afl->tc_graph_size))) {
+    afl->tc_graph_size += INIT_TC_GRAPH_SIZE;
+    afl->tc_graph = (struct tc_graph_entry *) realloc(afl->tc_graph,
+    sizeof(struct tc_graph_entry) * (afl->tc_graph_size));
+  }
+
+  struct tc_graph_entry * new_tc = &(afl->tc_graph[tc_idx]);
+
   write_to_testcase(afl, out_buf, len);
 
   u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
@@ -201,6 +211,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
   if (fault == FSRV_RUN_TMOUT) {
     //what?
     WARNF("input in the queue timed out on func log");
+    new_tc->initialized = 0;
     return;
   }
 
@@ -211,16 +222,6 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
 
   u8 precondition, postcondition;
 
-  u32 tc_idx = afl->queued_paths - 1;
-
-  if ((tc_idx >= afl->tc_graph_size) || (afl->current_entry >= afl->tc_graph_size)
-      || ((afl->splicing_with >= 0) && (((u32) afl->splicing_with) >= afl->tc_graph_size))) {
-    afl->tc_graph_size += INIT_TC_GRAPH_SIZE;
-    afl->tc_graph = (struct tc_graph_entry *) realloc(afl->tc_graph,
-    sizeof(struct tc_graph_entry) * (afl->tc_graph_size));
-  }
-
-  struct tc_graph_entry * new_tc = &(afl->tc_graph[tc_idx]);
   new_tc->num_children = 0; 
   new_tc->num_parents = 1;
   if (likely(!is_init)) {
@@ -255,6 +256,8 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
       }
     }
   }
+
+  new_tc->initialized = 1;
 
   
   struct cmp_queue_entry * queue_entries = afl->cmp_queue_entries;
@@ -835,7 +838,11 @@ void get_close_tcs(afl_state_t * afl, u32 target_id, u32 * close_tcs, u32 * num_
 
   if (unlikely(*num_close_tc >= CLOSE_TCS_SIZE)) return;
 
+  if (unlikely(target_id >= afl->tc_graph_size)) return;
+
   struct tc_graph_entry * cur_entry = &(afl->tc_graph[target_id]);
+
+  if (unlikely(!cur_entry->initialized)) return;
 
   if (degree == 1) {
 
