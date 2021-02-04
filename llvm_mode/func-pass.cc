@@ -193,6 +193,8 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
       cmp_id ++;
     }
 
+    if (icomps.size() == 0) continue;
+
     func_cmp.push_back(cmp_id);
 
     func_id ++;

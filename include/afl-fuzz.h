@@ -748,6 +748,8 @@ typedef struct afl_state {
 
   //DEBUG
   FILE * byte_sel_record_file;
+
+  u8 func_rel_mode;
 } afl_state_t;
 
 struct custom_mutator {
@@ -1099,6 +1101,9 @@ void fuzz_one_func(afl_state_t *);
 void destroy_func(afl_state_t *);
 void init_trim_and_func(afl_state_t *);
 void get_byte_cmps_func_rels(afl_state_t *, u8 *, u32, u8);
+void init_no_func_mode(afl_state_t *);
+void read_init_seed_no_func(afl_state_t *);
+void get_branch_cov(afl_state_t *, u8 *, u32);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len,

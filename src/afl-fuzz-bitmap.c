@@ -628,7 +628,11 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault) {
     close(fd);
     
     // execute funclog binary and record cmp information
-    get_byte_cmps_func_rels(afl, mem, len, 0);
+    if (afl->func_rel_mode) {
+      get_byte_cmps_func_rels(afl, mem, len, 0);
+    } else {
+      get_branch_cov(afl, mem, len);
+    }
 
     keeping = 1;
 

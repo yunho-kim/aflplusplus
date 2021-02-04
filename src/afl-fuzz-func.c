@@ -64,6 +64,24 @@ void init_func(afl_state_t* afl) {
   fprintf(afl->byte_sel_record_file, "target_cmp, mutating_tc, # of close tc, # of bytes, tc len, # rel func,\n");
 }
 
+void init_no_func_mode(afl_state_t * afl) {
+  FILE * f = fopen(afl->func_info_txt, "r");
+
+  if (f == NULL) PFATAL("Can't open func txt file");
+
+  int res;
+  res = fscanf(f, "%u,%u\n", &afl->num_func, &afl->num_cmp);
+  if (res == EOF) PFATAL("Can't read func txt file");
+
+  if (afl->num_cmp > CMP_FUNC_MAP_SIZE) {
+    WARNF("# of cmp is bigger than CMP_FUNC_MAP_SIZE");
+    afl->num_cmp = CMP_FUNC_MAP_SIZE;
+  }
+
+  afl->cmp_queue_entries = (struct cmp_queue_entry *) calloc(afl->num_cmp, sizeof(struct cmp_queue_entry));
+  if (afl->cmp_queue_entries == NULL) PFATAL("Can't alloc cmp_queue_entries");
+}
+
 void init_trim_and_func(afl_state_t * afl) {
   struct queue_entry * q = afl->queue;
   s32 fd, len;
@@ -88,22 +106,92 @@ void init_trim_and_func(afl_state_t * afl) {
 
     q->trim_done = 1;
 
-    //TODO : make new function for initial inputs
     get_byte_cmps_func_rels(afl, in_buf, len, 1);
 
     q = q->next;
     afl->queued_paths++;
+
+    munmap(in_buf, len);
   }
   afl->queued_paths--;
+}
+
+void read_init_seed_no_func(afl_state_t * afl) {
+  struct queue_entry * q = afl->queue;
+  s32 fd;
+  u32 len;
+  u8 * in_buf;
+
+  while(!q) {
+    fd = open(q->fname, O_RDONLY);
+    if (unlikely(fd < 0)) PFATAL("Unable to open '%s'", q->fname);
+
+    len = q->len;
+    in_buf = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+
+    if (unlikely(in_buf == MAP_FAILED)) PFATAL("Unable to mmap '%s' with len %d", q->fname, len);
+
+    close(fd);
+
+    get_branch_cov(afl, in_buf, len);
+
+    q = q->next;
+    munmap(in_buf, len);
+  }
+}
+
+void get_branch_cov(afl_state_t * afl, u8 * out_buf, u32 len) {
+
+  u32 i1, cmp_id;
+  struct cmp_func_entry * entries = afl->shm.func_map->entries;
+
+  for (i1 = 0; i1 < afl->num_cmp ; i1++) {
+    entries[i1].executed = 0;
+    entries[i1].condition = 0;
+  }
+
+  write_to_testcase(afl, out_buf, len);
+  u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
+
+  if (fault == FSRV_RUN_TMOUT) {
+    //what?
+    WARNF("input in the queue timed out on func log");
+    return;
+  }
+
+  u8 precondition, postcondition;
+  
+  struct cmp_queue_entry * queue_entries = afl->cmp_queue_entries;
+  struct cmp_queue_entry * cur_queue_entry;
+
+  for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id++) {
+    if (entries[cmp_id].executed) {
+      cur_queue_entry = &(queue_entries[cmp_id]);
+      precondition = cur_queue_entry->condition;
+      cur_queue_entry->condition |= entries[cmp_id].condition;
+      postcondition = cur_queue_entry->condition;
+
+      if ((precondition == 0) && (postcondition != 3)) {
+        afl->covered_branch++;
+      } else if ((precondition == 0) && (postcondition == 3)) {
+        afl->covered_branch += 2;
+      } else if ((precondition != 3) && (postcondition == 3)) {
+        afl->covered_branch++;
+      }
+    }
+  }
 }
 
 
 void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init) {
 
   u32 i1, i2, cmp_id;
+  struct cmp_func_entry * entries = afl->shm.func_map->entries;
+
   for (i1 = 0; i1 < afl->num_cmp ; i1++) {
-    afl->shm.func_map->entries[i1].condition = 0;
-    afl->shm.func_map->entries[i1].precondition = 0;
+    entries[i1].condition = 0;
+    entries[i1].precondition = 0;
+    entries[i1].executed = 0;
   }
 
   write_to_testcase(afl, out_buf, len);
@@ -118,7 +206,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
 
   //get condition values of the new test input
   for (i1 = 0; i1 < afl->num_cmp; i1++) {
-    afl->shm.func_map->entries[i1].precondition = afl->shm.func_map->entries[i1].condition;
+    entries[i1].precondition = entries[i1].condition;
   }
 
   u8 precondition, postcondition;
@@ -158,17 +246,17 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
     }
   }
 
-  struct cmp_func_entry * entries = afl->shm.func_map->entries;
+  
   struct cmp_queue_entry * queue_entries = afl->cmp_queue_entries;
   struct cmp_queue_entry * cur_queue_entry ;
 
   memset(afl->func_list, 0, sizeof(u8) * afl->num_func);
 
   for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id++) {
-    if (afl->shm.func_map->entries[cmp_id].executed) {
+    if (entries[cmp_id].executed) {
       cur_queue_entry = &(queue_entries[cmp_id]);
       precondition = cur_queue_entry->condition;
-      cur_queue_entry->condition |= afl->shm.func_map->entries[cmp_id].condition;
+      cur_queue_entry->condition |= entries[cmp_id].condition;
       postcondition = cur_queue_entry->condition;
 
       if ((precondition == 0) && (postcondition != 3)) {
@@ -920,7 +1008,8 @@ void write_func_stats (afl_state_t * afl) {
 void destroy_func(afl_state_t * afl) {
   u32 idx1, idx2;
 
-  fclose(afl->byte_sel_record_file);
+  if (afl->byte_sel_record_file)
+    fclose(afl->byte_sel_record_file);
 
   for (idx1 = 0; idx1 < afl->num_cmp; idx1++) {
     if (afl->cmp_queue_entries[idx1].executing_tcs != NULL)
@@ -942,11 +1031,16 @@ void destroy_func(afl_state_t * afl) {
       free(afl->tc_graph[idx1].children);
   }
 
-  free(afl->tc_graph);
+  if (afl->tc_graph)
+    free(afl->tc_graph);
   ck_free(afl->func_binary);
   ck_free(afl->func_info_txt);
-  free(afl->cmp_func_map);
-  free(afl->func_list);
+
+  if (afl->cmp_func_map)
+    free(afl->cmp_func_map);
+
+  if (afl->func_list)
+    free(afl->func_list);
   
   if(afl->func_exec_count_table) {
     for (idx1 = 0; idx1 < afl->num_func ; idx1 ++ ) {
@@ -956,7 +1050,8 @@ void destroy_func(afl_state_t * afl) {
     free(afl->func_exec_count_table);
   }
   
-  free(afl->fuzz_one_func_byte_offsets);
+  if (afl->fuzz_one_func_byte_offsets)
+    free(afl->fuzz_one_func_byte_offsets);
 }
 
 void fuzz_one_func (afl_state_t *afl) {
