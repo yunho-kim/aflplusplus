@@ -106,7 +106,7 @@ void init_trim_and_func(afl_state_t * afl) {
 
     q->trim_done = 1;
 
-    get_byte_cmps_func_rels(afl, in_buf, len, 1);
+    get_byte_cmps_func_rels(afl, in_buf, len, 0);
 
     q = q->next;
     afl->queued_paths++;
@@ -183,7 +183,7 @@ void get_branch_cov(afl_state_t * afl, u8 * out_buf, u32 len) {
 }
 
 
-void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init) {
+void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_parent) {
 
   u32 i1, i2, cmp_id;
   struct cmp_func_entry * entries = afl->shm.func_map->entries;
@@ -223,8 +223,9 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
   u8 precondition, postcondition;
 
   new_tc->num_children = 0; 
-  new_tc->num_parents = 1;
-  if (likely(!is_init)) {
+  new_tc->num_parents = 0;
+  new_tc->children = NULL;
+  if (likely(has_parent)) {
     new_tc->parents[0] = afl->current_entry;
     if (likely(afl->current_entry < tc_idx)) {
       struct tc_graph_entry * parent = &(afl->tc_graph[afl->current_entry]);
