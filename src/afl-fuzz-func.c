@@ -221,20 +221,12 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
   }
 
   struct tc_graph_entry * new_tc = &(afl->tc_graph[tc_idx]);
+  new_tc->num_children = 0; 
+  new_tc->num_parents = 1;
   if (likely(!is_init)) {
     new_tc->parents[0] = afl->current_entry;
-    struct tc_graph_entry * parent = &(afl->tc_graph[afl->current_entry]);
-    if (parent->children == NULL)
-      parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_MAX);
-    parent->children[parent->num_children++] = tc_idx;
-    if(unlikely(parent->num_children >= TC_CHILDREN_MAX)){
-      parent->children_max_reached = 1;
-      parent->num_children = 0;
-    }
-    new_tc->num_parents = 1;
-
-    if (afl->splicing_with >= 0) {
-      parent = &(afl->tc_graph[afl->splicing_with]);
+    if (likely(afl->current_entry < tc_idx)) {
+      struct tc_graph_entry * parent = &(afl->tc_graph[afl->current_entry]);
       if (parent->children == NULL)
         parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_MAX);
       parent->children[parent->num_children++] = tc_idx;
@@ -242,7 +234,25 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
         parent->children_max_reached = 1;
         parent->num_children = 0;
       }
-      new_tc->num_parents = 2;
+      new_tc->num_parents = 1;
+    } else {
+      //TODO : why?
+    }
+    
+    if (afl->splicing_with >= 0) {
+      if (likely(afl->splicing_with < tc_idx)) {
+        struct tc_graph_entry * parent = &(afl->tc_graph[afl->splicing_with]);
+        new_tc->parents[new_tc->num_parents++] = afl->splicing_with;
+        if (parent->children == NULL)
+          parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_MAX);
+        parent->children[parent->num_children++] = tc_idx;
+        if(unlikely(parent->num_children >= TC_CHILDREN_MAX)){
+          parent->children_max_reached = 1;
+          parent->num_children = 0;
+        }
+      } else {
+        //TODO : why?
+      }
     }
   }
 
@@ -861,6 +871,8 @@ void get_close_tcs(afl_state_t * afl, u32 target_id, u32 * close_tcs, u32 * num_
     u32 num_children = cur_entry->num_children;
     if (cur_entry->children_max_reached) num_children = TC_CHILDREN_MAX;
 
+    if (unlikely(cur_entry->children == NULL)) num_children = 0;
+
     for (i = 0; i < num_children; i ++) {
       temp = 0;
       for (j = 0; j < *num_close_tc; j++) {
@@ -884,6 +896,8 @@ void get_close_tcs(afl_state_t * afl, u32 target_id, u32 * close_tcs, u32 * num_
   
   u32 num_children = cur_entry->num_children;
   if (cur_entry->children_max_reached) num_children = TC_CHILDREN_MAX;
+
+  if (unlikely(cur_entry->children == NULL)) num_children = 0;
 
   for (i = 0; i < num_children; i ++) {
       get_close_tcs(afl, cur_entry->children[i], close_tcs, num_close_tc, degree - 1);

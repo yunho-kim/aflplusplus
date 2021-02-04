@@ -15,25 +15,25 @@ subject=$(echo ${subject} | sed 's,\.afl.*,,g')
 
 export AFL_DISABLE_TRIM=1
 
-cmd="gdb --batch --command=test.gdb --args ${FUZZER} -M 1 -d -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &"
+cmd="gdb --batch --command=test.gdb --args ${FUZZER} -M 1 -d -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &> gdb1.log &"
 
 echo $cmd
 AFL_NO_UI=1 eval $cmd
 
 
-cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 2 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} ${sancmd} &"
+cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 2 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} ${sancmd} &> gdb2.log &"
 echo $cmd
 AFL_NO_UI=1 eval $cmd
 
-cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 3 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} -c ./subjects/${subject}.cmp $* &"
+cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 3 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} -c ./subjects/${subject}.cmp $* &> gdb3.log &"
 echo $cmd
 AFL_NO_UI=1 eval $cmd
 
-cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 4 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &"
+cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 4 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &> gdb4.log &"
 echo $cmd
 AFL_NO_UI=1 eval $cmd
 
-cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 5 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &"
+cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 5 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &> gdb5.log &"
 echo $cmd
 AFL_UN_UI=1 eval $cmd
 
