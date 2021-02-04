@@ -320,7 +320,11 @@ do {                                      \
 
 
   i1 = 0;
+  u32 num_try = 0;
   while(i1 < NUM_BYTES_SETS) {
+
+    if (num_try >= NUM_TRY_MAXIMUM) break;
+
     u32 use_stacking = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2_FUNC));
     u32 rand_value;
     afl->cur_num_bytes = 0;
@@ -784,6 +788,7 @@ do {                                      \
       //changed too many cmps instrs!
       free(new_tc->byte_cmp_sets[i1].changed_cmps);
       memcpy(out_buf2, out_buf, len);
+      num_try ++;
       continue;
     }
 
@@ -800,6 +805,8 @@ do {                                      \
     memcpy(out_buf2, out_buf, len);
     i1++;
   }
+
+  new_tc->num_byte_cmp_sets = i1;
 
   //for (i1 = 0; i1 < NUM_BYTES_SETS; i1++) {
   //  assert(new_tc->byte_cmp_sets[i1].num_changed_cmps < CHANGED_CMPS_SIZE);
@@ -959,7 +966,7 @@ void write_func_stats (afl_state_t * afl) {
     for(idx1= 0; idx1 < afl->queued_paths ; idx1++) {
       e = &(afl->tc_graph[idx1]);
       fprintf(f, "tc_idx:%u,num_children:%u\n", idx1, e->num_children);
-      for (idx2 = 0; idx2 < NUM_BYTES_SETS ; idx2++) {
+      for (idx2 = 0; idx2 < e->num_byte_cmp_sets ; idx2++) {
         fprintf(f, "byte_cmp_set_entry_idx:%u\n",idx2);
         if(e->byte_cmp_sets != NULL) {
           fprintf(f, "num_changed_cmps:%u,num_changed_bytes:%u\n",
@@ -1019,7 +1026,7 @@ void destroy_func(afl_state_t * afl) {
 
   for (idx1 = 0; idx1 < afl->tc_graph_size ; idx1++ ) {
     if (afl->tc_graph[idx1].byte_cmp_sets) {
-      for (idx2 = 0; idx2 < NUM_BYTES_SETS; idx2++) {
+      for (idx2 = 0; idx2 < afl->tc_graph[idx1].num_byte_cmp_sets; idx2++) {
         if (afl->tc_graph[idx1].byte_cmp_sets[idx2].changed_cmps)
           free(afl->tc_graph[idx1].byte_cmp_sets[idx2].changed_cmps);
         if (afl->tc_graph[idx1].byte_cmp_sets[idx2].changed_bytes)
@@ -1153,7 +1160,7 @@ void fuzz_one_func (afl_state_t *afl) {
     u32 num_changed_cmp_max = 0;
     u32 max_idx = (u32) -1;
 
-    for (j = 0 ; j < NUM_BYTES_SETS; j++) {
+    for (j = 0 ; j < cur_tc->num_byte_cmp_sets; j++) {
       num_changed_cmps = cur_tc->byte_cmp_sets[j].num_changed_cmps;
       contains_rel_cmp = 0;
 

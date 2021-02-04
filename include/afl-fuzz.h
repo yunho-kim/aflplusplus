@@ -215,6 +215,7 @@ struct tc_graph_entry {
   struct byte_cmp_set * byte_cmp_sets;
   u32 num_children;
   u8  num_parents;
+  u8  num_byte_cmp_sets;
   u8  children_max_reached : 1;
 };
 

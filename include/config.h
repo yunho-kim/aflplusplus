@@ -463,6 +463,8 @@
 //# of bytes set to try, used int tc_graph_entry
 #define NUM_BYTES_SETS 8
 
+#define NUM_TRY_MAXIMUM (NUM_BYTES_SETS * 512)
+
 #define HAVOC_STACK_POW2_FUNC 4
 
 
