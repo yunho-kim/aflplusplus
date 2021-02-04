@@ -838,7 +838,6 @@ void get_close_tcs(afl_state_t * afl, u32 target_id, u32 * close_tcs, u32 * num_
   u8 temp;
 
   if (unlikely(*num_close_tc >= CLOSE_TCS_SIZE)) return;
-
   if (unlikely(target_id >= afl->tc_graph_size)) return;
 
   struct tc_graph_entry * cur_entry = &(afl->tc_graph[target_id]);
@@ -1173,9 +1172,13 @@ void fuzz_one_func (afl_state_t *afl) {
   u32 * selected_set_size  = (u32 *) malloc (sizeof(u32) * num_close_tc);
 
   for (i = 0; i < num_close_tc; i++) {  
-    struct tc_graph_entry * cur_tc = &(afl->tc_graph[close_tcs[i]]);
+    u32 tc_id = close_tcs[i];
+    //TODO: why?
+    if (unlikely(tc_id >= afl->tc_graph_size)) return;
+    struct tc_graph_entry * cur_tc = &(afl->tc_graph[tc_id]);
     u32 contains_rel_cmp = 0;
 
+    if (unlikely(!cur_tc->initialized)) continue;
     if (cur_tc->byte_cmp_sets == NULL) continue;
 
     u32 num_changed_cmps;
