@@ -240,7 +240,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 is_init
     }
     
     if (afl->splicing_with >= 0) {
-      if (likely(afl->splicing_with < tc_idx)) {
+      if (likely(((u32) afl->splicing_with) < tc_idx)) {
         struct tc_graph_entry * parent = &(afl->tc_graph[afl->splicing_with]);
         new_tc->parents[new_tc->num_parents++] = afl->splicing_with;
         if (parent->children == NULL)
