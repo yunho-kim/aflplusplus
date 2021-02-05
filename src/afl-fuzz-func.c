@@ -1759,7 +1759,7 @@ void fuzz_one_func (afl_state_t *afl) {
               clone_from = rand_below(afl, new_len - clone_len + 1);
 
               clone_to = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
-              if(copy_to >= (temp_len - copy_len + 1)) copy_to = temp_len - copy_len;
+              if(clone_to >= (temp_len - clone_len + 1)) clone_to = temp_len - clone_len;
 
               u8 *temp_buf =
                   afl_realloc(AFL_BUF_PARAM(out_scratch), temp_len + clone_len);
