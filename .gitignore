@@ -79,6 +79,14 @@ afl-tmin
 as
 afl-clang-lto++.8
 afl-gotcpu
+afl-c++
+afl-c++.8
+afl-cc
+afl-cc.8
+afl-lto
+afl-lto++
+afl-lto++.8
+afl-lto.8
 
 *.swp
 
