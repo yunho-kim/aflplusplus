@@ -57,11 +57,11 @@ void init_func(afl_state_t* afl) {
 
   afl->fuzz_one_func_byte_offsets = (u32 *) malloc(sizeof(u32) * FUZZ_ONE_FUNC_BYTE_SIZE);
 
-  snprintf(fn, PATH_MAX, "%s/FRIEND_byte_sel.txt", afl->out_dir);
-  s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-  afl->byte_sel_record_file = fdopen(fd, "w");
+  //snprintf(fn, PATH_MAX, "%s/FRIEND_byte_sel.txt", afl->out_dir);
+  //s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  //afl->byte_sel_record_file = fdopen(fd, "w");
 
-  fprintf(afl->byte_sel_record_file, "target_cmp, mutating_tc, # of close tc, # of bytes, tc len, # rel func,\n");
+  //fprintf(afl->byte_sel_record_file, "target_cmp, mutating_tc, # of close tc, # of bytes, tc len, # rel func,\n");
 }
 
 void init_no_func_mode(afl_state_t * afl) {
@@ -1044,8 +1044,8 @@ void write_func_stats (afl_state_t * afl) {
 void destroy_func(afl_state_t * afl) {
   u32 idx1, idx2;
 
-  if (afl->byte_sel_record_file)
-    fclose(afl->byte_sel_record_file);
+  //if (afl->byte_sel_record_file)
+  //  fclose(afl->byte_sel_record_file);
 
   for (idx1 = 0; idx1 < afl->num_cmp; idx1++) {
     if (afl->cmp_queue_entries[idx1].executing_tcs != NULL)
@@ -1175,9 +1175,9 @@ void fuzz_one_func (afl_state_t *afl) {
   get_close_tcs(afl, afl->cmp_queue_cur->tc->id, close_tcs, &num_close_tc, CLOSE_TC_THRESHOLD);
 
   //debug
-  u32 * selected_set_idx  = (u32 *) malloc (sizeof(u32) * num_close_tc);
-  u32 * selected_set_rel  = (u32 *) malloc (sizeof(u32) * num_close_tc);
-  u32 * selected_set_size  = (u32 *) malloc (sizeof(u32) * num_close_tc);
+  //u32 * selected_set_idx  = (u32 *) malloc (sizeof(u32) * num_close_tc);
+  //u32 * selected_set_rel  = (u32 *) malloc (sizeof(u32) * num_close_tc);
+  //u32 * selected_set_size  = (u32 *) malloc (sizeof(u32) * num_close_tc);
 
   for (i = 0; i < num_close_tc; i++) {  
     u32 tc_id = close_tcs[i];
@@ -1214,9 +1214,9 @@ void fuzz_one_func (afl_state_t *afl) {
     }
 
     if (max_idx == (u32) -1) continue;
-    selected_set_idx[i] = max_idx;
-    selected_set_rel[i] = num_changed_cmp_max;
-    selected_set_size[i] = cur_tc->byte_cmp_sets[max_idx].num_changed_cmps;
+    //selected_set_idx[i] = max_idx;
+    //selected_set_rel[i] = num_changed_cmp_max;
+    //selected_set_size[i] = cur_tc->byte_cmp_sets[max_idx].num_changed_cmps;
 
     if (unlikely(!cur_tc->byte_cmp_sets[max_idx].changed_bytes)) continue;
 
@@ -1239,16 +1239,16 @@ void fuzz_one_func (afl_state_t *afl) {
   afl-> func_cur_num_bytes = afl->is_fuzz_one_func_byte_offsets_max ?
                           FUZZ_ONE_FUNC_BYTE_SIZE : afl->fuzz_one_func_byte_offsets_size;
 
-  fprintf(afl->byte_sel_record_file, "*,%u,%u,%u,%u,%u,%u/%u\n", 
-    target_cmp_id, afl->cmp_queue_cur->tc->id, num_close_tc,  afl->func_cur_num_bytes, len, num_rel_funcs, num_exec_funcs);
+  //fprintf(afl->byte_sel_record_file, "*,%u,%u,%u,%u,%u,%u/%u\n", 
+  //  target_cmp_id, afl->cmp_queue_cur->tc->id, num_close_tc,  afl->func_cur_num_bytes, len, num_rel_funcs, num_exec_funcs);
 
-  for (i = 0; i < num_close_tc; i++) {
-    fprintf(afl->byte_sel_record_file, "%u:%u/%u,", selected_set_idx[i], selected_set_rel[i], selected_set_size[i]);
-  }
-  fprintf(afl->byte_sel_record_file, "\n");
-  free(selected_set_idx);
-  free(selected_set_rel);
-  free(selected_set_size);
+  //for (i = 0; i < num_close_tc; i++) {
+  //  fprintf(afl->byte_sel_record_file, "%u:%u/%u,", selected_set_idx[i], selected_set_rel[i], selected_set_size[i]);
+  //}
+  //fprintf(afl->byte_sel_record_file, "\n");
+  //free(selected_set_idx);
+  //free(selected_set_rel);
+  //free(selected_set_size);
 
   if (afl->func_cur_num_bytes == 0) {
     munmap(orig_in, len);
