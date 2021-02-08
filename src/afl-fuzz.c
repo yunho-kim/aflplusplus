@@ -1247,9 +1247,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  if (afl->func_binary) {
-    check_binary(afl, afl->func_binary);
-  }
+  check_binary(afl, afl->func_binary);
+  ck_free(afl->fsrv.target_path);
 
   check_binary(afl, argv[optind]);
 

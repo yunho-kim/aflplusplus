@@ -1655,6 +1655,8 @@ int check_main_node_exists(afl_state_t *afl) {
     if (res == 0) return 1;
 
   }
+ 
+  closedir(sd);
 
   return 0;
 

@@ -199,7 +199,9 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
     || ((afl->splicing_with >= 0) && (((u32) afl->splicing_with) >= afl->tc_graph_size))) {
     afl->tc_graph_size += INIT_TC_GRAPH_SIZE;
     afl->tc_graph = (struct tc_graph_entry *) realloc(afl->tc_graph,
-    sizeof(struct tc_graph_entry) * (afl->tc_graph_size));
+      sizeof(struct tc_graph_entry) * (afl->tc_graph_size));
+    memset(afl->tc_graph + afl->tc_graph_size - INIT_TC_GRAPH_SIZE,
+           0, sizeof(struct tc_graph_entry) * INIT_TC_GRAPH_SIZE);
   }
 
   struct tc_graph_entry * new_tc = &(afl->tc_graph[tc_idx]);
@@ -812,7 +814,7 @@ do {                                      \
     u32 num_changed_bytes = afl->is_bytes_max ? CUR_BYTES_SIZE : afl->cur_num_bytes;
     new_tc->byte_cmp_sets[i1].num_changed_bytes = num_changed_bytes;
     new_tc->byte_cmp_sets[i1].changed_bytes = (u32 *) malloc (sizeof(u32) * num_changed_bytes);
-    memcpy(new_tc->byte_cmp_sets[i1].changed_bytes, afl->cur_bytes, num_changed_bytes);
+    memcpy(new_tc->byte_cmp_sets[i1].changed_bytes, afl->cur_bytes, sizeof(u32) * num_changed_bytes);
 
     //fprintf(afl->byte_sel_record_file,"**,%u,%u\n",num_changed_bytes, num_changed_cmps);
     
@@ -932,8 +934,14 @@ void write_func_stats (afl_state_t * afl) {
     fprintf(f,"\n");
     for (idx1 = 0; idx1 < afl->num_func; idx1++){
       fprintf(f, "%u,", idx1);
-      for (idx2 = 0; idx2 < afl->num_func ; idx2++){
-        fprintf(f, "%u,", afl->func_exec_count_table[idx1][idx2]);
+      if (afl->func_exec_count_table[idx1]) {
+        for (idx2 = 0; idx2 < afl->num_func ; idx2++){
+            fprintf(f, "%u,", afl->func_exec_count_table[idx1][idx2]);
+        }
+      } else {
+        for (idx2 = 0; idx2 < afl->num_func ; idx2++){
+            fprintf(f, "0,");
+        }
       }
       fprintf(f, "\n");
     }
@@ -999,7 +1007,7 @@ void write_func_stats (afl_state_t * afl) {
             fprintf(f, "\n");
           }
           if (e->byte_cmp_sets[idx2].changed_bytes) {
-            for(idx3 = 0; idx3 < e->byte_cmp_sets[idx3].num_changed_cmps; idx3++) {
+            for(idx3 = 0; idx3 < e->byte_cmp_sets[idx2].num_changed_bytes; idx3++) {
               fprintf(f, "%u,",e->byte_cmp_sets[idx2].changed_bytes[idx3]);
             }
             fprintf(f, "\n");
@@ -1087,7 +1095,7 @@ void fuzz_one_func (afl_state_t *afl) {
   s32 fd;
   u32 len, temp_len;
   u32 i, j, k;
-  u8 *in_buf, *out_buf, *orig_in;
+  u8 *out_buf, *orig_in;
   u64 havoc_queued = 0, orig_hit_cnt, new_hit_cnt = 0;
   u32 perf_score = 100;
 
@@ -1099,7 +1107,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
   len = (u32) afl->cmp_queue_cur->tc->len;
   
-  orig_in = in_buf = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+  orig_in = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
 
   if (unlikely(orig_in == MAP_FAILED))
     PFATAL("Unable to mmap '%s' with len %d", afl->cmp_queue_cur->tc->fname, len);
@@ -1109,7 +1117,7 @@ void fuzz_one_func (afl_state_t *afl) {
   out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
   if (unlikely(!out_buf)) { PFATAL("alloc"); }
 
-  memcpy(out_buf, in_buf, len);
+  memcpy(out_buf, orig_in, len);
 
   perf_score = calculate_score(afl, afl->cmp_queue_cur->tc);
 
@@ -1174,7 +1182,7 @@ void fuzz_one_func (afl_state_t *afl) {
   for (i = 0; i < num_close_tc; i++) {  
     u32 tc_id = close_tcs[i];
     //TODO: why?
-    if (unlikely(tc_id >= afl->tc_graph_size)) return;
+    if (unlikely(tc_id >= afl->tc_graph_size)) continue;
     struct tc_graph_entry * cur_tc = &(afl->tc_graph[tc_id]);
     u32 contains_rel_cmp = 0;
 
@@ -1242,7 +1250,10 @@ void fuzz_one_func (afl_state_t *afl) {
   free(selected_set_rel);
   free(selected_set_size);
 
-  if (afl->func_cur_num_bytes == 0) return;
+  if (afl->func_cur_num_bytes == 0) {
+    munmap(orig_in, len);
+    return;
+  }
   
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
 
@@ -1802,7 +1813,7 @@ void fuzz_one_func (afl_state_t *afl) {
     out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
     if (unlikely(!out_buf)) { PFATAL("alloc"); }
     temp_len = len;
-    memcpy(out_buf, in_buf, len);
+    memcpy(out_buf, orig_in, len);
 
     if (afl->queued_paths != havoc_queued) {
 
