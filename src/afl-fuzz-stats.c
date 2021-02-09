@@ -276,11 +276,11 @@ void maybe_update_plot_file(afl_state_t *afl, double bitmap_cvg, double eps) {
 
   fprintf(
       afl->fsrv.plot_file,
-      "%llu, %llu, %u, %u, %u, %u, %0.02f%%, %llu, %u, %0.02f, %llu\n",
+      "%llu, %llu, %u, %u, %u, %u, %u, %0.02f%%, %llu, %u, %0.02f, %llu\n",
       (get_cur_time() - afl->start_time) / 1000, afl->queue_cycle - 1,
       afl->current_entry, afl->queued_paths, afl->covered_branch,
-      afl->cmp_queue_size, bitmap_cvg, afl->unique_crashes,
-      afl->max_depth, eps, afl->plot_prev_ed); 
+      afl->cmp_queue_size, afl->pending_not_fuzzed, bitmap_cvg,
+      afl->unique_crashes, afl->max_depth, eps, afl->plot_prev_ed); 
       /* ignore errors */
       
   fflush(afl->fsrv.plot_file);
@@ -714,7 +714,6 @@ void show_stats(afl_state_t *afl) {
 
   SAYF(bSTG bV bSTOP "  total tmouts : " cRST "%-22s" bSTG bV "\n", tmp);
 
-  //TODO:
   //  branch coverage, size of cmp queue, cur_num_bytes
   SAYF(bVR bH cCYA bSTOP
        " func relevance metrics " bSTG bH bH10 bX bH10 bH5 bH bH10 bH10 bH2 bH bVL "\n");

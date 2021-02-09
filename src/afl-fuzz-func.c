@@ -922,7 +922,7 @@ void write_func_stats (afl_state_t * afl) {
   s32 fd;
 
   if (afl->func_exec_count_table) {
-    snprintf(fn, PATH_MAX, "%s/func_exec_table.csv", afl->out_dir);
+    snprintf(fn, PATH_MAX, "%s/FRIEND/func_exec_table.csv", afl->out_dir);
     fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd < 0) PFATAL("Unable to create '%s'", fn);
   
@@ -950,7 +950,7 @@ void write_func_stats (afl_state_t * afl) {
 
   // FRIEND related stats
   if (afl->func_binary) {
-    snprintf(fn, PATH_MAX, "%s/FRIEND.stat", afl->out_dir);
+    snprintf(fn, PATH_MAX, "%s/FRIEND/FRIEND.stat", afl->out_dir);
     fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd < 0) PFATAL("Unable to create '%s'", fn);
 
@@ -961,7 +961,7 @@ void write_func_stats (afl_state_t * afl) {
     fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
     fclose(f);
 
-    snprintf(fn, PATH_MAX, "%s/FRIEND_cmp_queue.stat", afl->out_dir);
+    snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_queue.stat", afl->out_dir);
     fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd < 0) PFATAL("Unable to create '%s'", fn);
     f = fdopen(fd, "w");
@@ -985,7 +985,7 @@ void write_func_stats (afl_state_t * afl) {
     }
     fclose(f);
 
-    snprintf(fn, PATH_MAX, "%s/FRIEND_tc_graph.stat", afl->out_dir);
+    snprintf(fn, PATH_MAX, "%s/FRIEND/tc_graph.stat", afl->out_dir);
     fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd < 0) PFATAL("Unable to create '%s'", fn);
 
@@ -1017,7 +1017,7 @@ void write_func_stats (afl_state_t * afl) {
     }
     fclose(f);
 
-    snprintf(fn, PATH_MAX, "%s/findings.stat", afl->out_dir);
+    snprintf(fn, PATH_MAX, "%s/FRIEND/findings.stat", afl->out_dir);
     fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd < 0) PFATAL("Unable to create '%s'", fn);
 

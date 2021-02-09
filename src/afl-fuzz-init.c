@@ -1802,11 +1802,15 @@ void setup_dirs_fds(afl_state_t *afl) {
 
   fprintf(afl->fsrv.plot_file,
           "time, cycles, cur_path, paths_total, covered_branch, "
-          "cmp queue size, map_size, unique_crashes, "
+          "pending_total, cmp queue size, map_size, unique_crashes, "
           "max_depth, execs_per_sec\n");
   fflush(afl->fsrv.plot_file);
 
   /* ignore errors */
+
+  tmp = alloc_printf("%s/FRIEND", afl->out_dir);
+  if (mkdir(tmp, 0700)) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
 
 }
 
