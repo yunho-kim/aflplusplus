@@ -116,7 +116,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   unsigned int func_id = 0;
   unsigned int cmp_id = 0;
   std::ofstream func;
-  func.open("afl_func_id" , std::ofstream::out | std::ofstream::app);
+  func.open("afl_func_id" , std::ofstream::out | std::ofstream::trunc);
 
   std::vector<unsigned int> func_cmp;
   /* iterate over all functions, bbs and instruction and add suitable calls */

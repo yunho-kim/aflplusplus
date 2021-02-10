@@ -57,29 +57,11 @@ void init_func(afl_state_t* afl) {
 
   afl->fuzz_one_func_byte_offsets = (u32 *) malloc(sizeof(u32) * FUZZ_ONE_FUNC_BYTE_SIZE);
 
-  //snprintf(fn, PATH_MAX, "%s/FRIEND_byte_sel.txt", afl->out_dir);
-  //s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-  //afl->byte_sel_record_file = fdopen(fd, "w");
+  snprintf(fn, PATH_MAX, "%s/FRIEND_debug.txt", afl->out_dir);
+  s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  afl->debug_file = fdopen(fd, "w");
 
-  //fprintf(afl->byte_sel_record_file, "target_cmp, mutating_tc, # of close tc, # of bytes, tc len, # rel func,\n");
-}
-
-void init_no_func_mode(afl_state_t * afl) {
-  FILE * f = fopen(afl->func_info_txt, "r");
-
-  if (f == NULL) PFATAL("Can't open func txt file");
-
-  int res;
-  res = fscanf(f, "%u,%u\n", &afl->num_func, &afl->num_cmp);
-  if (res == EOF) PFATAL("Can't read func txt file");
-
-  if (afl->num_cmp > CMP_FUNC_MAP_SIZE) {
-    WARNF("# of cmp is bigger than CMP_FUNC_MAP_SIZE");
-    afl->num_cmp = CMP_FUNC_MAP_SIZE;
-  }
-
-  afl->cmp_queue_entries = (struct cmp_queue_entry *) calloc(afl->num_cmp, sizeof(struct cmp_queue_entry));
-  if (afl->cmp_queue_entries == NULL) PFATAL("Can't alloc cmp_queue_entries");
+  //fprintf(afl->debug_file, "target_cmp, mutating_tc, # of close tc, # of bytes, tc len, # rel func,\n");
 }
 
 void init_trim_and_func(afl_state_t * afl) {
@@ -90,7 +72,7 @@ void init_trim_and_func(afl_state_t * afl) {
 
   afl->queued_paths = 1;
 
-  while(!q) {
+  while(q) {
     fd = open(q->fname, O_RDONLY);
     if (unlikely(fd < 0)) PFATAL("Unable to open '%s'", q->fname);
 
@@ -101,8 +83,8 @@ void init_trim_and_func(afl_state_t * afl) {
 
     close(fd);
 
-    res = trim_case(afl, q, in_buf);
-    if (unlikely(res == FSRV_RUN_ERROR)) FATAL("Unable to execute target application");
+    //res = trim_case(afl, q, in_buf);
+    //if (unlikely(res == FSRV_RUN_ERROR)) FATAL("Unable to execute target application");
 
     q->trim_done = 1;
 
@@ -115,73 +97,6 @@ void init_trim_and_func(afl_state_t * afl) {
   }
   afl->queued_paths--;
 }
-
-void read_init_seed_no_func(afl_state_t * afl) {
-  struct queue_entry * q = afl->queue;
-  s32 fd;
-  u32 len;
-  u8 * in_buf;
-
-  while(!q) {
-    fd = open(q->fname, O_RDONLY);
-    if (unlikely(fd < 0)) PFATAL("Unable to open '%s'", q->fname);
-
-    len = q->len;
-    in_buf = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-
-    if (unlikely(in_buf == MAP_FAILED)) PFATAL("Unable to mmap '%s' with len %d", q->fname, len);
-
-    close(fd);
-
-    get_branch_cov(afl, in_buf, len);
-
-    q = q->next;
-    munmap(in_buf, len);
-  }
-}
-
-void get_branch_cov(afl_state_t * afl, u8 * out_buf, u32 len) {
-
-  u32 i1, cmp_id;
-  struct cmp_func_entry * entries = afl->shm.func_map->entries;
-
-  for (i1 = 0; i1 < afl->num_cmp ; i1++) {
-    entries[i1].executed = 0;
-    entries[i1].condition = 0;
-  }
-
-  write_to_testcase(afl, out_buf, len);
-  u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
-
-  if (fault == FSRV_RUN_TMOUT) {
-    //what?
-    WARNF("input in the queue timed out on func log");
-    return;
-  }
-
-  u8 precondition, postcondition;
-  
-  struct cmp_queue_entry * queue_entries = afl->cmp_queue_entries;
-  struct cmp_queue_entry * cur_queue_entry;
-
-  for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id++) {
-    if (entries[cmp_id].executed) {
-      cur_queue_entry = &(queue_entries[cmp_id]);
-      precondition = cur_queue_entry->condition;
-      cur_queue_entry->condition |= entries[cmp_id].condition;
-      postcondition = cur_queue_entry->condition;
-
-      if ((precondition == 0) && (postcondition != 3)) {
-        afl->covered_branch++;
-      } else if ((precondition == 0) && (postcondition == 3)) {
-        afl->covered_branch += 2;
-      } else if ((precondition != 3) && (postcondition == 3)) {
-        afl->covered_branch++;
-      }
-    }
-  }
-}
-
 
 void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_parent) {
 
@@ -292,19 +207,24 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
       }
 
       if (postcondition != 3) {
-        if (cur_queue_entry->executing_tcs == NULL)
+        if (cur_queue_entry->executing_tcs == NULL) {
           cur_queue_entry->executing_tcs = (u32 *) malloc (sizeof(u32) * EXEC_TCS_SIZE);
+          cur_queue_entry->num_executing_tcs = 0;
+          cur_queue_entry->executing_tcs_size = EXEC_TCS_SIZE;
+        }
         
         cur_queue_entry->executing_tcs[cur_queue_entry->num_executing_tcs++] = tc_idx;
-        if (unlikely(cur_queue_entry-> num_executing_tcs >= EXEC_TCS_SIZE)) {
-          cur_queue_entry->exec_tcs_max_reached = 1;
-          cur_queue_entry->num_executing_tcs = 0;
+        if (unlikely(cur_queue_entry-> num_executing_tcs >= cur_queue_entry->executing_tcs_size)) {
+          cur_queue_entry->executing_tcs_size += EXEC_TCS_SIZE;
+          cur_queue_entry->executing_tcs = (u32 *) realloc(
+            cur_queue_entry->executing_tcs,
+            sizeof(u32) * cur_queue_entry->executing_tcs_size);
         }
       }
       afl->func_list[afl->cmp_func_map[cmp_id]] = 1;
     }
   }
-  
+
   for (i1 = 0; i1 < afl->num_func; i1++) {
     if (afl->func_list[i1]) {
       if (unlikely(afl->func_exec_count_table[i1] == NULL)) {
@@ -816,7 +736,7 @@ do {                                      \
     new_tc->byte_cmp_sets[i1].changed_bytes = (u32 *) malloc (sizeof(u32) * num_changed_bytes);
     memcpy(new_tc->byte_cmp_sets[i1].changed_bytes, afl->cur_bytes, sizeof(u32) * num_changed_bytes);
 
-    //fprintf(afl->byte_sel_record_file,"**,%u,%u\n",num_changed_bytes, num_changed_cmps);
+    //fprintf(afl->debug_file,"**,%u,%u\n",num_changed_bytes, num_changed_cmps);
     
     memcpy(out_buf2, out_buf, len);
     i1++;
@@ -970,12 +890,11 @@ void write_func_stats (afl_state_t * afl) {
     struct cmp_queue_entry * q = afl->cmp_queue;
     fprintf(f, "cmpid, condition, # changed tcs, # executing tcs, executing tcs, mutating tc idx\n");
     while (q != NULL) {
-      u32 num_tcs2 = q->exec_tcs_max_reached ? EXEC_TCS_SIZE : q->num_executing_tcs;
       fprintf(f, "%ld,%u,%u,%u\n",
-        q - afl->cmp_queue_entries, q->condition, num_tcs2, q->mutating_tc_idx);
+        q - afl->cmp_queue_entries, q->condition, q->num_executing_tcs, q->mutating_tc_idx);
 
       if (q->executing_tcs) {
-        for (idx1 = 0; idx1 < num_tcs2; idx1 ++) {
+        for (idx1 = 0; idx1 < q->num_executing_tcs; idx1 ++) {
           fprintf(f, "%u,", q->executing_tcs[idx1]);
         }
         fprintf(f,"\n");
@@ -1044,8 +963,8 @@ void write_func_stats (afl_state_t * afl) {
 void destroy_func(afl_state_t * afl) {
   u32 idx1, idx2;
 
-  //if (afl->byte_sel_record_file)
-  //  fclose(afl->byte_sel_record_file);
+  if (afl->debug_file)
+    fclose(afl->debug_file);
 
   for (idx1 = 0; idx1 < afl->num_cmp; idx1++) {
     if (afl->cmp_queue_entries[idx1].executing_tcs != NULL)
@@ -1239,13 +1158,13 @@ void fuzz_one_func (afl_state_t *afl) {
   afl-> func_cur_num_bytes = afl->is_fuzz_one_func_byte_offsets_max ?
                           FUZZ_ONE_FUNC_BYTE_SIZE : afl->fuzz_one_func_byte_offsets_size;
 
-  //fprintf(afl->byte_sel_record_file, "*,%u,%u,%u,%u,%u,%u/%u\n", 
+  //fprintf(afl->debug_file, "*,%u,%u,%u,%u,%u,%u/%u\n", 
   //  target_cmp_id, afl->cmp_queue_cur->tc->id, num_close_tc,  afl->func_cur_num_bytes, len, num_rel_funcs, num_exec_funcs);
 
   //for (i = 0; i < num_close_tc; i++) {
-  //  fprintf(afl->byte_sel_record_file, "%u:%u/%u,", selected_set_idx[i], selected_set_rel[i], selected_set_size[i]);
+  //  fprintf(afl->debug_file, "%u:%u/%u,", selected_set_idx[i], selected_set_rel[i], selected_set_size[i]);
   //}
-  //fprintf(afl->byte_sel_record_file, "\n");
+  //fprintf(afl->debug_file, "\n");
   //free(selected_set_idx);
   //free(selected_set_rel);
   //free(selected_set_size);
@@ -1805,7 +1724,6 @@ void fuzz_one_func (afl_state_t *afl) {
     }
 
     common_fuzz_stuff(afl, out_buf, temp_len);
-    //fprintf(stderr, "                                                                      temp_len : %u\n", temp_len);
 
     /* out_buf might have been mangled a bit, so let's restore it to its
        original size and shape. */

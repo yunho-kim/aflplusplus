@@ -189,13 +189,13 @@ struct cmp_queue_entry {
   struct queue_entry * tc;
   u32 * executing_tcs;
   u32 num_executing_tcs;
+  u32 executing_tcs_size;
   u32 sel_tc_idx;
   u32 sel_tc_score;
   u32 mutating_tc_idx;
   //2 bits, MSB : true, LSB : false,  true | false covered
   u8 condition : 2;
   u8 tcs_max_reached : 1;
-  u8 exec_tcs_max_reached : 1;
   u8 has_been_fuzzed : 1;
   //u8 is_max_bytes : 1;
 };
@@ -749,9 +749,8 @@ typedef struct afl_state {
   u32 fuzz_one_func_byte_offsets_size;
 
   //DEBUG
-  FILE * byte_sel_record_file;
+  FILE * debug_file;
 
-  u8 func_rel_mode;
 } afl_state_t;
 
 struct custom_mutator {
@@ -1103,9 +1102,6 @@ void fuzz_one_func(afl_state_t *);
 void destroy_func(afl_state_t *);
 void init_trim_and_func(afl_state_t *);
 void get_byte_cmps_func_rels(afl_state_t *, u8 *, u32, u8);
-void init_no_func_mode(afl_state_t *);
-void read_init_seed_no_func(afl_state_t *);
-void get_branch_cov(afl_state_t *, u8 *, u32);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len,

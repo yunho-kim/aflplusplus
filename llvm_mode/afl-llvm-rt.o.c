@@ -1085,7 +1085,6 @@ void __func_log_hook(uint32_t cmpid, uint32_t condition) {
   if (unlikely(!__afl_func_map)) return;
 
   uintptr_t k = (CMP_FUNC_MAP_SIZE - 1) & cmpid;
-
   condition = condition ? 2 : 1;
   __afl_func_map->entries[k].executed = 1; //mark executed
   __afl_func_map->entries[k].condition |= condition;

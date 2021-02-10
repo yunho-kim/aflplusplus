@@ -142,7 +142,6 @@ static char *afl_environment_variables[] = {
     "AFL_NO_SNAPSHOT",
     "AFL_EXPAND_HAVOC_NOW",
     "AFL_FUNC",
-    "AFL_NO_FUNC_MODE",
     NULL
 
 };

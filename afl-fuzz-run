@@ -15,10 +15,10 @@ subject=$(echo ${subject} | sed 's,\.afl.*,,g')
 
 export AFL_DISABLE_TRIM=1
 
-cmd="${FUZZER} -M 1 -d -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &> /dev/null &"
+cmd="${FUZZER} -M 1 -d -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &"
 
 echo $cmd
-AFL_NO_UI=1 eval $cmd
+eval $cmd
 
 
 cmd="${FUZZER} -S 2 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} ${sancmd}  &> /dev/null &"
@@ -33,7 +33,7 @@ cmd="${FUZZER} -S 4 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $*
 echo $cmd
 AFL_NO_UI=1 eval $cmd
 
-cmd="${FUZZER} -S 5 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &"
+cmd="${FUZZER} -S 5 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &> /dev/null &"
 echo $cmd
 AFL_NO_UI=1 eval $cmd
 

@@ -198,7 +198,6 @@ static void usage(u8 *argv0, int more_help) {
       "AFL_SKIP_CPUFREQ: do not warn about variable cpu clocking\n"
       "AFL_SKIP_CRASHES: during initial dry run do not terminate for crashing inputs\n"
       "AFL_TMPDIR: directory to use for input file generation (ramdisk recommended)\n"
-      "AFL_NO_FUNC_MODE: \n"
       //"AFL_PERSISTENT: not supported anymore -> no effect, just a warning\n"
       //"AFL_DEFER_FORKSRV: not supported anymore -> no effect, just a warning\n"
       "\n"
@@ -910,8 +909,6 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  if(get_afl_env("AFL_NO_FUNC_MODE")) { afl->func_rel_mode = 0; } else {afl->func_rel_mode = 1;}
-
   ACTF("Getting to work...");
 
   switch (afl->schedule) {
@@ -1142,11 +1139,7 @@ int main(int argc, char **argv_orig, char **envp) {
     printf("DEBUG: rand %06d is %u\n", counter, rand_below(afl, 65536));
   #endif
   
-  if (afl->func_rel_mode) {
-    init_func(afl);
-  } else {
-    init_no_func_mode(afl);
-  }
+  init_func(afl);
 
   setup_custom_mutators(afl);
 
@@ -1334,11 +1327,7 @@ int main(int argc, char **argv_orig, char **envp) {
   // real start time, we reset, so this works correctly with -V
   afl->start_time = get_cur_time();
 
-  if(afl->func_rel_mode) {
-    init_trim_and_func(afl);
-  } else {
-    read_init_seed_no_func(afl);
-  }
+  init_trim_and_func(afl);
 
   while (1) {
 
@@ -1505,15 +1494,14 @@ int main(int argc, char **argv_orig, char **envp) {
     ++afl->current_entry;
 
     //FRIEND style branch selection and mutation
-    if (!skipped_fuzz && afl->func_rel_mode) {
+    if (!skipped_fuzz) {
       if (likely(afl->cmp_queue)) {
         if (unlikely(afl->cmp_queue_cur == NULL)) {
           afl->cmp_queue_cur = afl->cmp_queue;
         }
 
         //ITERATE through tcs
-        u32 num_tcs = afl->cmp_queue_cur->exec_tcs_max_reached ? 
-          EXEC_TCS_SIZE : afl->cmp_queue_cur->num_executing_tcs;
+        u32 num_tcs = afl->cmp_queue_cur->num_executing_tcs;
 
         if (!afl->cmp_queue_cur->has_been_fuzzed) {
           afl->cmp_queue_cur->mutating_tc_idx = rand_below(afl, num_tcs);
