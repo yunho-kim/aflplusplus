@@ -83,8 +83,8 @@ void init_trim_and_func(afl_state_t * afl) {
 
     close(fd);
 
-    //res = trim_case(afl, q, in_buf);
-    //if (unlikely(res == FSRV_RUN_ERROR)) FATAL("Unable to execute target application");
+    res = trim_case(afl, q, in_buf);
+    if (unlikely(res == FSRV_RUN_ERROR)) FATAL("Unable to execute target application");
 
     q->trim_done = 1;
 
