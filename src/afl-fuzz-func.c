@@ -61,7 +61,7 @@ void init_func(afl_state_t* afl) {
   s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   afl->debug_file = fdopen(fd, "w");
 
-  //fprintf(afl->debug_file, "target_cmp, mutating_tc, # of close tc, # of bytes, tc len, # rel func,\n");
+  fprintf(afl->debug_file, "target_cmp, mutating_tc, # of close tc, # of bytes, tc len, # rel func,\n");
 }
 
 void init_trim_and_func(afl_state_t * afl) {
@@ -775,24 +775,22 @@ void get_close_tcs(afl_state_t * afl, u32 target_id, u32 * close_tcs, u32 * num_
   struct tc_graph_entry * cur_entry = &(afl->tc_graph[target_id]);
 
   if (unlikely(!cur_entry->initialized)) return;
+  
+  temp = 0;
+  for (j = 0; j < *num_close_tc; j++) {
+    if (target_id == close_tcs[j]) {
+      temp = 1;
+      break;
+    }
+  }
+
+  if (!temp) {
+    close_tcs[*num_close_tc] = target_id;
+    (*num_close_tc)++;
+    if (unlikely(*num_close_tc >= CLOSE_TCS_SIZE)) return;
+  }
 
   if (degree == 1) {
-
-    temp = 0;
-    for (j = 0; j < *num_close_tc; j++) {
-      if (target_id == close_tcs[j]) {
-        temp = 1;
-        break;
-      }
-    }
-
-    if (!temp) {
-      close_tcs[*num_close_tc] = target_id;
-      (*num_close_tc)++;
-      if (unlikely(*num_close_tc >= CLOSE_TCS_SIZE)) return;
-    }
-
-
     for (i = 0; i < cur_entry->num_parents; i ++) {
       temp = 0;
       for (j = 0; j < *num_close_tc; j++) {
@@ -898,10 +896,10 @@ void write_func_stats (afl_state_t * afl) {
 
     fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
     struct cmp_queue_entry * q = afl->cmp_queue;
-    fprintf(f, "cmpid, condition, # changed tcs, # executing tcs, executing tcs, mutating tc idx, exec_max_reached, num_fuzzed\n");
+    fprintf(f, "cmpid, condition, # changed tcs, # executing tcs, executing tcs, mutating tc idx, exec_max_reached, num_fuzzed, num_skipped\n");
     while (q != NULL) {
-      fprintf(f, "%ld,%u,%u,%u,%u,%u\n",
-        q - afl->cmp_queue_entries, q->condition, q->num_executing_tcs, q->mutating_tc_idx, q->exec_max_reached, q->num_fuzzed);
+      fprintf(f, "%ld,%u,%u,%u,%u,%u,%u\n",
+        q - afl->cmp_queue_entries, q->condition, q->num_executing_tcs, q->mutating_tc_idx, q->exec_max_reached, q->num_fuzzed, q->num_skipped);
 
       q = q->next;
     }
@@ -1018,7 +1016,8 @@ void fuzz_one_func (afl_state_t *afl) {
   u32 len, temp_len;
   u32 i, j, k;
   u8 *out_buf, *orig_in;
-  u64 havoc_queued = 0, orig_hit_cnt, new_hit_cnt = 0;
+  u64 havoc_queued = 0, orig_hit_cnt, new_hit_cnt;
+  //u32 orig_branch_cov = afl->covered_branch;
   u32 perf_score = 100;
 
   // Map the tc into memory
@@ -1751,10 +1750,14 @@ void fuzz_one_func (afl_state_t *afl) {
 
   }
 
-  new_hit_cnt = afl->queued_paths + afl->unique_crashes;
+  new_hit_cnt = afl->queued_paths + afl->unique_crashes - orig_hit_cnt;
 
-  afl->stage_finds[STAGE_HAVOC_FUNC] += new_hit_cnt - orig_hit_cnt;
+  afl->stage_finds[STAGE_HAVOC_FUNC] += new_hit_cnt;
   afl->stage_cycles[STAGE_HAVOC_FUNC] += afl->stage_max;
+
+  //if (new_hit_cnt) {
+  //  fprintf(afl->debug_file,"**,new path : %llu, branch_cov : %u\n", new_hit_cnt, afl->covered_branch - orig_branch_cov);
+  //}
   
   munmap(orig_in, afl->cmp_queue_cur->tc->len);
 

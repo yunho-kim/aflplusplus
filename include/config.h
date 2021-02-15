@@ -471,5 +471,6 @@
 
 #define CMP_MAX_EXEC_TC_TRESHOLD 0.8
 
+#define TC_ITER_LIMIT 100
 
 #endif                                                  /* ! _HAVE_CONFIG_H */

@@ -192,6 +192,7 @@ struct cmp_queue_entry {
   u32 executing_tcs_size;
   u32 mutating_tc_idx;
   u32 num_fuzzed;
+  u32 num_skipped;
   //2 bits, MSB : true, LSB : false,  true | false covered
   u8 condition : 2;
   u8 has_been_fuzzed : 1;

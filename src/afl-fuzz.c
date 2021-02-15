@@ -1508,16 +1508,30 @@ int main(int argc, char **argv_orig, char **envp) {
           //ITERATE through tcs
           u32 num_tcs = afl->cmp_queue_cur->num_executing_tcs;
 
-          if (!afl->cmp_queue_cur->num_fuzzed) {
+          if (unlikely(!afl->cmp_queue_cur->num_fuzzed)) {
             afl->cmp_queue_cur->mutating_tc_idx = rand_below(afl, num_tcs);
           }
 
-          afl->cmp_queue_cur->tc = afl->queue_buf[
-            afl->cmp_queue_cur->executing_tcs[afl->cmp_queue_cur->mutating_tc_idx++]
-          ];
+          u32 idx = 0;
+          u32 tc_id;
+          do {
+            tc_id = afl->cmp_queue_cur->executing_tcs[afl->cmp_queue_cur->mutating_tc_idx++];
+            if (unlikely(afl->cmp_queue_cur->mutating_tc_idx >= num_tcs))
+              afl->cmp_queue_cur->mutating_tc_idx = 0;
+            idx ++;
+          } while(((tc_id >= afl->tc_graph_size) ||
+            (!afl->tc_graph[tc_id].initialized)) && (idx < TC_ITER_LIMIT)
+          );
 
-          if (unlikely(afl->cmp_queue_cur->mutating_tc_idx >= num_tcs))
-            afl->cmp_queue_cur->mutating_tc_idx = 0;
+          if(idx == TC_ITER_LIMIT) { 
+            afl->cmp_queue_cur->num_skipped++;
+            afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+            continue;
+          }
+
+          //assert(afl->tc_graph[tc_id].initialized);
+
+          afl->cmp_queue_cur->tc = afl->queue_buf[tc_id];
           
           fuzz_one_func(afl);
 
