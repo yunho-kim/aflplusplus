@@ -185,8 +185,12 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
 
   for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id++) {
     if (entries[cmp_id].executed) {
+      afl->func_list[afl->cmp_func_map[cmp_id]] = 1;
       cur_queue_entry = &(queue_entries[cmp_id]);
       precondition = cur_queue_entry->condition;
+
+      if (precondition == 3) continue;
+
       cur_queue_entry->condition |= entries[cmp_id].condition;
       postcondition = cur_queue_entry->condition;
 
@@ -206,7 +210,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
         afl->covered_branch++;
       }
 
-      if (postcondition != 3) {
+      if (postcondition != 3 && !cur_queue_entry->exec_max_reached) {
         if (cur_queue_entry->executing_tcs == NULL) {
           cur_queue_entry->executing_tcs = (u32 *) malloc (sizeof(u32) * EXEC_TCS_SIZE);
           cur_queue_entry->num_executing_tcs = 0;
@@ -220,8 +224,14 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
             cur_queue_entry->executing_tcs,
             sizeof(u32) * cur_queue_entry->executing_tcs_size);
         }
+
+        if ((afl->queued_paths > CMP_CHECK_MAX_EXEC_TC_TRESHOLD) &&
+            unlikely((((float) cur_queue_entry->num_executing_tcs) / ((float) afl->queued_paths)) 
+              > CMP_MAX_EXEC_TC_TRESHOLD)) {
+                cur_queue_entry->exec_max_reached = 1;
+                free(cur_queue_entry->executing_tcs);
+            }
       }
-      afl->func_list[afl->cmp_func_map[cmp_id]] = 1;
     }
   }
 
@@ -888,17 +898,10 @@ void write_func_stats (afl_state_t * afl) {
 
     fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
     struct cmp_queue_entry * q = afl->cmp_queue;
-    fprintf(f, "cmpid, condition, # changed tcs, # executing tcs, executing tcs, mutating tc idx\n");
+    fprintf(f, "cmpid, condition, # changed tcs, # executing tcs, executing tcs, mutating tc idx, exec_max_reached, num_fuzzed\n");
     while (q != NULL) {
-      fprintf(f, "%ld,%u,%u,%u\n",
-        q - afl->cmp_queue_entries, q->condition, q->num_executing_tcs, q->mutating_tc_idx);
-
-      if (q->executing_tcs) {
-        for (idx1 = 0; idx1 < q->num_executing_tcs; idx1 ++) {
-          fprintf(f, "%u,", q->executing_tcs[idx1]);
-        }
-        fprintf(f,"\n");
-      }
+      fprintf(f, "%ld,%u,%u,%u,%u,%u\n",
+        q - afl->cmp_queue_entries, q->condition, q->num_executing_tcs, q->mutating_tc_idx, q->exec_max_reached, q->num_fuzzed);
 
       q = q->next;
     }

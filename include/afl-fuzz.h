@@ -190,13 +190,12 @@ struct cmp_queue_entry {
   u32 * executing_tcs;
   u32 num_executing_tcs;
   u32 executing_tcs_size;
-  u32 sel_tc_idx;
-  u32 sel_tc_score;
   u32 mutating_tc_idx;
+  u32 num_fuzzed;
   //2 bits, MSB : true, LSB : false,  true | false covered
   u8 condition : 2;
-  u8 tcs_max_reached : 1;
   u8 has_been_fuzzed : 1;
+  u8 exec_max_reached : 1;
   //u8 is_max_bytes : 1;
 };
 

@@ -1500,33 +1500,41 @@ int main(int argc, char **argv_orig, char **envp) {
           afl->cmp_queue_cur = afl->cmp_queue;
         }
 
-        //ITERATE through tcs
-        u32 num_tcs = afl->cmp_queue_cur->num_executing_tcs;
-
-        if (!afl->cmp_queue_cur->has_been_fuzzed) {
-          afl->cmp_queue_cur->mutating_tc_idx = rand_below(afl, num_tcs);
-          afl->cmp_queue_cur->has_been_fuzzed = 1;
+        while (unlikely(afl->cmp_queue_cur->exec_max_reached)) {
+          afl->cmp_queue_cur = afl->cmp_queue_cur->next;
         }
 
-        afl->cmp_queue_cur->tc = afl->queue_buf[
-          afl->cmp_queue_cur->executing_tcs[afl->cmp_queue_cur->mutating_tc_idx++]
-        ];
+        if (likely(afl->cmp_queue_cur)) {
+          //ITERATE through tcs
+          u32 num_tcs = afl->cmp_queue_cur->num_executing_tcs;
 
-        if (unlikely(afl->cmp_queue_cur->mutating_tc_idx >= num_tcs))
-          afl->cmp_queue_cur->mutating_tc_idx = 0;
-        
-        fuzz_one_func(afl);
-
-        while (afl->cmp_queue_cur->next != NULL) {
-          if (afl->cmp_queue_cur->next->condition == 3) {
-            //remove target
-            afl->cmp_queue_cur->next = afl->cmp_queue_cur->next->next;
-            afl->cmp_queue_size--;
-          } else {
-            break;
+          if (!afl->cmp_queue_cur->num_fuzzed) {
+            afl->cmp_queue_cur->mutating_tc_idx = rand_below(afl, num_tcs);
           }
+
+          afl->cmp_queue_cur->tc = afl->queue_buf[
+            afl->cmp_queue_cur->executing_tcs[afl->cmp_queue_cur->mutating_tc_idx++]
+          ];
+
+          if (unlikely(afl->cmp_queue_cur->mutating_tc_idx >= num_tcs))
+            afl->cmp_queue_cur->mutating_tc_idx = 0;
+          
+          fuzz_one_func(afl);
+
+          afl->cmp_queue_cur->num_fuzzed++;
+
+          while (afl->cmp_queue_cur->next != NULL) {
+            if ((afl->cmp_queue_cur->next->condition == 3) ||
+                afl->cmp_queue_cur->next->exec_max_reached) {
+              //remove target
+              afl->cmp_queue_cur->next = afl->cmp_queue_cur->next->next;
+              afl->cmp_queue_size--;
+            } else {
+              break;
+            }
+          }
+          afl->cmp_queue_cur = afl->cmp_queue_cur->next;
         }
-        afl->cmp_queue_cur = afl->cmp_queue_cur->next;
       }
     }
   }

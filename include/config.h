@@ -467,5 +467,9 @@
 
 #define HAVOC_STACK_POW2_FUNC 4
 
+#define CMP_CHECK_MAX_EXEC_TC_TRESHOLD 3000
+
+#define CMP_MAX_EXEC_TC_TRESHOLD 0.8
+
 
 #endif                                                  /* ! _HAVE_CONFIG_H */
