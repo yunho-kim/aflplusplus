@@ -437,7 +437,7 @@
 
 //# of cmp instructions, used for shm.func_map->entries to
 //fetch runtime information of cmp instructions
-#define CMP_FUNC_MAP_SIZE 262144
+#define CMP_FUNC_MAP_SIZE 65536
 
 //buffer size
 #define CUR_BYTES_SIZE 256
