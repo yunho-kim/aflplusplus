@@ -737,6 +737,8 @@ typedef struct afl_state {
   //Total number of cmp instructions
   u32 num_cmp;
 
+  u32 num_change_cmp_limit;
+
   //Total number of covered branches respect to cmp instructions
   u32 covered_branch;
 

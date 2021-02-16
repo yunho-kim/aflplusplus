@@ -687,7 +687,7 @@ void show_stats(afl_state_t *afl) {
 
     SAYF(bV bSTOP " total execs : " cRST "%-20s " bSTG bV bSTOP
                   " total crashes : %s%-22s" bSTG         bV "\n",
-         u_stringify_int(IB(0), afl->fsrv.total_execs),
+         u_stringify_int(IB(0), afl->fsrv.total_execs + afl->func_fsrv.total_execs),
          afl->unique_crashes ? cLRD : cRST, tmp);
 
   }

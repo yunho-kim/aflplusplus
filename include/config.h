@@ -438,6 +438,7 @@
 //# of cmp instructions, used for shm.func_map->entries to
 //fetch runtime information of cmp instructions
 #define CMP_FUNC_MAP_SIZE 65536
+//#define CMP_FUNC_MAP_SIZE 262144
 
 //buffer size
 #define CUR_BYTES_SIZE 256
@@ -458,7 +459,9 @@
 #define EXEC_TCS_SIZE 128
 
 //size of # of changed cmps buffer, used in tc_graph_entry
-#define CHANGED_CMPS_SIZE 256
+#define CHANGED_CMPS_SIZE_RATIO 0.02
+
+#define CHANGED_CMPS_SIZE_MIN 256
 
 //size of # of changed bytes buffer, used in tc_graph_entry
 #define CHANGED_BYTES_SIZE 256
@@ -471,7 +474,7 @@
 //# of bytes set to try, used in tc_graph_entry
 #define NUM_BYTES_SETS 16
 
-#define NUM_TRY_MAXIMUM (NUM_BYTES_SETS * 512)
+#define NUM_TRY_MAXIMUM 1024
 
 #define HAVOC_STACK_POW2_FUNC 4
 

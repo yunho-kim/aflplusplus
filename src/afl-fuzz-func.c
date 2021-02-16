@@ -19,9 +19,11 @@ void init_func(afl_state_t* afl) {
   res = fscanf(f, "%u,%u\n", &afl->num_func, &afl->num_cmp);
   if (res == EOF) PFATAL("Can't read func txt file");
 
+  afl->num_change_cmp_limit = (u32) ((float) afl->num_cmp * CHANGED_CMPS_SIZE_RATIO);
+  if (afl->num_change_cmp_limit < CHANGED_CMPS_SIZE_MIN) afl->num_change_cmp_limit = CHANGED_CMPS_SIZE_MIN;
+
   if (afl->num_cmp > CMP_FUNC_MAP_SIZE) {
-    WARNF("# of cmp is bigger than CMP_FUNC_MAP_SIZE");
-    afl->num_cmp = CMP_FUNC_MAP_SIZE;
+    FATAL("# of cmp (%u) is bigger than CMP_FUNC_MAP_SIZE(%u)", afl->num_cmp, CMP_FUNC_MAP_SIZE);
   }
 
   afl->cmp_func_map = malloc(sizeof(u32) * afl->num_cmp);
@@ -61,14 +63,20 @@ void init_func(afl_state_t* afl) {
   s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   afl->debug_file = fdopen(fd, "w");
 
-  fprintf(afl->debug_file, "target_cmp, mutating_tc, # of close tc, # of bytes, tc len, # rel func,\n");
+  //fprintf(afl->debug_file, "target_cmp, mutating_tc, # of close tc, # of bytes, tc len, # rel func,\n");
+
+  //fprintf(afl->debug_file, "change limit : %u\n",afl->num_change_cmp_limit);
 }
 
 void init_trim_and_func(afl_state_t * afl) {
+  printf("init trimming starts\n");
+
   struct queue_entry * q = afl->queue;
   s32 fd, len;
   u8 * in_buf;
   u8 res;
+
+  u64 cur_time = get_cur_time();
 
   afl->queued_paths = 1;
 
@@ -79,7 +87,7 @@ void init_trim_and_func(afl_state_t * afl) {
       afl->queued_paths ++;
       continue;
     }
-    
+
     fd = open(q->fname, O_RDONLY);
     if (unlikely(fd < 0)) PFATAL("Unable to open '%s'", q->fname);
 
@@ -103,6 +111,10 @@ void init_trim_and_func(afl_state_t * afl) {
     munmap(in_buf, len);
   }
   afl->queued_paths--;
+
+  printf("init trimming done, took %llus", (get_cur_time() - cur_time) / 1000);
+
+  return;
 }
 
 
@@ -225,7 +237,6 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
   }
 
   new_tc->initialized = 1;
-
   
   struct cmp_queue_entry * queue_entries = afl->cmp_queue_entries;
   struct cmp_queue_entry * cur_queue_entry ;
@@ -760,7 +771,7 @@ do {                                      \
 
     u32 num_changed_cmps = 0;
     u32 is_max = 0;
-    new_tc->byte_cmp_sets[i1].changed_cmps = (u32 *) malloc (sizeof(u32) * CHANGED_CMPS_SIZE);
+    new_tc->byte_cmp_sets[i1].changed_cmps = (u32 *) malloc (sizeof(u32) * afl->num_change_cmp_limit);
 
     for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id ++) {
       if(entries[cmp_id].executed) {
@@ -771,7 +782,7 @@ do {                                      \
           cur_queue_entry = &(queue_entries[cmp_id]);
 
           new_tc->byte_cmp_sets[i1].changed_cmps[num_changed_cmps++] = cmp_id;
-          if (unlikely(num_changed_cmps >= CHANGED_CMPS_SIZE)) {
+          if (unlikely(num_changed_cmps >= afl->num_change_cmp_limit)) {
             is_max = 1;
             break;
           }
@@ -800,6 +811,8 @@ do {                                      \
     memcpy(out_buf2, out_buf, len);
     i1++;
   }
+
+  //fprintf(afl->debug_file, "**,num_try : %d, num_byte_cmp_sets : %u\n",num_try, i1);
 
   new_tc->num_byte_cmp_sets = i1;
 
