@@ -148,7 +148,8 @@ struct queue_entry {
       favored,                          /* Currently favored?               */
       fs_redundant,                     /* Marked as redundant in the fs?   */
       fully_colorized,                  /* Do not run redqueen stage again  */
-      is_ascii;                         /* Is the input just ascii text?    */
+      is_ascii,                         /* Is the input just ascii text?    */
+      abandoned;
 
   u32 bitmap_size,                      /* Number of bits set in bitmap     */
       fuzz_level;                       /* Number of fuzzing iterations     */

@@ -1350,6 +1350,11 @@ int main(int argc, char **argv_orig, char **envp) {
 
       }
 
+      //TODO: add null check
+      while (afl->queue_cur->abandoned) {
+        afl->queue_cur = afl->queue_cur->next;
+      }
+
       // show_stats(afl);
 
       if (unlikely(afl->not_on_tty)) {
@@ -1451,10 +1456,10 @@ int main(int argc, char **argv_orig, char **envp) {
         struct queue_entry *q = afl->queue;
         // we must recalculate the scores of all queue entries
         while (q) {
-
-          update_bitmap_score(afl, q);
+          if (!q->abandoned) {
+            update_bitmap_score(afl, q);
+          }
           q = q->next;
-
         }
 
       }
@@ -1490,8 +1495,10 @@ int main(int argc, char **argv_orig, char **envp) {
 
     if (afl->stop_soon) { break; }
 
-    afl->queue_cur = afl->queue_cur->next;
-    ++afl->current_entry;
+    do {
+      afl->queue_cur = afl->queue_cur->next;
+      ++afl->current_entry;
+    } while (afl->queue_cur->abandoned);
 
     //FRIEND style branch selection and mutation
     if (!skipped_fuzz) {

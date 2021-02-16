@@ -135,13 +135,21 @@
    ranges has a 33% probability of getting picked, except for the first
    two cycles where smaller blocks are favored: */
 
-#define HAVOC_BLK_SMALL 4
-#define HAVOC_BLK_MEDIUM 16
-#define HAVOC_BLK_LARGE 32
+#define HAVOC_BLK_SMALL 32
+#define HAVOC_BLK_MEDIUM 128
+#define HAVOC_BLK_LARGE 1500
 
 /* Extra-large blocks, selected very rarely (<5% of the time): */
 
-#define HAVOC_BLK_XL 128
+#define HAVOC_BLK_XL 32768
+
+#define FUNC_HAVOC_BLK_SMALL 4
+#define FUNC_HAVOC_BLK_MEDIUM 16
+#define FUNC_HAVOC_BLK_LARGE 32
+
+/* Extra-large blocks, selected very rarely (<5% of the time): */
+
+#define FUNC_HAVOC_BLK_XL 128
 
 /* Probabilities of skipping non-favored entries in the queue, expressed as
    percentages: */
@@ -429,7 +437,7 @@
 
 //# of cmp instructions, used for shm.func_map->entries to
 //fetch runtime information of cmp instructions
-#define CMP_FUNC_MAP_SIZE 65536
+#define CMP_FUNC_MAP_SIZE 262144
 
 //buffer size
 #define CUR_BYTES_SIZE 256
@@ -460,7 +468,7 @@
 //Maximum # of close tcs for each tc, used in tc_graph_entry
 #define CLOSE_TCS_SIZE 64
 
-//# of bytes set to try, used int tc_graph_entry
+//# of bytes set to try, used in tc_graph_entry
 #define NUM_BYTES_SETS 16
 
 #define NUM_TRY_MAXIMUM (NUM_BYTES_SETS * 512)

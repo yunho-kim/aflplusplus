@@ -791,11 +791,15 @@ void perform_dry_run(afl_state_t *afl) {
 
       case FSRV_RUN_TMOUT:
 
+        //let's just skip the tc
+        q->abandoned = 1;
+        break;
+        /*
         if (afl->timeout_given) {
 
-          /* The -t nn+ syntax in the command line sets afl->timeout_given to
-             '2' and instructs afl-fuzz to tolerate but skip queue entries that
-             time out. */
+          // The -t nn+ syntax in the command line sets afl->timeout_given to
+          //   '2' and instructs afl-fuzz to tolerate but skip queue entries that
+          //   time out. 
 
           if (afl->timeout_given > 1) {
 
@@ -837,6 +841,7 @@ void perform_dry_run(afl_state_t *afl) {
           FATAL("Test case '%s' results in a timeout", fn);
 
         }
+        */
 
       case FSRV_RUN_CRASH:
 

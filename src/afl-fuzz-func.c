@@ -73,6 +73,13 @@ void init_trim_and_func(afl_state_t * afl) {
   afl->queued_paths = 1;
 
   while(q) {
+
+    if (q->abandoned) {
+      q = q->next;
+      afl->queued_paths ++;
+      continue;
+    }
+    
     fd = open(q->fname, O_RDONLY);
     if (unlikely(fd < 0)) PFATAL("Unable to open '%s'", q->fname);
 
@@ -96,6 +103,48 @@ void init_trim_and_func(afl_state_t * afl) {
     munmap(in_buf, len);
   }
   afl->queued_paths--;
+}
+
+
+u32 func_choose_block_len(afl_state_t *afl, u32 limit) {
+
+  u32 min_value, max_value;
+  u32 rlim = MIN(afl->queue_cycle, (u32)3);
+
+  if (unlikely(!afl->run_over10m)) { rlim = 1; }
+
+  switch (rand_below(afl, rlim)) {
+
+    case 0:
+      min_value = 1;
+      max_value = FUNC_HAVOC_BLK_SMALL;
+      break;
+
+    case 1:
+      min_value = FUNC_HAVOC_BLK_SMALL;
+      max_value = FUNC_HAVOC_BLK_MEDIUM;
+      break;
+
+    default:
+
+      if (likely(rand_below(afl, 10))) {
+
+        min_value = FUNC_HAVOC_BLK_MEDIUM;
+        max_value = FUNC_HAVOC_BLK_LARGE;
+
+      } else {
+
+        min_value = FUNC_HAVOC_BLK_LARGE;
+        max_value = FUNC_HAVOC_BLK_XL;
+
+      }
+
+  }
+
+  if (min_value >= limit) { min_value = 1; }
+
+  return min_value + rand_below(afl, MIN(max_value, limit) - min_value + 1);
+
 }
 
 void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_parent) {
@@ -537,7 +586,7 @@ do {                                      \
 
           if (len < 2) { break; }
 
-          copy_len = choose_block_len(afl, len - 1);
+          copy_len = func_choose_block_len(afl, len - 1);
 
           copy_from = rand_below(afl, len - copy_len + 1);
           copy_to = rand_below(afl, len - copy_len + 1);
@@ -671,7 +720,7 @@ do {                                      \
 
           u32 copy_from, copy_to, copy_len;
 
-          copy_len = choose_block_len(afl, new_len - 1);
+          copy_len = func_choose_block_len(afl, new_len - 1);
           if (copy_len > len) copy_len = len;
 
           copy_from = rand_below(afl, new_len - copy_len + 1);
@@ -960,6 +1009,7 @@ void write_func_stats (afl_state_t * afl) {
 
   return;
 }
+
 
 void destroy_func(afl_state_t * afl) {
   u32 idx1, idx2;
@@ -1393,7 +1443,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
           /* Don't delete too much. */
 
-          del_len = choose_block_len(afl, temp_len - 1);
+          del_len = func_choose_block_len(afl, temp_len - 1);
 
           del_from = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
           if(del_from > (temp_len - del_len)) continue;
@@ -1416,7 +1466,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
         case 13:
 
-          if (temp_len + HAVOC_BLK_XL < MAX_FILE) {
+          if (temp_len + FUNC_HAVOC_BLK_XL < MAX_FILE) {
 
             /* Clone bytes (75%) or insert a block of constant bytes (25%). */
 
@@ -1426,12 +1476,12 @@ void fuzz_one_func (afl_state_t *afl) {
 
             if (likely(actually_clone)) {
 
-              clone_len = choose_block_len(afl, temp_len);
+              clone_len = func_choose_block_len(afl, temp_len);
               clone_from = rand_below(afl, temp_len - clone_len + 1);
 
             } else {
 
-              clone_len = choose_block_len(afl, HAVOC_BLK_XL);
+              clone_len = func_choose_block_len(afl, FUNC_HAVOC_BLK_XL);
               clone_from = 0;
 
             }
@@ -1486,7 +1536,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
           if (temp_len < 2) { break; }
 
-          copy_len = choose_block_len(afl, temp_len - 1);
+          copy_len = func_choose_block_len(afl, temp_len - 1);
 
           copy_from = rand_below(afl, temp_len - copy_len + 1);
           copy_to = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
@@ -1659,7 +1709,7 @@ void fuzz_one_func (afl_state_t *afl) {
             u8 overwrite = 0;
             if (temp_len >= 2 && rand_below(afl, 2))
               overwrite = 1;
-            else if (temp_len + HAVOC_BLK_XL >= MAX_FILE) {
+            else if (temp_len + FUNC_HAVOC_BLK_XL >= MAX_FILE) {
 
               if (temp_len >= 2)
                 overwrite = 1;
@@ -1672,7 +1722,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
               u32 copy_from, copy_to, copy_len;
 
-              copy_len = choose_block_len(afl, new_len - 1);
+              copy_len = func_choose_block_len(afl, new_len - 1);
               if (copy_len > temp_len) copy_len = temp_len;
 
               copy_from = rand_below(afl, new_len - copy_len + 1);
@@ -1687,7 +1737,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
               u32 clone_from, clone_to, clone_len;
 
-              clone_len = choose_block_len(afl, new_len);
+              clone_len = func_choose_block_len(afl, new_len);
               clone_from = rand_below(afl, new_len - clone_len + 1);
 
               clone_to = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
