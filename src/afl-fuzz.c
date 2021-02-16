@@ -1498,7 +1498,7 @@ int main(int argc, char **argv_orig, char **envp) {
     do {
       afl->queue_cur = afl->queue_cur->next;
       ++afl->current_entry;
-    } while (afl->queue_cur->abandoned);
+    } while (afl->queue_cur && afl->queue_cur->abandoned);
 
     //FRIEND style branch selection and mutation
     if (!skipped_fuzz) {

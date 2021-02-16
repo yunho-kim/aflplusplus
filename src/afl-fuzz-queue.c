@@ -221,6 +221,7 @@ void add_to_queue(afl_state_t *afl, u8 *fname, u32 len, u8 passed_det) {
   q->n_fuzz = 1;
   q->trace_mini = NULL;
   q->id = afl->queued_paths;
+  q->abandoned = 0;
 
   if (q->depth > afl->max_depth) { afl->max_depth = q->depth; }
 
