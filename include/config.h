@@ -441,6 +441,8 @@
 //#define CMP_FUNC_MAP_SIZE 262144
 
 //buffer size
+#define BYTE_CHANGE_RATIO 0.1
+#define BYTE_CHANGE_MIN 256
 #define CUR_BYTES_SIZE 256
 
 //maximum # of children to record
@@ -453,7 +455,7 @@
 #define CLOSE_TC_THRESHOLD 2
 
 //# of bytes to mutate with function relevance
-#define FUZZ_ONE_FUNC_BYTE_SIZE 1024
+#define FUZZ_ONE_FUNC_BYTE_SIZE_RATIO 0.5
 
 //size of executing tcs buffer, used in cmp_queue_entry
 #define EXEC_TCS_SIZE 128
@@ -462,9 +464,6 @@
 #define CHANGED_CMPS_SIZE_RATIO 0.02
 
 #define CHANGED_CMPS_SIZE_MIN 256
-
-//size of # of changed bytes buffer, used in tc_graph_entry
-#define CHANGED_BYTES_SIZE 256
 
 #define REL_FUNC_THRESHOLD 0.95
 

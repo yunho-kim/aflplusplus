@@ -42,6 +42,8 @@ void init_func(afl_state_t* afl) {
     }
   }
   fclose(f);
+  
+  ck_free(afl->func_info_txt);
 
   afl->func_exec_count_table =
     (u32 **) calloc (sizeof(u32*), afl->num_func);
@@ -56,8 +58,6 @@ void init_func(afl_state_t* afl) {
   afl->tc_graph = (struct tc_graph_entry *) calloc(INIT_TC_GRAPH_SIZE, sizeof(struct tc_graph_entry));
   if (afl->tc_graph == NULL) PFATAL("Can't alloc tc_graph");
   afl->tc_graph_size = INIT_TC_GRAPH_SIZE;
-
-  afl->fuzz_one_func_byte_offsets = (u32 *) malloc(sizeof(u32) * FUZZ_ONE_FUNC_BYTE_SIZE);
 
   snprintf(fn, PATH_MAX, "%s/FRIEND_debug.txt", afl->out_dir);
   s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
@@ -235,8 +235,6 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
       }
     }
   }
-
-  new_tc->initialized = 1;
   
   struct cmp_queue_entry * queue_entries = afl->cmp_queue_entries;
   struct cmp_queue_entry * cur_queue_entry ;
@@ -308,10 +306,18 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
     }
   }
 
+  u32 num_change_bytes = (u32) ((float) len * BYTE_CHANGE_RATIO);
+
+  if (unlikely(num_change_bytes <= 0)) {
+    return;
+  } 
+
   u8 * out_buf2 = (u8 *) malloc(sizeof(u8) * len);
   memcpy(out_buf2, out_buf, len);
 
   new_tc->byte_cmp_sets = (struct byte_cmp_set *) malloc(sizeof(struct byte_cmp_set) * NUM_BYTES_SETS);
+
+  afl->cur_bytes = (u32 *) malloc(sizeof(u32) * (num_change_bytes + 10)); //buffer 10bytes
   //mutate and get new byte/cmps sets
   u32 r;
 
@@ -334,7 +340,6 @@ do {                                      \
     u32 use_stacking = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2_FUNC));
     u32 rand_value;
     afl->cur_num_bytes = 0;
-    afl->is_bytes_max = 0;
 
     for (i2 = 0; i2 < use_stacking; ++i2) {
       
@@ -344,9 +349,8 @@ do {                                      \
         
           rand_value = rand_below(afl, len << 3);
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value >> 3;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
           FLIP_BIT(out_buf2, rand_value);
           break;
@@ -355,9 +359,8 @@ do {                                      \
 
           rand_value = rand_below(afl, len);
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
           out_buf2[rand_value] =
               interesting_8[rand_below(afl, sizeof(interesting_8))];
@@ -383,9 +386,8 @@ do {                                      \
 
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
 
           break;
@@ -414,9 +416,8 @@ do {                                      \
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 2;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 3;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
 
           break;
@@ -427,9 +428,8 @@ do {                                      \
 
           rand_value = rand_below(afl, len);
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
           out_buf2[rand_value] -= 1 + rand_below(afl, ARITH_MAX);
           break;
@@ -440,9 +440,8 @@ do {                                      \
 
           rand_value = rand_below(afl, len);
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
           out_buf2[rand_value] += 1 + rand_below(afl, ARITH_MAX);
           break;
@@ -470,9 +469,8 @@ do {                                      \
 
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
 
           break;
@@ -501,9 +499,8 @@ do {                                      \
 
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
 
           break;
@@ -534,9 +531,8 @@ do {                                      \
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 2;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 3;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
 
           break;
@@ -566,9 +562,8 @@ do {                                      \
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 1;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 2;
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value + 3;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
 
           break;
@@ -581,9 +576,8 @@ do {                                      \
 
           rand_value = rand_below(afl, len);
           afl->cur_bytes[afl->cur_num_bytes++] = rand_value;
-          if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-            afl->cur_num_bytes = 0;
-            afl->is_bytes_max = 1;
+          if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+            i2 = use_stacking;
           }
           out_buf2[rand_value] ^= 1 + rand_below(afl, 255);
           break;
@@ -605,9 +599,9 @@ do {                                      \
           u32 i3;
           for (i3 = 0; i3 < copy_len; i3++) {
             afl->cur_bytes[afl->cur_num_bytes++] = copy_to + i3;
-            if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-              afl->cur_num_bytes = 0;
-              afl->is_bytes_max = 1;
+            if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+              i2 = use_stacking;
+              break;
             }
           }
 
@@ -652,9 +646,9 @@ do {                                      \
             u32 i3;
             for (i3 = 0; i3 < extra_len; i3++) {
               afl->cur_bytes[afl->cur_num_bytes++] = insert_at + i3;
-              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-                afl->cur_num_bytes = 0;
-                afl->is_bytes_max = 1;
+              if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+                i2 = use_stacking;
+                break;
               }
             }
 
@@ -676,9 +670,9 @@ do {                                      \
             u32 i3;
             for (i3 = 0; i3 < extra_len; i3++) {
               afl->cur_bytes[afl->cur_num_bytes++] = insert_at + i3;
-              if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-                afl->cur_num_bytes = 0;
-                afl->is_bytes_max = 1;
+              if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+                i2 = use_stacking;
+                break;
               }
             }
 
@@ -740,9 +734,9 @@ do {                                      \
           u32 i3;
           for (i3 = 0; i3 < copy_len; i3++) {
             afl->cur_bytes[afl->cur_num_bytes++] = copy_to + i3;
-            if (unlikely(afl->cur_num_bytes >= CUR_BYTES_SIZE)) {
-              afl->cur_num_bytes = 0;
-              afl->is_bytes_max = 1;
+            if (unlikely(afl->cur_num_bytes >= num_change_bytes)) {
+              i2 = use_stacking;
+              break;
             }
           }
 
@@ -801,20 +795,21 @@ do {                                      \
     new_tc-> byte_cmp_sets[i1].num_changed_cmps = num_changed_cmps;
     //assert(num_changed_cmps < CHANGED_CMPS_SIZE);
 
-    u32 num_changed_bytes = afl->is_bytes_max ? CUR_BYTES_SIZE : afl->cur_num_bytes;
+    u32 num_changed_bytes = afl->cur_num_bytes;
     new_tc->byte_cmp_sets[i1].num_changed_bytes = num_changed_bytes;
     new_tc->byte_cmp_sets[i1].changed_bytes = (u32 *) malloc (sizeof(u32) * num_changed_bytes);
     memcpy(new_tc->byte_cmp_sets[i1].changed_bytes, afl->cur_bytes, sizeof(u32) * num_changed_bytes);
 
-    //fprintf(afl->debug_file,"**,%u,%u\n",num_changed_bytes, num_changed_cmps);
+    //fprintf(afl->debug_file,"**,mutated %u, changed %u cmps\n",num_changed_bytes, num_changed_cmps);
     
     memcpy(out_buf2, out_buf, len);
     i1++;
   }
 
-  //fprintf(afl->debug_file, "**,num_try : %d, num_byte_cmp_sets : %u\n",num_try, i1);
+  //fprintf(afl->debug_file, "*,num_try : %d, num_byte_cmp_sets : %u\n",num_try, i1);
 
   new_tc->num_byte_cmp_sets = i1;
+  new_tc->initialized = 1;
 
   //for (i1 = 0; i1 < NUM_BYTES_SETS; i1++) {
   //  assert(new_tc->byte_cmp_sets[i1].num_changed_cmps < CHANGED_CMPS_SIZE);
@@ -822,6 +817,7 @@ do {                                      \
   //}
 
   free(out_buf2);
+  free(afl->cur_bytes);
 
   return;
 }
@@ -949,6 +945,7 @@ void write_func_stats (afl_state_t * afl) {
     fprintf(f, "# of cmp :%u\n", afl->num_cmp);
     fprintf(f, "# of covered branch:%u\n", afl->covered_branch);
     fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
+    fprintf(f, "Avg. length of tcs : %llu/%u=%.1f", afl->tc_len_sum, afl->queued_paths, (double)afl->tc_len_sum / afl->queued_paths);
     fclose(f);
 
     snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_queue.stat", afl->out_dir);
@@ -1053,7 +1050,6 @@ void destroy_func(afl_state_t * afl) {
   if (afl->tc_graph)
     free(afl->tc_graph);
   ck_free(afl->func_binary);
-  ck_free(afl->func_info_txt);
 
   if (afl->cmp_func_map)
     free(afl->cmp_func_map);
@@ -1068,9 +1064,6 @@ void destroy_func(afl_state_t * afl) {
     }
     free(afl->func_exec_count_table);
   }
-  
-  if (afl->fuzz_one_func_byte_offsets)
-    free(afl->fuzz_one_func_byte_offsets);
 }
 
 void fuzz_one_func (afl_state_t *afl) {
@@ -1132,10 +1125,6 @@ void fuzz_one_func (afl_state_t *afl) {
 
   }
 
-  // Select bytes
-  afl->fuzz_one_func_byte_offsets_size = 0;
-  afl->is_fuzz_one_func_byte_offsets_max = 0;
-
   u32 target_cmp_id = afl->cmp_queue_cur - afl->cmp_queue_entries;
   //get related funcs
   memset(afl->func_list, 0, sizeof(u8) * afl->num_func);
@@ -1157,6 +1146,13 @@ void fuzz_one_func (afl_state_t *afl) {
   u32 num_close_tc = 0;
 
   get_close_tcs(afl, afl->cmp_queue_cur->tc->id, close_tcs, &num_close_tc, CLOSE_TC_THRESHOLD);
+
+  u32 num_mut_bytes = (u32) ((float) len * FUZZ_ONE_FUNC_BYTE_SIZE_RATIO);
+
+  afl->fuzz_one_func_byte_offsets = (u32 *) malloc(sizeof(u32) * num_mut_bytes);
+
+  // Select bytes
+  afl->func_cur_num_bytes = 0;
 
   //debug
   //u32 * selected_set_idx  = (u32 *) malloc (sizeof(u32) * num_close_tc);
@@ -1204,24 +1200,23 @@ void fuzz_one_func (afl_state_t *afl) {
 
     if (unlikely(!cur_tc->byte_cmp_sets[max_idx].changed_bytes)) continue;
 
-    u32 num_changed_bytes = cur_tc->byte_cmp_sets[max_idx].num_changed_bytes;
     k = 0;
-    while (k < num_changed_bytes) {
+    while (k < cur_tc->byte_cmp_sets[max_idx].num_changed_bytes) {
       if (cur_tc->byte_cmp_sets[max_idx].changed_bytes[k] < temp_len) {
-        afl->fuzz_one_func_byte_offsets[afl->fuzz_one_func_byte_offsets_size++]
+        afl->fuzz_one_func_byte_offsets[afl->func_cur_num_bytes++]
           = cur_tc->byte_cmp_sets[max_idx].changed_bytes[k];
-        if(unlikely(afl->fuzz_one_func_byte_offsets_size >= FUZZ_ONE_FUNC_BYTE_SIZE)) {
-          afl->fuzz_one_func_byte_offsets_size = 0;
-          afl->is_fuzz_one_func_byte_offsets_max = 1;
+        if(unlikely(afl->func_cur_num_bytes >= num_mut_bytes)) {
+          break;
         }
       }
       k++;
     }
+
+    if(afl->func_cur_num_bytes >= num_mut_bytes) {
+      break;
+    }
   }
   free(close_tcs);
-
-  afl-> func_cur_num_bytes = afl->is_fuzz_one_func_byte_offsets_max ?
-                          FUZZ_ONE_FUNC_BYTE_SIZE : afl->fuzz_one_func_byte_offsets_size;
 
   //fprintf(afl->debug_file, "*,%u,%u,%u,%u,%u,%u/%u\n", 
   //  target_cmp_id, afl->cmp_queue_cur->tc->id, num_close_tc,  afl->func_cur_num_bytes, len, num_rel_funcs, num_exec_funcs);
@@ -1234,8 +1229,11 @@ void fuzz_one_func (afl_state_t *afl) {
   //free(selected_set_rel);
   //free(selected_set_size);
 
+  //fprintf(afl->debug_file, "***,mutating %u/%u\n", afl->func_cur_num_bytes, num_mut_bytes);
+
   if (afl->func_cur_num_bytes == 0) {
     munmap(orig_in, len);
+    free(afl->fuzz_one_func_byte_offsets);
     return;
   }
   
@@ -1819,10 +1817,11 @@ void fuzz_one_func (afl_state_t *afl) {
   afl->stage_cycles[STAGE_HAVOC_FUNC] += afl->stage_max;
 
   //if (new_hit_cnt) {
-  //  fprintf(afl->debug_file,"**,new path : %llu, branch_cov : %u\n", new_hit_cnt, afl->covered_branch - orig_branch_cov);
+  //  fprintf(afl->debug_file,"***,new path : %llu, branch_cov : %u\n", new_hit_cnt, afl->covered_branch - orig_branch_cov);
   //}
   
   munmap(orig_in, afl->cmp_queue_cur->tc->len);
+  free(afl->fuzz_one_func_byte_offsets);
 
   return ;
 }

@@ -37,7 +37,8 @@ cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 5 -r ./subjects/${subjec
 echo $cmd
 AFL_UN_UI=1 eval $cmd
 
-cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 6 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $*"
+#cmd="gdb --batch --command=test.gdb --args ${FUZZER} -S 6 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $*"
+cmd="gdb --args ${FUZZER} -S 6 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $*"
 echo $cmd
 eval $cmd
 

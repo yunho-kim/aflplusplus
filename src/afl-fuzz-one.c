@@ -3977,9 +3977,6 @@ pacemaker_fuzzing:
 
         afl->stage_cur_val = use_stacking;
 
-        afl->cur_num_bytes = 0;
-        afl->is_bytes_max = 0;
-
         for (i = 0; i < operator_num; ++i) {
 
           MOpt_globals.cycles_v3[i] = MOpt_globals.cycles_v2[i];

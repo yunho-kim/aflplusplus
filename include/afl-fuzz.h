@@ -710,20 +710,15 @@ typedef struct afl_state {
   u32 cmp_queue_size;
 
   //List of mutated bytes indexes
-  u32 cur_bytes[CUR_BYTES_SIZE];
-
-  //some buffer space..
-  u32 garbage_offset[20];
+  u32 * cur_bytes;
 
   //number of mutated bytes
   u32 cur_num_bytes;
 
   u32 func_cur_num_bytes;
 
-  u8 is_bytes_max : 1;
   u8 get_func_info : 1;
   u8 is_spliced : 1;
-  u8 is_fuzz_one_func_byte_offsets_max : 1;
 
   //cmpid (index) -> funcid
   u32 * cmp_func_map;
@@ -749,7 +744,8 @@ typedef struct afl_state {
   u32 tc_graph_size;
 
   u32 * fuzz_one_func_byte_offsets;
-  u32 fuzz_one_func_byte_offsets_size;
+
+  u64 tc_len_sum;
 
   //DEBUG
   FILE * debug_file;

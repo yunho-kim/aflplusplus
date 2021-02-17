@@ -685,9 +685,10 @@ void show_stats(afl_state_t *afl) {
 
   } else {
 
-    SAYF(bV bSTOP " total execs : " cRST "%-20s " bSTG bV bSTOP
+    SAYF(bV bSTOP " total execs : " cRST "%-10s+%-10s" bSTG bV bSTOP
                   " total crashes : %s%-22s" bSTG         bV "\n",
-         u_stringify_int(IB(0), afl->fsrv.total_execs + afl->func_fsrv.total_execs),
+         u_stringify_int(IB(0), afl->fsrv.total_execs),
+         u_stringify_int(IB(1), afl->func_fsrv.total_execs),
          afl->unique_crashes ? cLRD : cRST, tmp);
 
   }
@@ -730,7 +731,7 @@ void show_stats(afl_state_t *afl) {
       afl->cmp_queue_cur - afl->cmp_queue_entries);
   else
     SAYF(bV bSTOP "                                    " bSTG bV);
-  SAYF(bSTOP "      branch cov : " cRST "%-18s  " bSTG bV "\n", tmp);
+  SAYF(bSTOP "      branch cov : " cRST "%-18s " bSTG bV "\n", tmp);
   
   SAYF(bV bSTOP " # of cur_func_bytes :  " cRST "%-12u" bSTG bV, afl->func_cur_num_bytes);
 
@@ -741,7 +742,11 @@ void show_stats(afl_state_t *afl) {
     SAYF(bSTOP "                                       " bSTG bV "\n");
   }
 
-  
+  sprintf(tmp, "%s/%u (%s)",  u_stringify_int(IB(0), afl->tc_len_sum), afl->queued_paths,
+      u_stringify_float(IB(1), (float) afl->tc_len_sum / afl->queued_paths));
+
+  SAYF(bV bSTOP " Avg. tc len :  " cRST "%-20s" bSTG bV, tmp);  
+  SAYF(bSTOP "                                       " bSTG bV "\n");
       
   /* Aaaalmost there... hold on! */
 
