@@ -1502,6 +1502,27 @@ int main(int argc, char **argv_orig, char **envp) {
 
     //FRIEND style branch selection and mutation
     if (!skipped_fuzz) {
+      //mining
+      afl->stage_name = "mining";
+      afl->stage_short = "mining";
+
+      u32 tmp_stage_cur = afl->fsrv.total_execs;
+      u32 tmp_hit = afl->queued_paths + afl->unique_crashes;
+      u32 idx = 0;
+      while (((afl->mining_done_idx + 1) < afl->queued_paths) && idx < MINING_LIMIT) {
+        afl->stage_cur = afl->mining_done_idx;
+        afl->stage_max = afl->queued_paths;
+        get_byte_cmps_main(afl);
+        show_stats(afl);
+        if (afl->stop_soon) {break;}
+        idx++;
+      }
+
+      afl->stage_finds[STAGE_MINIG] += afl->queued_paths + afl->unique_crashes - tmp_hit;
+      afl->stage_cycles[STAGE_MINIG] += afl->fsrv.total_execs - tmp_stage_cur;
+
+      if (afl->stop_soon) {break;}
+
       if (likely(afl->cmp_queue)) {
         if (unlikely(afl->cmp_queue_cur == NULL)) {
           afl->cmp_queue_cur = afl->cmp_queue;
@@ -1527,7 +1548,7 @@ int main(int argc, char **argv_orig, char **envp) {
               afl->cmp_queue_cur->mutating_tc_idx = 0;
             idx ++;
           } while(((tc_id >= afl->tc_graph_size) ||
-            (!afl->tc_graph[tc_id].initialized)) && (idx < TC_ITER_LIMIT)
+            (!afl->tc_graph[tc_id]->initialized)) && (idx < TC_ITER_LIMIT)
           );
 
           if(idx == TC_ITER_LIMIT) { 

@@ -867,9 +867,11 @@ void show_stats(afl_state_t *afl) {
                   : cRST),
        tmp);
 
-  sprintf(tmp, "%s/%s      ",
+  sprintf(tmp, "%s/%s, %s/%s",
           u_stringify_int(IB(0), afl->stage_finds[STAGE_HAVOC_FUNC]),
-          u_stringify_int(IB(1), afl->stage_cycles[STAGE_HAVOC_FUNC]));
+          u_stringify_int(IB(1), afl->stage_cycles[STAGE_HAVOC_FUNC]),
+          u_stringify_int(IB(2), afl->stage_finds[STAGE_MINIG]),
+          u_stringify_int(IB(3), afl->stage_cycles[STAGE_MINIG]));
 
   SAYF(bV bSTOP " havoc_func  : " cRST "%-36s " bSTG bV "\n", tmp);
 

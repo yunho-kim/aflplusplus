@@ -143,13 +143,23 @@
 
 #define HAVOC_BLK_XL 32768
 
-#define FUNC_HAVOC_BLK_SMALL 4
-#define FUNC_HAVOC_BLK_MEDIUM 16
-#define FUNC_HAVOC_BLK_LARGE 32
+#define FUNC_HAVOC_BLK_SMALL_RATIO 0.001
+#define FUNC_HAVOC_BLK_MEDIUM_RATIO 0.004
+#define FUNC_HAVOC_BLK_LARGE_RATIO 0.016
 
 /* Extra-large blocks, selected very rarely (<5% of the time): */
 
-#define FUNC_HAVOC_BLK_XL 128
+#define FUNC_HAVOC_BLK_XL_RATIO 0.04
+
+#define FUNC_HAVOC_BLK_SMALL_MIN 4
+#define FUNC_HAVOC_BLK_MEDIUM_MIN 16
+#define FUNC_HAVOC_BLK_LARGE_MIN 32
+
+/* Extra-large blocks, selected very rarely (<5% of the time): */
+
+#define FUNC_HAVOC_BLK_XL_MIN 128
+
+
 
 /* Probabilities of skipping non-favored entries in the queue, expressed as
    percentages: */
@@ -179,7 +189,7 @@
 
 /* Maximum size of input file, in bytes (keep under 100MB): */
 
-#define MAX_FILE (1 << 16)
+#define MAX_FILE (1 * 1024 * 1024)
 
 /* The same, for the test case minimizer: */
 
@@ -473,7 +483,7 @@
 //# of bytes set to try, used in tc_graph_entry
 #define NUM_BYTES_SETS 16
 
-#define NUM_TRY_MAXIMUM 1024
+#define NUM_TRY_MAXIMUM 128
 
 #define HAVOC_STACK_POW2_FUNC 4
 
@@ -482,5 +492,7 @@
 #define CMP_MAX_EXEC_TC_TRESHOLD 0.8
 
 #define TC_ITER_LIMIT 100
+
+#define MINING_LIMIT 100
 
 #endif                                                  /* ! _HAVE_CONFIG_H */

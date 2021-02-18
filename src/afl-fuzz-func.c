@@ -55,7 +55,7 @@ void init_func(afl_state_t* afl) {
   afl->cmp_queue_entries = (struct cmp_queue_entry *) calloc(afl->num_cmp, sizeof(struct cmp_queue_entry));
   if (afl->cmp_queue_entries == NULL) PFATAL("Can't alloc cmp_queue_entries");
 
-  afl->tc_graph = (struct tc_graph_entry *) calloc(INIT_TC_GRAPH_SIZE, sizeof(struct tc_graph_entry));
+  afl->tc_graph = (struct tc_graph_entry **) calloc(INIT_TC_GRAPH_SIZE, sizeof(struct tc_graph_entry *));
   if (afl->tc_graph == NULL) PFATAL("Can't alloc tc_graph");
   afl->tc_graph_size = INIT_TC_GRAPH_SIZE;
 
@@ -78,13 +78,13 @@ void init_trim_and_func(afl_state_t * afl) {
 
   u64 cur_time = get_cur_time();
 
-  afl->queued_paths = 1;
+  u32 tc_idx = 0;
 
   while(q) {
 
     if (q->abandoned) {
       q = q->next;
-      afl->queued_paths ++;
+      tc_idx++;
       continue;
     }
 
@@ -103,22 +103,47 @@ void init_trim_and_func(afl_state_t * afl) {
 
     q->trim_done = 1;
 
-    get_byte_cmps_func_rels(afl, in_buf, len, 0);
+    update_tc_graph(afl, tc_idx, (u32) -1, (u32) -1);
 
     q = q->next;
-    afl->queued_paths++;
-
+    tc_idx++;
+   
     munmap(in_buf, len);
   }
-  afl->queued_paths--;
+
+  afl->mining_done_idx = tc_idx - 1;
 
   printf("init trimming done, took %llus", (get_cur_time() - cur_time) / 1000);
 
   return;
 }
 
+void get_byte_cmps_main(afl_state_t * afl) {
 
-u32 func_choose_block_len(afl_state_t *afl, u32 limit) {
+  s32 fd, len;
+  u8 * in_buf;
+
+  afl->mining_done_idx++;
+
+  struct queue_entry * q = afl->queue_buf[afl->mining_done_idx];
+
+  fd = open(q->fname, O_RDONLY);
+  if (unlikely(fd < 0)) PFATAL("Unable to open '%s'", q->fname);
+
+  len = q->len;
+  in_buf = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+
+  if (unlikely(in_buf == MAP_FAILED)) PFATAL("Unable to mmap '%s' with len %d", q->fname, len);
+
+  close(fd);
+
+  get_byte_cmps(afl, in_buf, len, afl->mining_done_idx);
+
+  munmap(in_buf, len);
+}
+
+
+u32 func_choose_block_len(afl_state_t *afl, u32 limit, u32 len) {
 
   u32 min_value, max_value;
   u32 rlim = MIN(afl->queue_cycle, (u32)3);
@@ -129,25 +154,39 @@ u32 func_choose_block_len(afl_state_t *afl, u32 limit) {
 
     case 0:
       min_value = 1;
-      max_value = FUNC_HAVOC_BLK_SMALL;
+      max_value = len * FUNC_HAVOC_BLK_SMALL_RATIO;
+      if (max_value < FUNC_HAVOC_BLK_SMALL_MIN)
+        max_value = FUNC_HAVOC_BLK_SMALL_MIN;
       break;
 
     case 1:
-      min_value = FUNC_HAVOC_BLK_SMALL;
-      max_value = FUNC_HAVOC_BLK_MEDIUM;
+      min_value = len * FUNC_HAVOC_BLK_SMALL_RATIO;
+      if (min_value < FUNC_HAVOC_BLK_SMALL_MIN)
+        min_value = FUNC_HAVOC_BLK_SMALL_MIN;
+      max_value = len * FUNC_HAVOC_BLK_MEDIUM_RATIO;
+      if (max_value < FUNC_HAVOC_BLK_MEDIUM_MIN)
+        max_value = FUNC_HAVOC_BLK_MEDIUM_MIN;
       break;
 
     default:
 
       if (likely(rand_below(afl, 10))) {
 
-        min_value = FUNC_HAVOC_BLK_MEDIUM;
-        max_value = FUNC_HAVOC_BLK_LARGE;
+        min_value = len * FUNC_HAVOC_BLK_MEDIUM_RATIO;
+        if (min_value < FUNC_HAVOC_BLK_MEDIUM_MIN)
+          min_value = FUNC_HAVOC_BLK_MEDIUM_MIN;
+        max_value = len * FUNC_HAVOC_BLK_LARGE_RATIO;
+        if (max_value < FUNC_HAVOC_BLK_LARGE_MIN)
+          max_value = FUNC_HAVOC_BLK_LARGE_MIN;
 
       } else {
 
-        min_value = FUNC_HAVOC_BLK_LARGE;
-        max_value = FUNC_HAVOC_BLK_XL;
+        min_value = len * FUNC_HAVOC_BLK_LARGE_RATIO;
+        if (min_value < FUNC_HAVOC_BLK_LARGE_MIN)
+          min_value = FUNC_HAVOC_BLK_LARGE_MIN;
+        max_value = len * FUNC_HAVOC_BLK_XL_RATIO;
+        if (max_value < FUNC_HAVOC_BLK_XL_MIN)
+          max_value = FUNC_HAVOC_BLK_XL_MIN;
 
       }
 
@@ -159,7 +198,70 @@ u32 func_choose_block_len(afl_state_t *afl, u32 limit) {
 
 }
 
-void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_parent) {
+void update_tc_graph(afl_state_t * afl, u32 tc_idx, u32 parent_idx, u32 parent2_idx) {
+
+  //fprintf(afl->debug_file, "****,updated index : %u, p1 : %u, p2: %u\n", tc_idx, parent_idx, parent2_idx);
+
+  if ((tc_idx >= afl->tc_graph_size) ||
+    ((parent_idx != (u32) -1) && parent_idx >= afl->tc_graph_size) ||
+    ((parent2_idx != (u32) -1) && (parent2_idx >= afl->tc_graph_size))) {
+    afl->tc_graph_size += INIT_TC_GRAPH_SIZE;
+    afl->tc_graph = (struct tc_graph_entry **) realloc(afl->tc_graph,
+      sizeof(struct tc_graph_entry *) * (afl->tc_graph_size));
+    memset(afl->tc_graph + afl->tc_graph_size - INIT_TC_GRAPH_SIZE,
+      0, sizeof(struct tc_graph_entry *) * INIT_TC_GRAPH_SIZE);
+  }
+
+  struct tc_graph_entry * new_tc = (struct tc_graph_entry *) malloc(sizeof(struct tc_graph_entry));
+  afl->tc_graph[tc_idx] = new_tc;
+
+  new_tc->children = NULL;
+  new_tc->byte_cmp_sets_ptr = NULL;
+  new_tc->num_children = 0; 
+  new_tc->num_parents = 0;
+  new_tc->num_byte_cmp_sets = 0;
+  new_tc->children_max_reached = 0;
+  new_tc->initialized = 0;
+
+
+  if (parent_idx == (u32) -1) return;
+
+  new_tc->parents[0] = parent_idx;
+
+  if (likely(parent_idx < tc_idx)) {
+    struct tc_graph_entry * parent = afl->tc_graph[parent_idx];
+    if (parent->children == NULL)
+      parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_MAX);
+    parent->children[parent->num_children++] = tc_idx;
+    if(unlikely(parent->num_children >= TC_CHILDREN_MAX)){
+      parent->children_max_reached = 1;
+      parent->num_children = 0;
+    }
+    new_tc->num_parents = 1;
+  } else {
+    //TODO : why?
+  }
+  
+  if (parent2_idx != (u32) -1) {
+    if (likely(parent2_idx < tc_idx)) {
+      struct tc_graph_entry * parent = afl->tc_graph[parent2_idx];
+      new_tc->parents[new_tc->num_parents++] = parent2_idx;
+      if (parent->children == NULL)
+        parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_MAX);
+      parent->children[parent->num_children++] = tc_idx;
+      if(unlikely(parent->num_children >= TC_CHILDREN_MAX)){
+        parent->children_max_reached = 1;
+        parent->num_children = 0;
+      }
+    } else {
+      //TODO : why?
+    }
+  }
+
+  return;
+}
+
+void get_byte_cmps(afl_state_t *afl, u8 * out_buf, u32 len, u32 tc_idx) {
 
   u32 i1, i2, cmp_id;
   struct cmp_func_entry * entries = afl->shm.func_map->entries;
@@ -170,17 +272,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
     entries[i1].executed = 0;
   }
 
-  u32 tc_idx = afl->queued_paths - 1;
-  if ((tc_idx >= afl->tc_graph_size) || (afl->current_entry >= afl->tc_graph_size)
-    || ((afl->splicing_with >= 0) && (((u32) afl->splicing_with) >= afl->tc_graph_size))) {
-    afl->tc_graph_size += INIT_TC_GRAPH_SIZE;
-    afl->tc_graph = (struct tc_graph_entry *) realloc(afl->tc_graph,
-      sizeof(struct tc_graph_entry) * (afl->tc_graph_size));
-    memset(afl->tc_graph + afl->tc_graph_size - INIT_TC_GRAPH_SIZE,
-           0, sizeof(struct tc_graph_entry) * INIT_TC_GRAPH_SIZE);
-  }
-
-  struct tc_graph_entry * new_tc = &(afl->tc_graph[tc_idx]);
+  struct tc_graph_entry * new_tc = afl->tc_graph[tc_idx];
 
   write_to_testcase(afl, out_buf, len);
 
@@ -189,7 +281,6 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
   if (fault == FSRV_RUN_TMOUT) {
     //what?
     WARNF("input in the queue timed out on func log");
-    new_tc->initialized = 0;
     return;
   }
 
@@ -199,42 +290,6 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
   }
 
   u8 precondition, postcondition;
-
-  new_tc->num_children = 0; 
-  new_tc->num_parents = 0;
-  new_tc->children = NULL;
-  if (likely(has_parent)) {
-    new_tc->parents[0] = afl->current_entry;
-    if (likely(afl->current_entry < tc_idx)) {
-      struct tc_graph_entry * parent = &(afl->tc_graph[afl->current_entry]);
-      if (parent->children == NULL)
-        parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_MAX);
-      parent->children[parent->num_children++] = tc_idx;
-      if(unlikely(parent->num_children >= TC_CHILDREN_MAX)){
-        parent->children_max_reached = 1;
-        parent->num_children = 0;
-      }
-      new_tc->num_parents = 1;
-    } else {
-      //TODO : why?
-    }
-    
-    if (afl->splicing_with >= 0) {
-      if (likely(((u32) afl->splicing_with) < tc_idx)) {
-        struct tc_graph_entry * parent = &(afl->tc_graph[afl->splicing_with]);
-        new_tc->parents[new_tc->num_parents++] = afl->splicing_with;
-        if (parent->children == NULL)
-          parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_MAX);
-        parent->children[parent->num_children++] = tc_idx;
-        if(unlikely(parent->num_children >= TC_CHILDREN_MAX)){
-          parent->children_max_reached = 1;
-          parent->num_children = 0;
-        }
-      } else {
-        //TODO : why?
-      }
-    }
-  }
   
   struct cmp_queue_entry * queue_entries = afl->cmp_queue_entries;
   struct cmp_queue_entry * cur_queue_entry ;
@@ -288,6 +343,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
               > CMP_MAX_EXEC_TC_TRESHOLD)) {
                 cur_queue_entry->exec_max_reached = 1;
                 free(cur_queue_entry->executing_tcs);
+                cur_queue_entry->executing_tcs = NULL;
             }
       }
     }
@@ -315,7 +371,7 @@ void get_byte_cmps_func_rels(afl_state_t *afl, u8 * out_buf, u32 len, u8 has_par
   u8 * out_buf2 = (u8 *) malloc(sizeof(u8) * len);
   memcpy(out_buf2, out_buf, len);
 
-  new_tc->byte_cmp_sets = (struct byte_cmp_set *) malloc(sizeof(struct byte_cmp_set) * NUM_BYTES_SETS);
+  new_tc->byte_cmp_sets_ptr = (struct byte_cmp_set **) malloc(sizeof(struct byte_cmp_set *) * NUM_BYTES_SETS);
 
   afl->cur_bytes = (u32 *) malloc(sizeof(u32) * (num_change_bytes + 10)); //buffer 10bytes
   //mutate and get new byte/cmps sets
@@ -591,7 +647,7 @@ do {                                      \
 
           if (len < 2) { break; }
 
-          copy_len = func_choose_block_len(afl, len - 1);
+          copy_len = func_choose_block_len(afl, len - 1, len);
 
           copy_from = rand_below(afl, len - copy_len + 1);
           copy_to = rand_below(afl, len - copy_len + 1);
@@ -725,7 +781,7 @@ do {                                      \
 
           u32 copy_from, copy_to, copy_len;
 
-          copy_len = func_choose_block_len(afl, new_len - 1);
+          copy_len = func_choose_block_len(afl, new_len - 1, len );
           if (copy_len > len) copy_len = len;
 
           copy_from = rand_below(afl, new_len - copy_len + 1);
@@ -748,13 +804,13 @@ do {                                      \
 
     //get byte cmps set
 
+    func_common_fuzz_stuff(afl, out_buf2, len, tc_idx);
+
     //execute
     for (i2 = 0; i2 < afl->num_cmp; i2++) {
       afl->shm.func_map->entries[i2].executed = 0;
       afl->shm.func_map->entries[i2].condition = 0;
     }
-
-    write_to_testcase(afl, out_buf2, len);
 
     fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
 
@@ -765,7 +821,10 @@ do {                                      \
 
     u32 num_changed_cmps = 0;
     u32 is_max = 0;
-    new_tc->byte_cmp_sets[i1].changed_cmps = (u32 *) malloc (sizeof(u32) * afl->num_change_cmp_limit);
+
+    new_tc->byte_cmp_sets_ptr[i1] = (struct byte_cmp_set *) malloc(sizeof(struct byte_cmp_set));
+
+    new_tc->byte_cmp_sets_ptr[i1]->changed_cmps = (u32 *) malloc (sizeof(u32) * afl->num_change_cmp_limit);
 
     for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id ++) {
       if(entries[cmp_id].executed) {
@@ -775,7 +834,7 @@ do {                                      \
         if(precondition && (precondition != postcondition)) {
           cur_queue_entry = &(queue_entries[cmp_id]);
 
-          new_tc->byte_cmp_sets[i1].changed_cmps[num_changed_cmps++] = cmp_id;
+          new_tc->byte_cmp_sets_ptr[i1]->changed_cmps[num_changed_cmps++] = cmp_id;
           if (unlikely(num_changed_cmps >= afl->num_change_cmp_limit)) {
             is_max = 1;
             break;
@@ -786,19 +845,22 @@ do {                                      \
 
     if (is_max || num_changed_cmps == 0) {
       //changed too many cmps instrs!
-      free(new_tc->byte_cmp_sets[i1].changed_cmps);
+      free(new_tc->byte_cmp_sets_ptr[i1]->changed_cmps);
+      free(new_tc->byte_cmp_sets_ptr[i1]);
       memcpy(out_buf2, out_buf, len);
       num_try ++;
       continue;
     }
 
-    new_tc-> byte_cmp_sets[i1].num_changed_cmps = num_changed_cmps;
+    new_tc->byte_cmp_sets_ptr[i1]->num_changed_cmps = num_changed_cmps;
+    new_tc->byte_cmp_sets_ptr[i1]->changed_cmps = (u32 *) realloc(
+      new_tc->byte_cmp_sets_ptr[i1]->changed_cmps, sizeof(u32) * num_changed_cmps);
     //assert(num_changed_cmps < CHANGED_CMPS_SIZE);
 
     u32 num_changed_bytes = afl->cur_num_bytes;
-    new_tc->byte_cmp_sets[i1].num_changed_bytes = num_changed_bytes;
-    new_tc->byte_cmp_sets[i1].changed_bytes = (u32 *) malloc (sizeof(u32) * num_changed_bytes);
-    memcpy(new_tc->byte_cmp_sets[i1].changed_bytes, afl->cur_bytes, sizeof(u32) * num_changed_bytes);
+    new_tc->byte_cmp_sets_ptr[i1]->num_changed_bytes = num_changed_bytes;
+    new_tc->byte_cmp_sets_ptr[i1]->changed_bytes = (u32 *) malloc (sizeof(u32) * num_changed_bytes);
+    memcpy(new_tc->byte_cmp_sets_ptr[i1]->changed_bytes, afl->cur_bytes, sizeof(u32) * num_changed_bytes);
 
     //fprintf(afl->debug_file,"**,mutated %u, changed %u cmps\n",num_changed_bytes, num_changed_cmps);
     
@@ -809,12 +871,19 @@ do {                                      \
   //fprintf(afl->debug_file, "*,num_try : %d, num_byte_cmp_sets : %u\n",num_try, i1);
 
   new_tc->num_byte_cmp_sets = i1;
-  new_tc->initialized = 1;
 
-  //for (i1 = 0; i1 < NUM_BYTES_SETS; i1++) {
-  //  assert(new_tc->byte_cmp_sets[i1].num_changed_cmps < CHANGED_CMPS_SIZE);
-  //  assert(new_tc->byte_cmp_sets[i1].num_changed_bytes <= CHANGED_BYTES_SIZE);
-  //}
+  if (i1 == 0) {
+    free(new_tc->byte_cmp_sets_ptr);
+    new_tc->byte_cmp_sets_ptr = NULL;
+    new_tc->initialized = 0;
+  } else {
+    new_tc->initialized = 1;
+    if (i1 < NUM_BYTES_SETS) {
+      new_tc->byte_cmp_sets_ptr = (struct byte_cmp_set **) realloc(
+        new_tc->byte_cmp_sets_ptr,
+        sizeof(struct byte_cmp_set *) * i1);
+    }
+  }
 
   free(out_buf2);
   free(afl->cur_bytes);
@@ -830,7 +899,7 @@ void get_close_tcs(afl_state_t * afl, u32 target_id, u32 * close_tcs, u32 * num_
   if (unlikely(*num_close_tc >= CLOSE_TCS_SIZE)) return;
   if (unlikely(target_id >= afl->tc_graph_size)) return;
 
-  struct tc_graph_entry * cur_entry = &(afl->tc_graph[target_id]);
+  struct tc_graph_entry * cur_entry = afl->tc_graph[target_id];
 
   if (unlikely(!cur_entry->initialized)) return;
   
@@ -972,22 +1041,22 @@ void write_func_stats (afl_state_t * afl) {
     fprintf(f, "# of queued_tcs : %u\n", afl->queued_paths);
     struct tc_graph_entry * e;
     for(idx1= 0; idx1 < afl->queued_paths ; idx1++) {
-      e = &(afl->tc_graph[idx1]);
+      e = afl->tc_graph[idx1];
       fprintf(f, "tc_idx:%u,num_children:%u\n", idx1, e->num_children);
       for (idx2 = 0; idx2 < e->num_byte_cmp_sets ; idx2++) {
         fprintf(f, "byte_cmp_set_entry_idx:%u\n",idx2);
-        if(e->byte_cmp_sets != NULL) {
+        if(e->byte_cmp_sets_ptr != NULL) {
           fprintf(f, "num_changed_cmps:%u,num_changed_bytes:%u\n",
-            e->byte_cmp_sets[idx2].num_changed_cmps,e->byte_cmp_sets[idx2].num_changed_bytes);
-          if (e->byte_cmp_sets[idx2].changed_cmps) {
-            for(idx3 = 0; idx3 < e->byte_cmp_sets[idx2].num_changed_cmps; idx3++) {
-              fprintf(f, "%u,",e->byte_cmp_sets[idx2].changed_cmps[idx3]);
+            e->byte_cmp_sets_ptr[idx2]->num_changed_cmps, e->byte_cmp_sets_ptr[idx2]->num_changed_bytes);
+          if (e->byte_cmp_sets_ptr[idx2]->changed_cmps) {
+            for(idx3 = 0; idx3 < e->byte_cmp_sets_ptr[idx2]->num_changed_cmps; idx3++) {
+              fprintf(f, "%u,",e->byte_cmp_sets_ptr[idx2]->changed_cmps[idx3]);
             }
             fprintf(f, "\n");
           }
-          if (e->byte_cmp_sets[idx2].changed_bytes) {
-            for(idx3 = 0; idx3 < e->byte_cmp_sets[idx2].num_changed_bytes; idx3++) {
-              fprintf(f, "%u,",e->byte_cmp_sets[idx2].changed_bytes[idx3]);
+          if (e->byte_cmp_sets_ptr[idx2]->changed_bytes) {
+            for(idx3 = 0; idx3 < e->byte_cmp_sets_ptr[idx2]->num_changed_bytes; idx3++) {
+              fprintf(f, "%u,",e->byte_cmp_sets_ptr[idx2]->changed_bytes[idx3]);
             }
             fprintf(f, "\n");
           }
@@ -1000,7 +1069,7 @@ void write_func_stats (afl_state_t * afl) {
     fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd < 0) PFATAL("Unable to create '%s'", fn);
 
-    u8 val_buf[8][STRINGIFY_VAL_SIZE_MAX];
+    u8 val_buf[6][STRINGIFY_VAL_SIZE_MAX];
 #define IB(i) (val_buf[(i)])
 
     f = fdopen(fd, "w");
@@ -1010,9 +1079,11 @@ void write_func_stats (afl_state_t * afl) {
           u_stringify_int(IB(3), afl->stage_finds[STAGE_SPLICE]),
           u_stringify_int(IB(4), afl->stage_cycles[STAGE_SPLICE]));
     
-    fprintf(f, "havoc_func : %s/%s\n",
+    fprintf(f, "havoc_func : %s/%s, %s/%s\n",
           u_stringify_int(IB(0), afl->stage_finds[STAGE_HAVOC_FUNC]),
-          u_stringify_int(IB(2), afl->stage_cycles[STAGE_HAVOC_FUNC]));
+          u_stringify_int(IB(2), afl->stage_cycles[STAGE_HAVOC_FUNC]),
+          u_stringify_int(IB(3), afl->stage_cycles[STAGE_MINIG]),
+          u_stringify_int(IB(4), afl->stage_cycles[STAGE_MINIG]));
 
     fclose(f);
   }
@@ -1034,21 +1105,24 @@ void destroy_func(afl_state_t * afl) {
   free(afl->cmp_queue_entries);
 
   for (idx1 = 0; idx1 < afl->tc_graph_size ; idx1++ ) {
-    if (afl->tc_graph[idx1].byte_cmp_sets) {
-      for (idx2 = 0; idx2 < afl->tc_graph[idx1].num_byte_cmp_sets; idx2++) {
-        if (afl->tc_graph[idx1].byte_cmp_sets[idx2].changed_cmps)
-          free(afl->tc_graph[idx1].byte_cmp_sets[idx2].changed_cmps);
-        if (afl->tc_graph[idx1].byte_cmp_sets[idx2].changed_bytes)
-          free(afl->tc_graph[idx1].byte_cmp_sets[idx2].changed_bytes);
+    if (afl->tc_graph[idx1]) {
+      if (afl->tc_graph[idx1]->byte_cmp_sets_ptr) {
+        for (idx2 = 0; idx2 < afl->tc_graph[idx1]->num_byte_cmp_sets; idx2++) {
+          if (afl->tc_graph[idx1]->byte_cmp_sets_ptr[idx2]->changed_cmps)
+            free(afl->tc_graph[idx1]->byte_cmp_sets_ptr[idx2]->changed_cmps);
+          if (afl->tc_graph[idx1]->byte_cmp_sets_ptr[idx2]->changed_bytes)
+            free(afl->tc_graph[idx1]->byte_cmp_sets_ptr[idx2]->changed_bytes);
+          free(afl->tc_graph[idx1]->byte_cmp_sets_ptr[idx2]);
+        }
+        free(afl->tc_graph[idx1]->byte_cmp_sets_ptr);
       }
-      free(afl->tc_graph[idx1].byte_cmp_sets);
-    }
-    if (afl->tc_graph[idx1].children != NULL)
-      free(afl->tc_graph[idx1].children);
+      if (afl->tc_graph[idx1]->children != NULL)
+        free(afl->tc_graph[idx1]->children);
+      }
+      free(afl->tc_graph[idx1]);
   }
 
-  if (afl->tc_graph)
-    free(afl->tc_graph);
+  free(afl->tc_graph);
   ck_free(afl->func_binary);
 
   if (afl->cmp_func_map)
@@ -1066,6 +1140,49 @@ void destroy_func(afl_state_t * afl) {
   }
 }
 
+void func_common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len, u32 parent_id) {
+
+  u8 fault;
+
+  write_to_testcase(afl, out_buf, len);
+
+  fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
+
+  if (afl->stop_soon) { return; }
+
+  if (fault == FSRV_RUN_TMOUT) {
+
+    if (afl->subseq_tmouts++ > TMOUT_LIMIT) {
+
+      ++afl->cur_skipped_paths;
+      return;
+
+    }
+
+  } else {
+
+    afl->subseq_tmouts = 0;
+
+  }
+
+  /* Users can hit us with SIGUSR1 to request the current input
+     to be abandoned. */
+
+  if (afl->skip_requested) {
+
+    afl->skip_requested = 0;
+    ++afl->cur_skipped_paths;
+    return;
+
+  }
+
+  /* This handles FAULT_ERROR for us: */
+
+  afl->queued_discovered += save_if_interesting(afl, out_buf, len, fault, parent_id, (u32) -1);
+
+  return ;
+}
+
 void fuzz_one_func (afl_state_t *afl) {
 
   s32 fd;
@@ -1073,7 +1190,6 @@ void fuzz_one_func (afl_state_t *afl) {
   u32 i, j, k;
   u8 *out_buf, *orig_in;
   u64 havoc_queued = 0, orig_hit_cnt, new_hit_cnt;
-  //u32 orig_branch_cov = afl->covered_branch;
   u32 perf_score = 100;
 
   // Map the tc into memory
@@ -1163,24 +1279,24 @@ void fuzz_one_func (afl_state_t *afl) {
     u32 tc_id = close_tcs[i];
     //TODO: why?
     if (unlikely(tc_id >= afl->tc_graph_size)) continue;
-    struct tc_graph_entry * cur_tc = &(afl->tc_graph[tc_id]);
+    struct tc_graph_entry * cur_tc = afl->tc_graph[tc_id];
     u32 contains_rel_cmp = 0;
 
     if (unlikely(!cur_tc->initialized)) continue;
-    if (cur_tc->byte_cmp_sets == NULL) continue;
+    if (cur_tc->byte_cmp_sets_ptr == NULL) continue;
 
     u32 num_changed_cmps;
     u32 num_changed_cmp_max = 0;
     u32 max_idx = (u32) -1;
 
     for (j = 0 ; j < cur_tc->num_byte_cmp_sets; j++) {
-      num_changed_cmps = cur_tc->byte_cmp_sets[j].num_changed_cmps;
+      num_changed_cmps = cur_tc->byte_cmp_sets_ptr[j]->num_changed_cmps;
       contains_rel_cmp = 0;
 
-      if (cur_tc->byte_cmp_sets[j].changed_cmps == NULL) continue;
+      if (cur_tc->byte_cmp_sets_ptr[j]->changed_cmps == NULL) continue;
 
       for (k = 0; k < num_changed_cmps; k++) {
-        if (afl->func_list[afl->cmp_func_map[cur_tc->byte_cmp_sets[j].changed_cmps[k]]]) {
+        if (afl->func_list[afl->cmp_func_map[cur_tc->byte_cmp_sets_ptr[j]->changed_cmps[k]]]) {
           contains_rel_cmp++;
         }
       }
@@ -1198,13 +1314,13 @@ void fuzz_one_func (afl_state_t *afl) {
     //selected_set_rel[i] = num_changed_cmp_max;
     //selected_set_size[i] = cur_tc->byte_cmp_sets[max_idx].num_changed_cmps;
 
-    if (unlikely(!cur_tc->byte_cmp_sets[max_idx].changed_bytes)) continue;
+    if (unlikely(!cur_tc->byte_cmp_sets_ptr[max_idx]->changed_bytes)) continue;
 
     k = 0;
-    while (k < cur_tc->byte_cmp_sets[max_idx].num_changed_bytes) {
-      if (cur_tc->byte_cmp_sets[max_idx].changed_bytes[k] < temp_len) {
+    while (k < cur_tc->byte_cmp_sets_ptr[max_idx]->num_changed_bytes) {
+      if (cur_tc->byte_cmp_sets_ptr[max_idx]->changed_bytes[k] < temp_len) {
         afl->fuzz_one_func_byte_offsets[afl->func_cur_num_bytes++]
-          = cur_tc->byte_cmp_sets[max_idx].changed_bytes[k];
+          = cur_tc->byte_cmp_sets_ptr[max_idx]->changed_bytes[k];
         if(unlikely(afl->func_cur_num_bytes >= num_mut_bytes)) {
           break;
         }
@@ -1454,7 +1570,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
           /* Don't delete too much. */
 
-          del_len = func_choose_block_len(afl, temp_len - 1);
+          del_len = func_choose_block_len(afl, temp_len - 1, len);
 
           del_from = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
           if(del_from > (temp_len - del_len)) continue;
@@ -1477,23 +1593,26 @@ void fuzz_one_func (afl_state_t *afl) {
 
         case 13:
 
-          if (temp_len + FUNC_HAVOC_BLK_XL < MAX_FILE) {
+          /* Clone bytes (75%) or insert a block of constant bytes (25%). */
 
-            /* Clone bytes (75%) or insert a block of constant bytes (25%). */
-
+          {
             u8  actually_clone = rand_below(afl, 4);
             u32 clone_from, clone_to, clone_len;
             u8 *new_buf;
 
             if (likely(actually_clone)) {
 
-              clone_len = func_choose_block_len(afl, temp_len);
+              clone_len = func_choose_block_len(afl, temp_len, len);
               clone_from = rand_below(afl, temp_len - clone_len + 1);
 
             } else {
 
-              clone_len = func_choose_block_len(afl, FUNC_HAVOC_BLK_XL);
+              clone_len = func_choose_block_len(afl, (u32) (len * FUNC_HAVOC_BLK_XL_RATIO), len);
               clone_from = 0;
+
+              if (clone_len + temp_len >= MAX_FILE) {
+                break;
+              }
 
             }
 
@@ -1517,24 +1636,23 @@ void fuzz_one_func (afl_state_t *afl) {
             } else {
 
               memset(new_buf + clone_to,
-                     rand_below(afl, 2) ? rand_below(afl, 256)
+                      rand_below(afl, 2) ? rand_below(afl, 256)
                                         : out_buf[rand_below(afl, temp_len)],
-                     clone_len);
+                      clone_len);
 
             }
 
             /* Tail */
             memcpy(new_buf + clone_to + clone_len, out_buf + clone_to,
-                   temp_len - clone_to);
+                    temp_len - clone_to);
 
             afl_swap_bufs(AFL_BUF_PARAM(out), AFL_BUF_PARAM(out_scratch));
             out_buf = new_buf;
             new_buf = NULL;
             temp_len += clone_len;
 
+            break;
           }
-
-          break;
 
         case 14: {
 
@@ -1547,7 +1665,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
           if (temp_len < 2) { break; }
 
-          copy_len = func_choose_block_len(afl, temp_len - 1);
+          copy_len = func_choose_block_len(afl, temp_len - 1, len);
 
           copy_from = rand_below(afl, temp_len - copy_len + 1);
           copy_to = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
@@ -1720,7 +1838,7 @@ void fuzz_one_func (afl_state_t *afl) {
             u8 overwrite = 0;
             if (temp_len >= 2 && rand_below(afl, 2))
               overwrite = 1;
-            else if (temp_len + FUNC_HAVOC_BLK_XL >= MAX_FILE) {
+            else if (temp_len + len * FUNC_HAVOC_BLK_XL_RATIO >= MAX_FILE) {
 
               if (temp_len >= 2)
                 overwrite = 1;
@@ -1733,7 +1851,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
               u32 copy_from, copy_to, copy_len;
 
-              copy_len = func_choose_block_len(afl, new_len - 1);
+              copy_len = func_choose_block_len(afl, new_len - 1, len);
               if (copy_len > temp_len) copy_len = temp_len;
 
               copy_from = rand_below(afl, new_len - copy_len + 1);
@@ -1748,7 +1866,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
               u32 clone_from, clone_to, clone_len;
 
-              clone_len = func_choose_block_len(afl, new_len);
+              clone_len = func_choose_block_len(afl, new_len, len);
               clone_from = rand_below(afl, new_len - clone_len + 1);
 
               clone_to = afl->fuzz_one_func_byte_offsets[rand_below(afl, afl-> func_cur_num_bytes)];
@@ -1817,7 +1935,7 @@ void fuzz_one_func (afl_state_t *afl) {
   afl->stage_cycles[STAGE_HAVOC_FUNC] += afl->stage_max;
 
   //if (new_hit_cnt) {
-  //  fprintf(afl->debug_file,"***,new path : %llu, branch_cov : %u\n", new_hit_cnt, afl->covered_branch - orig_branch_cov);
+  //  fprintf(afl->debug_file,"***,new path : %llu\n", new_hit_cnt);
   //}
   
   munmap(orig_in, afl->cmp_queue_cur->tc->len);

@@ -536,7 +536,7 @@ static void write_crash_readme(afl_state_t *afl) {
    entry is saved, 0 otherwise. */
 
 u8 __attribute__((hot))
-save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u8 is_imported) {
+save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_id, u32 parent_id2) {
 
   if (unlikely(len == 0)) { return 0; }
 
@@ -627,8 +627,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u8 is_import
     ck_write(fd, mem, len, queue_fn);
     close(fd);
     
-    // execute funclog binary and record cmp information
-    get_byte_cmps_func_rels(afl, mem, len, !is_imported);
+    update_tc_graph(afl, afl->queued_paths - 1, parent_id, parent_id2);
 
     keeping = 1;
 

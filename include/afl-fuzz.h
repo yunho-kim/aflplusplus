@@ -213,7 +213,7 @@ struct tc_graph_entry {
   u32 parents[2];
   //change children allocation
   u32 * children;
-  struct byte_cmp_set * byte_cmp_sets;
+  struct byte_cmp_set ** byte_cmp_sets_ptr;
   u32 num_children;
   u8  num_parents;
   u8  num_byte_cmp_sets;
@@ -247,6 +247,7 @@ enum {
   /* 19 */ STAGE_COLORIZATION,
   /* 20 */ STAGE_ITS,
   /* 21 */ STAGE_HAVOC_FUNC,
+  /* 22 */ STAGE_MINIG,
 
   STAGE_NUM_MAX
 
@@ -740,7 +741,7 @@ typedef struct afl_state {
   //# of new path with spliced input
   u32 num_new_path_spliced;
 
-  struct tc_graph_entry * tc_graph;
+  struct tc_graph_entry ** tc_graph;
   u32 tc_graph_size;
 
   u32 * fuzz_one_func_byte_offsets;
@@ -749,6 +750,8 @@ typedef struct afl_state {
 
   //DEBUG
   FILE * debug_file;
+
+  u32 mining_done_idx;
 
 } afl_state_t;
 
@@ -1021,7 +1024,7 @@ void minimize_bits(afl_state_t *, u8 *, u8 *);
 #ifndef SIMPLE_FILES
 u8 *describe_op(afl_state_t *, u8);
 #endif
-u8 save_if_interesting(afl_state_t *, void *, u32, u8, u8);
+u8 save_if_interesting(afl_state_t *, void *, u32, u8, u32, u32);
 u8 has_new_bits(afl_state_t *, u8 *);
 
 /* Extras */
@@ -1100,7 +1103,10 @@ void write_func_stats(afl_state_t *);
 void fuzz_one_func(afl_state_t *);
 void destroy_func(afl_state_t *);
 void init_trim_and_func(afl_state_t *);
-void get_byte_cmps_func_rels(afl_state_t *, u8 *, u32, u8);
+void update_tc_graph(afl_state_t *, u32, u32, u32);
+void get_byte_cmps(afl_state_t *, u8 *, u32, u32);
+void get_byte_cmps_main(afl_state_t *);
+void   func_common_fuzz_stuff(afl_state_t *, u8 *, u32, u32);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len,

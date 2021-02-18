@@ -640,7 +640,7 @@ void sync_fuzzers(afl_state_t *afl) {
 
         afl->syncing_party = sd_ent->d_name;
         afl->queued_imported +=
-            save_if_interesting(afl, mem, st.st_size, fault, 1);
+            save_if_interesting(afl, mem, st.st_size, fault, (u32) -1, (u32) -1);
         afl->syncing_party = 0;
 
         munmap(mem, st.st_size);
@@ -895,7 +895,9 @@ common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
 
   /* This handles FAULT_ERROR for us: */
 
-  afl->queued_discovered += save_if_interesting(afl, out_buf, len, fault, 0);
+  u32 parent_idx2 = (afl->splicing_with >= 0) ? (u32) afl->splicing_with : (u32) -1;
+
+  afl->queued_discovered += save_if_interesting(afl, out_buf, len, fault, afl->current_entry, parent_idx2);
 
   if (!(afl->stage_cur % afl->stats_update_freq) ||
       afl->stage_cur + 1 == afl->stage_max) {
