@@ -212,17 +212,11 @@ void update_tc_graph(afl_state_t * afl, u32 tc_idx, u32 parent_idx, u32 parent2_
       0, sizeof(struct tc_graph_entry *) * INIT_TC_GRAPH_SIZE);
   }
 
-  struct tc_graph_entry * new_tc = (struct tc_graph_entry *) malloc(sizeof(struct tc_graph_entry));
-  afl->tc_graph[tc_idx] = new_tc;
+  if (afl->tc_graph[tc_idx] == NULL) {
+    afl->tc_graph[tc_idx] = (struct tc_graph_entry *) calloc(1, sizeof(struct tc_graph_entry));
+  }
 
-  new_tc->children = NULL;
-  new_tc->byte_cmp_sets_ptr = NULL;
-  new_tc->num_children = 0; 
-  new_tc->num_parents = 0;
-  new_tc->num_byte_cmp_sets = 0;
-  new_tc->children_max_reached = 0;
-  new_tc->initialized = 0;
-
+  struct tc_graph_entry * new_tc = afl->tc_graph[tc_idx];
 
   if (parent_idx == (u32) -1) return;
 
@@ -230,6 +224,10 @@ void update_tc_graph(afl_state_t * afl, u32 tc_idx, u32 parent_idx, u32 parent2_
 
   if (likely(parent_idx < tc_idx)) {
     struct tc_graph_entry * parent = afl->tc_graph[parent_idx];
+    if (parent == NULL) {
+      afl->tc_graph[parent_idx] = (struct tc_graph_entry *) calloc(1, sizeof(struct tc_graph_entry));
+      parent = afl->tc_graph[parent_idx];
+    }
     if (parent->children == NULL)
       parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_MAX);
     parent->children[parent->num_children++] = tc_idx;
@@ -245,6 +243,10 @@ void update_tc_graph(afl_state_t * afl, u32 tc_idx, u32 parent_idx, u32 parent2_
   if (parent2_idx != (u32) -1) {
     if (likely(parent2_idx < tc_idx)) {
       struct tc_graph_entry * parent = afl->tc_graph[parent2_idx];
+      if (parent == NULL) {
+        afl->tc_graph[parent2_idx] = (struct tc_graph_entry *) calloc(1, sizeof(struct tc_graph_entry));
+        parent = afl->tc_graph[parent2_idx];
+      }
       new_tc->parents[new_tc->num_parents++] = parent2_idx;
       if (parent->children == NULL)
         parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_MAX);
