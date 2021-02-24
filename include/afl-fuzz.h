@@ -194,6 +194,7 @@ struct cmp_queue_entry {
   u32 mutating_tc_idx;
   u32 num_fuzzed;
   u32 num_skipped;
+  u32 id;
   //2 bits, MSB : true, LSB : false,  true | false covered
   u8 condition : 2;
   u8 has_been_fuzzed : 1;
@@ -704,7 +705,7 @@ typedef struct afl_state {
   u8 * func_list;
 
   //cmp queue alloc location
-  struct cmp_queue_entry * cmp_queue_entries;
+  struct cmp_queue_entry ** cmp_queue_entries_ptr;
 
   //cmp queue head, tail, cur entry
   struct cmp_queue_entry * cmp_queue, *cmp_queue_top, *cmp_queue_cur;
@@ -1022,7 +1023,7 @@ void classify_counts(afl_forkserver_t *);
 void init_count_class16(void);
 void minimize_bits(afl_state_t *, u8 *, u8 *);
 #ifndef SIMPLE_FILES
-u8 *describe_op(afl_state_t *, u8);
+u8 *describe_op(afl_state_t *, u8, u32, u32);
 #endif
 u8 save_if_interesting(afl_state_t *, void *, u32, u8, u32, u32);
 u8 has_new_bits(afl_state_t *, u8 *);

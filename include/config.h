@@ -373,7 +373,7 @@
    problems with complex programs). You need to recompile the target binary
    after changing this - otherwise, SEGVs may ensue. */
 
-#define MAP_SIZE_POW2 16
+#define MAP_SIZE_POW2 8
 #define MAP_SIZE (1 << MAP_SIZE_POW2)
 
 /* Maximum allocator request size (keep well under INT_MAX): */
@@ -447,8 +447,8 @@
 
 //# of cmp instructions, used for shm.func_map->entries to
 //fetch runtime information of cmp instructions
-#define CMP_FUNC_MAP_SIZE 65536
-//#define CMP_FUNC_MAP_SIZE 262144
+//#define CMP_FUNC_MAP_SIZE 65536
+#define CMP_FUNC_MAP_SIZE 262144
 
 //buffer size
 #define BYTE_CHANGE_RATIO 0.1
@@ -481,7 +481,7 @@
 #define CLOSE_TCS_SIZE 64
 
 //# of bytes set to try, used in tc_graph_entry
-#define NUM_BYTES_SETS 16
+#define NUM_BYTES_SETS 8
 
 #define NUM_TRY_MAXIMUM 128
 
@@ -489,10 +489,12 @@
 
 #define CMP_CHECK_MAX_EXEC_TC_TRESHOLD 3000
 
-#define CMP_MAX_EXEC_TC_TRESHOLD 0.8
+#define CMP_MAX_EXEC_TC_TRESHOLD 0.5
 
 #define TC_ITER_LIMIT 100
 
 #define MINING_LIMIT 100
+
+#define TC_LEN_MIN 1000
 
 #endif                                                  /* ! _HAVE_CONFIG_H */

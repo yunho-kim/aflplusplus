@@ -727,8 +727,8 @@ void show_stats(afl_state_t *afl) {
   SAYF(bSTOP "  cmp queue size : " cRST "%-18d  " bSTG  bV "\n", afl->cmp_queue_size);
   
   if (afl->cmp_queue_cur != NULL) 
-    SAYF(bV bSTOP "  cur target cmp : " cRST "%-17lu" bSTG  bV,
-      afl->cmp_queue_cur - afl->cmp_queue_entries);
+    SAYF(bV bSTOP "  cur target cmp : " cRST "%-17u" bSTG  bV,
+      afl->cmp_queue_cur->id);
   else
     SAYF(bV bSTOP "                                    " bSTG bV);
   SAYF(bSTOP "      branch cov : " cRST "%-18s " bSTG bV "\n", tmp);

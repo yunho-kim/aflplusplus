@@ -1536,6 +1536,11 @@ int main(int argc, char **argv_orig, char **envp) {
           //ITERATE through tcs
           u32 num_tcs = afl->cmp_queue_cur->num_executing_tcs;
 
+          if (unlikely(num_tcs == 0)) {
+            afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+            continue;
+          }
+
           if (unlikely(!afl->cmp_queue_cur->num_fuzzed)) {
             afl->cmp_queue_cur->mutating_tc_idx = rand_below(afl, num_tcs);
           }

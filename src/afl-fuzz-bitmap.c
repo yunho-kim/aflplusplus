@@ -426,21 +426,21 @@ void minimize_bits(afl_state_t *afl, u8 *dst, u8 *src) {
 /* Construct a file name for a new test case, capturing the operation
    that led to its discovery. Returns a ptr to afl->describe_op_buf_256. */
 
-u8 *describe_op(afl_state_t *afl, u8 hnb) {
+u8 *describe_op(afl_state_t *afl, u8 hnb, u32 parent_id1, u32 parent_id2) {
 
   u8 *ret = afl->describe_op_buf_256;
 
   if (unlikely(afl->syncing_party)) {
 
-    sprintf(ret, "sync:%s,src:%06u", afl->syncing_party, afl->syncing_case);
+    sprintf(ret, "sync:%s,src:%06u", afl->syncing_party, parent_id1);
 
   } else {
 
-    sprintf(ret, "src:%06u", afl->current_entry);
+    sprintf(ret, "src:%06u", parent_id1);
 
-    if (afl->splicing_with >= 0) {
+    if (parent_id2 != (u32) -1) {
 
-      sprintf(ret + strlen(ret), "+%06d", afl->splicing_with);
+      sprintf(ret + strlen(ret), "+%06d", parent_id2);
 
     }
 
@@ -587,7 +587,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
 #ifndef SIMPLE_FILES
 
     queue_fn = alloc_printf("%s/queue/id:%06u,%s", afl->out_dir,
-                            afl->queued_paths, describe_op(afl, hnb));
+                            afl->queued_paths, describe_op(afl, hnb, parent_id, parent_id2));
 
 #else
 
@@ -687,7 +687,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
 #ifndef SIMPLE_FILES
 
       snprintf(fn, PATH_MAX, "%s/hangs/id:%06llu,%s", afl->out_dir,
-               afl->unique_hangs, describe_op(afl, 0));
+               afl->unique_hangs, describe_op(afl, 0, parent_id, parent_id2));
 
 #else
 
@@ -732,7 +732,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
 
       snprintf(fn, PATH_MAX, "%s/crashes/id:%06llu,sig:%02u,%s", afl->out_dir,
                afl->unique_crashes, afl->fsrv.last_kill_signal,
-               describe_op(afl, 0));
+               describe_op(afl, 0, parent_id, parent_id2));
 
 #else
 
