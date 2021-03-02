@@ -31,14 +31,15 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <stdbool.h>
 #include "types.h"
-#include "stdbool.h"
 
 /* STRINGIFY_VAL_SIZE_MAX will fit all stringify_ strings. */
 
 #define STRINGIFY_VAL_SIZE_MAX (16)
 
-void detect_file_args(char **argv, u8 *prog_in, u8 *use_stdin);
+void detect_file_args(char **argv, u8 *prog_in, bool *use_stdin);
+void print_suggested_envs(char *mispelled_env);
 void check_environment_vars(char **env);
 
 char **argv_cpy_dup(int argc, char **argv);
@@ -47,6 +48,7 @@ void   argv_cpy_free(char **argv);
 char **get_qemu_argv(u8 *own_loc, u8 **target_path_p, int argc, char **argv);
 char **get_wine_argv(u8 *own_loc, u8 **target_path_p, int argc, char **argv);
 char * get_afl_env(char *env);
+u8 *   get_libqasan_path(u8 *own_loc);
 
 extern u8  be_quiet;
 extern u8 *doc_path;                    /* path to documentation dir        */
@@ -55,6 +57,11 @@ extern u8 *doc_path;                    /* path to documentation dir        */
    @returns the path, allocating the string */
 
 u8 *find_binary(u8 *fname);
+
+/* Parses the kill signal environment variable, FATALs on error.
+  If the env is not set, sets the env to default_signal for the signal handlers
+  and returns the default_signal. */
+int parse_afl_kill_signal_env(u8 *afl_kill_signal_env, int default_signal);
 
 /* Read a bitmap from file fname to memory
    This is for the -B option again. */

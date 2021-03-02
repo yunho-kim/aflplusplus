@@ -16,21 +16,23 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
   AFL_HARDEN=1 ../afl-clang-fast -o test-compcov.harden test-compcov.c > /dev/null 2>&1
   test -e test-instr.plain && {
     $ECHO "$GREEN[+] llvm_mode compilation succeeded"
-    echo 0 | ../afl-showmap -m ${MEM_LIMIT} -o test-instr.plain.0 -r -- ./test-instr.plain > /dev/null 2>&1
-    ../afl-showmap -m ${MEM_LIMIT} -o test-instr.plain.1 -r -- ./test-instr.plain < /dev/null > /dev/null 2>&1
+    echo 0 | AFL_QUIET=1 ../afl-showmap -m ${MEM_LIMIT} -o test-instr.plain.0 -r -- ./test-instr.plain > /dev/null 2>&1
+    AFL_QUIET=1 ../afl-showmap -m ${MEM_LIMIT} -o test-instr.plain.1 -r -- ./test-instr.plain < /dev/null > /dev/null 2>&1
     test -e test-instr.plain.0 -a -e test-instr.plain.1 && {
       diff test-instr.plain.0 test-instr.plain.1 > /dev/null 2>&1 && {
         $ECHO "$RED[!] llvm_mode instrumentation should be different on different input but is not"
         CODE=1
       } || {
         $ECHO "$GREEN[+] llvm_mode instrumentation present and working correctly"
-        TUPLES=`echo 0|../afl-showmap -m ${MEM_LIMIT} -o /dev/null -- ./test-instr.plain 2>&1 | grep Captur | awk '{print$3}'`
-        test "$TUPLES" -gt 3 -a "$TUPLES" -lt 8 && {
+        TUPLES=`echo 0|AFL_QUIET=1 ../afl-showmap -m ${MEM_LIMIT} -o /dev/null -- ./test-instr.plain 2>&1 | grep Captur | awk '{print$3}'`
+        test "$TUPLES" -gt 2 -a "$TUPLES" -lt 8 && {
           $ECHO "$GREEN[+] llvm_mode run reported $TUPLES instrumented locations which is fine"
         } || {
           $ECHO "$RED[!] llvm_mode instrumentation produces weird numbers: $TUPLES"
           CODE=1
         }
+        test "$TUPLES" -lt 3 && SKIP=1
+        true
       }
     } || {
       $ECHO "$RED[!] llvm_mode instrumentation failed"
@@ -66,18 +68,20 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
   }) || {
     mkdir -p in
     echo 0 > in/in
-    $ECHO "$GREY[*] running afl-fuzz for llvm_mode, this will take approx 10 seconds"
-    {
-      ../afl-fuzz -V10 -m ${MEM_LIMIT} -i in -o out -- ./test-instr.plain >>errors 2>&1
-    } >>errors 2>&1
-    test -n "$( ls out/queue/id:000002* 2>/dev/null )" && {
-      $ECHO "$GREEN[+] afl-fuzz is working correctly with llvm_mode"
-    } || {
-      echo CUT------------------------------------------------------------------CUT
-      cat errors
-      echo CUT------------------------------------------------------------------CUT
-      $ECHO "$RED[!] afl-fuzz is not working correctly with llvm_mode"
-      CODE=1
+    test -z "$SKIP" && {
+      $ECHO "$GREY[*] running afl-fuzz for llvm_mode, this will take approx 10 seconds"
+      {
+        ../afl-fuzz -V10 -m ${MEM_LIMIT} -i in -o out -D -- ./test-instr.plain >>errors 2>&1
+      } >>errors 2>&1
+      test -n "$( ls out/default/queue/id:000002* 2>/dev/null )" && {
+        $ECHO "$GREEN[+] afl-fuzz is working correctly with llvm_mode"
+      } || {
+        echo CUT------------------------------------------------------------------CUT
+        cat errors
+        echo CUT------------------------------------------------------------------CUT
+        $ECHO "$RED[!] afl-fuzz is not working correctly with llvm_mode"
+        CODE=1
+      }
     }
     test "$SYS" = "i686" -o "$SYS" = "x86_64" -o "$SYS" = "amd64" -o "$SYS" = "i86pc" || {
       echo 000000000000000000000000 > in/in2
@@ -124,8 +128,8 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
   test -e ../libLLVMInsTrim.so && {
     AFL_LLVM_INSTRUMENT=CFG AFL_LLVM_INSTRIM_LOOPHEAD=1 ../afl-clang-fast -o test-instr.instrim ../test-instr.c > /dev/null 2>test.out
     test -e test-instr.instrim && {
-      TUPLES=`echo 0|../afl-showmap -m ${MEM_LIMIT} -o /dev/null -- ./test-instr.instrim 2>&1 | grep Captur | awk '{print$3}'`
-      test "$TUPLES" -gt 2 -a "$TUPLES" -lt 5 && {
+      TUPLES=`echo 0|AFL_QUIET=1 ../afl-showmap -m ${MEM_LIMIT} -o /dev/null -- ./test-instr.instrim 2>&1 | grep Captur | awk '{print$3}'`
+      test "$TUPLES" -gt 1 -a "$TUPLES" -lt 5 && {
         $ECHO "$GREEN[+] llvm_mode InsTrim reported $TUPLES instrumented locations which is fine"
       } || {
         $ECHO "$RED[!] llvm_mode InsTrim instrumentation produces weird numbers: $TUPLES"
@@ -133,6 +137,7 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
       }
       rm -f test-instr.instrim test.out
     } || {
+      cat test.out
       $ECHO "$RED[!] llvm_mode InsTrim compilation failed"
       CODE=1
     }
@@ -159,9 +164,9 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
     echo ZZZZ > in/in
     $ECHO "$GREY[*] running afl-fuzz with floating point splitting, this will take max. 30 seconds"
     {
-      AFL_BENCH_UNTIL_CRASH=1 AFL_NO_UI=1 ../afl-fuzz -s 1 -V30 -m ${MEM_LIMIT} -i in -o out -- ./test-floatingpoint >>errors 2>&1
+      AFL_BENCH_UNTIL_CRASH=1 AFL_NO_UI=1 ../afl-fuzz -s 1 -V30 -m ${MEM_LIMIT} -i in -o out -D -- ./test-floatingpoint >>errors 2>&1
     } >>errors 2>&1
-    test -n "$( ls out/crashes/id:* 2>/dev/null )" && {
+    test -n "$( ls out/default/crashes/id:* 2>/dev/null )" && {
       $ECHO "$GREEN[+] llvm_mode laf-intel floatingpoint splitting feature works correctly"
     } || {
       cat errors
@@ -195,7 +200,7 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
       echo 0000000000000000000000000 > in/in
       AFL_BENCH_UNTIL_CRASH=1 ../afl-fuzz -m none -V60 -i in -o out -c./test-cmplog -- ./test-cmplog >>errors 2>&1
     } >>errors 2>&1
-    test -n "$( ls out/crashes/id:000000* out/hangs/id:000000* 2>/dev/null )" & {
+    test -n "$( ls out/default/crashes/id:000000* out/default/hangs/id:000000* 2>/dev/null )" & {
       $ECHO "$GREEN[+] afl-fuzz is working correctly with llvm_mode cmplog"
     } || {
       echo CUT------------------------------------------------------------------CUT
@@ -209,9 +214,9 @@ test -e ../afl-clang-fast -a -e ../split-switches-pass.so && {
     INCOMPLETE=1
   }
   rm -rf errors test-cmplog in core.*
-  ../afl-clang-fast -o test-persistent ../examples/persistent_demo/persistent_demo.c > /dev/null 2>&1
+  ../afl-clang-fast -o test-persistent ../utils/persistent_mode/persistent_demo.c > /dev/null 2>&1
   test -e test-persistent && {
-    echo foo | ../afl-showmap -m ${MEM_LIMIT} -o /dev/null -q -r ./test-persistent && {
+    echo foo | AFL_QUIET=1 ../afl-showmap -m ${MEM_LIMIT} -o /dev/null -q -r ./test-persistent && {
       $ECHO "$GREEN[+] llvm_mode persistent mode feature works correctly"
     } || {
       $ECHO "$RED[!] llvm_mode persistent mode feature failed to work"
