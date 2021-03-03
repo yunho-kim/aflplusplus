@@ -37,6 +37,7 @@
 #include "sharedmem.h"
 #include "cmplog.h"
 #include "list.h"
+#include "funclog.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -131,7 +132,7 @@ void afl_shm_deinit(sharedmem_t *shm) {
   shmctl(shm->shm_id, IPC_RMID, NULL);
   if (shm->cmplog_mode) { shmctl(shm->cmplog_shm_id, IPC_RMID, NULL); }
 #endif
-
+  shmctl(shm->func_shm_id, IPC_RMID, NULL);
   shm->map = NULL;
 
 }
@@ -147,6 +148,7 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
   shm->map = NULL;
   shm->cmp_map = NULL;
+  shm->func_map = NULL;
 
 #ifdef USEMMAP
 
@@ -258,6 +260,16 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
   }
 
+  shm->func_shm_id = shmget(IPC_PRIVATE, sizeof(struct cmp_func_list), IPC_CREAT | IPC_EXCL | 0600);
+  
+  if (shm->func_shm_id < 0) {
+    shmctl(shm->shm_id, IPC_RMID, NULL);
+    if (shm->cmplog_mode) {
+      shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);
+    }
+    PFATAL("shmget() failed func");
+  }
+
   if (!non_instrumented_mode) {
 
     shm_str = alloc_printf("%d", shm->shm_id);
@@ -281,6 +293,12 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
     ck_free(shm_str);
 
+  }
+
+  if (!non_instrumented_mode) {
+    shm_str = alloc_printf("%d", shm->func_shm_id);
+    setenv(AFL_FUNC_SHM_ENV_VAR, shm_str, 1);
+    ck_free(shm_str);
   }
 
   shm->map = shmat(shm->shm_id, NULL, 0);
@@ -313,6 +331,15 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
     }
 
+  }
+
+  shm->func_map = shmat(shm->func_shm_id, NULL, 0);
+  if (shm->func_map == (void *) -1 || !shm->func_map) {
+    shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
+    if (shm->cmplog_mode) {
+      shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
+    }
+    shmctl(shm->func_shm_id, IPC_RMID, NULL);
   }
 
 #endif

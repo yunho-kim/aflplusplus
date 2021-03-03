@@ -820,9 +820,10 @@ void show_stats(afl_state_t *afl) {
 
   } else {
 
-    SAYF(bV bSTOP " total execs : " cRST "%-20s " bSTG bV bSTOP
+    SAYF(bV bSTOP " total execs : " cRST "%-10s+%-10s" bSTG bV bSTOP
                   " total crashes : %s%-22s" bSTG         bV "\n",
          u_stringify_int(IB(0), afl->fsrv.total_execs),
+         u_stringify_int(IB(1), afl->func_fsrv.total_execs),
          afl->unique_crashes ? cLRD : cRST, tmp);
 
   }
@@ -848,6 +849,39 @@ void show_stats(afl_state_t *afl) {
           (afl->unique_hangs >= KEEP_UNIQUE_HANG) ? "+" : "");
 
   SAYF(bSTG bV bSTOP "  total tmouts : " cRST "%-22s" bSTG bV "\n", tmp);
+
+  //  branch coverage, size of cmp queue, cur_num_bytes
+  SAYF(bVR bH cCYA bSTOP
+       " func relevance metrics " bSTG bH bH10 bX bH10 bH5 bH bH10 bH10 bH2 bH bVL "\n");
+
+  sprintf(tmp, "%u/%u (%.1f%%)", afl->covered_branch, 
+    afl->num_cmp * 2,  (double) afl->covered_branch * 100.0 / afl->num_cmp / 2.0);
+
+
+  SAYF(bV bSTOP "  cur # of bytes : " cRST "%-17d" bSTG  bV , afl->cur_num_bytes);
+  SAYF(bSTOP "  cmp queue size : " cRST "%-18d  " bSTG  bV "\n", afl->cmp_queue_size);
+  
+  if (afl->cmp_queue_cur != NULL) 
+    SAYF(bV bSTOP "  cur target cmp : " cRST "%-17u" bSTG  bV,
+      afl->cmp_queue_cur->id);
+  else
+    SAYF(bV bSTOP "                                    " bSTG bV);
+  SAYF(bSTOP "      branch cov : " cRST "%-18s " bSTG bV "\n", tmp);
+  
+  SAYF(bV bSTOP " # of cur_func_bytes :  " cRST "%-12u" bSTG bV, afl->func_cur_num_bytes);
+
+  if (afl->cmp_queue_cur && afl->cmp_queue_cur->tc) {
+    sprintf(tmp, "%u", afl->cmp_queue_cur->tc->id);
+    SAYF(bSTOP "      cur tc id  : " cRST "%-18s  " bSTG bV "\n", tmp);
+  } else {
+    SAYF(bSTOP "                                       " bSTG bV "\n");
+  }
+
+  sprintf(tmp, "%s/%u (%s)",  u_stringify_int(IB(0), afl->tc_len_sum), afl->queued_paths,
+      u_stringify_float(IB(1), (float) afl->tc_len_sum / afl->queued_paths));
+
+  SAYF(bV bSTOP " Avg. tc len :  " cRST "%-20s" bSTG bV, tmp);  
+  SAYF(bSTOP "                                       " bSTG bV "\n");
 
   /* Aaaalmost there... hold on! */
 
@@ -967,6 +1001,14 @@ void show_stats(afl_state_t *afl) {
                   ? cMGN
                   : cRST),
        tmp);
+
+  sprintf(tmp, "%s/%s, %s/%s",
+          u_stringify_int(IB(0), afl->stage_finds[STAGE_HAVOC_FUNC]),
+          u_stringify_int(IB(1), afl->stage_cycles[STAGE_HAVOC_FUNC]),
+          u_stringify_int(IB(2), afl->stage_finds[STAGE_MINING]),
+          u_stringify_int(IB(3), afl->stage_cycles[STAGE_MINING]));
+
+  SAYF(bV bSTOP " havoc_func  : " cRST "%-36s " bSTG bV "\n", tmp);
 
   if (afl->shm.cmplog_mode) {
 

@@ -25,6 +25,7 @@
 
 #include "afl-fuzz.h"
 #include "cmplog.h"
+#include "funclog.h"
 #include <limits.h>
 #include <stdlib.h>
 #ifndef USEMMAP
@@ -362,7 +363,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   while ((opt = getopt(
               argc, argv,
-              "+b:B:c:CdDe:E:hi:I:f:F:l:L:m:M:nNo:p:RQs:S:t:T:UV:Wx:Z")) > 0) {
+              "+b:a:B:c:CdDe:E:hi:I:f:F:l:L:m:M:nNo:p:Rr:Qs:S:t:T:UV:Wx:Z")) > 0) {
 
     switch (opt) {
 
@@ -1007,6 +1008,15 @@ int main(int argc, char **argv_orig, char **envp) {
             "Radamsa is now a custom mutator, please use that "
             "(custom_mutators/radamsa/).");
 
+      case 'r':
+        afl->shm.func_mode = 1;
+        afl->func_binary = ck_strdup(optarg);
+
+        break;
+
+      //func information text file
+      case 'a':
+        afl->func_info_txt = ck_strdup(optarg);
         break;
 
       default:
@@ -1021,6 +1031,8 @@ int main(int argc, char **argv_orig, char **envp) {
     usage(argv[0], show_help);
 
   }
+
+  if (!afl->func_info_txt || !afl->func_binary) FATAL("No func info txt and exectuable");
 
   if (afl->fsrv.qemu_mode && getenv("AFL_USE_QASAN")) {
 
@@ -1427,6 +1439,8 @@ int main(int argc, char **argv_orig, char **envp) {
     printf("DEBUG: rand %06d is %u\n", counter, rand_below(afl, 65536));
   #endif
 
+  init_func(afl);
+
   setup_custom_mutators(afl);
 
   write_setup_file(afl, argc, argv);
@@ -1541,6 +1555,9 @@ int main(int argc, char **argv_orig, char **envp) {
     }
 
   }
+
+  check_binary(afl, afl->func_binary);
+  ck_free(afl->fsrv.target_path);
 
   check_binary(afl, argv[optind]);
 
@@ -1681,6 +1698,70 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
+  if (afl->func_binary) {
+    ACTF("Spawning func forkserver");
+    afl_fsrv_init_dup(&afl->func_fsrv, &afl->fsrv);
+        // TODO: this is semi-nice
+    afl->func_fsrv.trace_bits = afl->fsrv.trace_bits;
+    afl->func_fsrv.qemu_mode = afl->fsrv.qemu_mode;
+    afl->func_fsrv.func_binary = afl->func_binary;
+    afl->func_fsrv.init_child_func = func_exec_child;
+
+    afl->func_fsrv.map_size = 4194304;
+
+    u32 new_map_size =
+        afl_fsrv_get_mapsize(&afl->func_fsrv, afl->argv, &afl->stop_soon,
+                             afl->afl_env.afl_debug_child);
+
+    if (new_map_size && new_map_size != 4194304) {
+
+      // only reinitialize when it needs to be larger
+      if (map_size < new_map_size) {
+
+        OKF("Re-initializing maps to %u bytes due func", new_map_size);
+
+        afl->virgin_bits = ck_realloc(afl->virgin_bits, new_map_size);
+        afl->virgin_tmout = ck_realloc(afl->virgin_tmout, new_map_size);
+        afl->virgin_crash = ck_realloc(afl->virgin_crash, new_map_size);
+        afl->var_bytes = ck_realloc(afl->var_bytes, new_map_size);
+        afl->top_rated =
+            ck_realloc(afl->top_rated, new_map_size * sizeof(void *));
+        afl->clean_trace = ck_realloc(afl->clean_trace, new_map_size);
+        afl->clean_trace_custom =
+            ck_realloc(afl->clean_trace_custom, new_map_size);
+        afl->first_trace = ck_realloc(afl->first_trace, new_map_size);
+        afl->map_tmp_buf = ck_realloc(afl->map_tmp_buf, new_map_size);
+
+        afl_fsrv_kill(&afl->fsrv);
+        if (afl->cmplog_binary) {
+          afl_fsrv_kill(&afl->cmplog_fsrv);
+        }
+        afl_fsrv_kill(&afl->func_fsrv);
+        afl_shm_deinit(&afl->shm);
+        afl->func_fsrv.map_size = new_map_size;  // non-cmplog stays the same
+
+        afl->fsrv.trace_bits =
+            afl_shm_init(&afl->shm, new_map_size, afl->non_instrumented_mode);
+        setenv("AFL_NO_AUTODICT", "1", 1);  // loaded already
+        afl_fsrv_start(&afl->fsrv, afl->argv, &afl->stop_soon,
+                       afl->afl_env.afl_debug_child);
+
+        if (afl->cmplog_binary) {
+          afl_fsrv_start(&afl->cmplog_fsrv, afl->argv, &afl->stop_soon,
+                         afl->afl_env.afl_debug_child);
+        }
+
+        afl_fsrv_start(&afl->func_fsrv, afl->argv, &afl->stop_soon,
+                    afl->afl_env.afl_debug_child);       
+
+        map_size = new_map_size;
+
+      }
+
+    }
+    OKF("Func forkserver successfully started");
+  }
+
   // after we have the correct bitmap size we can read the bitmap -B option
   // and set the virgin maps
   if (afl->in_bitmap) {
@@ -1767,6 +1848,8 @@ int main(int argc, char **argv_orig, char **envp) {
   // (void)nice(-20);  // does not improve the speed
   // real start time, we reset, so this works correctly with -V
   afl->start_time = get_cur_time();
+
+  init_trim_and_func(afl);
 
   u32 runs_in_current_cycle = (u32)-1;
   u32 prev_queued_paths = 0;
@@ -2003,6 +2086,68 @@ int main(int argc, char **argv_orig, char **envp) {
 
       }
 
+      //havoc_func
+      if (!skipped_fuzz && likely(afl->cmp_queue)) {
+        if (unlikely(afl->cmp_queue_cur == NULL)) {
+          afl->cmp_queue_cur = afl->cmp_queue;
+        }
+
+        while (unlikely(afl->cmp_queue_cur->exec_max_reached)) {
+          afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+        }
+
+        if (likely(afl->cmp_queue_cur)) {
+          //ITERATE through tcs
+          u32 num_tcs = afl->cmp_queue_cur->num_executing_tcs;
+
+          if (unlikely(num_tcs == 0)) {
+            afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+            continue;
+          }
+
+          if (unlikely(!afl->cmp_queue_cur->num_fuzzed)) {
+            afl->cmp_queue_cur->mutating_tc_idx = rand_below(afl, num_tcs);
+          }
+
+          u32 idx = 0;
+          u32 tc_id;
+          do {
+            tc_id = afl->cmp_queue_cur->executing_tcs[afl->cmp_queue_cur->mutating_tc_idx++];
+            if (unlikely(afl->cmp_queue_cur->mutating_tc_idx >= num_tcs))
+              afl->cmp_queue_cur->mutating_tc_idx = 0;
+            idx ++;
+          } while(((tc_id >= afl->tc_graph_size) ||
+            (!afl->tc_graph[tc_id]->initialized)) && (idx < TC_ITER_LIMIT)
+          );
+
+          if(idx == TC_ITER_LIMIT) { 
+            afl->cmp_queue_cur->num_skipped++;
+            afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+            continue;
+          }
+
+          //assert(afl->tc_graph[tc_id].initialized);
+
+          afl->cmp_queue_cur->tc = afl->queue_buf[tc_id];
+          
+          fuzz_one_func(afl);
+
+          afl->cmp_queue_cur->num_fuzzed++;
+
+          while (afl->cmp_queue_cur->next != NULL) {
+            if ((afl->cmp_queue_cur->next->condition == 3) ||
+                afl->cmp_queue_cur->next->exec_max_reached) {
+              //remove target
+              afl->cmp_queue_cur->next = afl->cmp_queue_cur->next->next;
+              afl->cmp_queue_size--;
+            } else {
+              break;
+            }
+          }
+          afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+        }
+      }
+
     } while (skipped_fuzz && afl->queue_cur && !afl->stop_soon);
 
     if (likely(!afl->stop_soon && afl->sync_id)) {
@@ -2039,6 +2184,25 @@ int main(int argc, char **argv_orig, char **envp) {
       }
 
     }
+
+    //mining
+    afl->stage_name = "mining";
+    afl->stage_short = "mining";
+
+    u32 tmp_stage_cur = afl->fsrv.total_execs;
+    u32 tmp_hit = afl->queued_paths + afl->unique_crashes;
+    u32 idx = 0;
+    while (((afl->mining_done_idx + 1) < afl->queued_paths) && idx < MINING_LIMIT) {
+      afl->stage_cur = afl->mining_done_idx;
+      afl->stage_max = afl->queued_paths;
+      get_byte_cmps_main(afl);
+      show_stats(afl);
+      if (afl->stop_soon) {break;}
+      idx++;
+    }
+
+    afl->stage_finds[STAGE_MINING] += afl->queued_paths + afl->unique_crashes - tmp_hit;
+    afl->stage_cycles[STAGE_MINING] += afl->fsrv.total_execs - tmp_stage_cur;
 
   }
 
@@ -2095,6 +2259,8 @@ stop_fuzzing:
   }
 
   fclose(afl->fsrv.plot_file);
+  write_func_stats(afl);
+  destroy_func(afl);
   destroy_queue(afl);
   destroy_extras(afl);
   destroy_custom_mutators(afl);

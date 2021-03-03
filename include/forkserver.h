@@ -94,6 +94,8 @@ typedef struct afl_forkserver {
 
   char *cmplog_binary;                  /* the name of the cmplog binary    */
 
+  char * func_binary;
+
   /* Function to kick off the forkserver child */
   void (*init_child_func)(struct afl_forkserver *fsrv, char **argv);
 

@@ -20,6 +20,7 @@
 #include "config.h"
 #include "types.h"
 #include "cmplog.h"
+#include "funclog.h"
 #include "llvm-ngram-coverage.h"
 
 #include <stdio.h>
@@ -75,6 +76,8 @@
   #define MAP_INITIAL_SIZE MAP_SIZE
 #endif
 
+#define FUNC_MAP_INITIAL_SIZE 10000
+
 u8   __afl_area_initial[MAP_INITIAL_SIZE];
 u8 * __afl_area_ptr_dummy = __afl_area_initial;
 u8 * __afl_area_ptr = __afl_area_initial;
@@ -83,6 +86,9 @@ u8 * __afl_dictionary;
 u8 * __afl_fuzz_ptr;
 u32  __afl_fuzz_len_dummy;
 u32 *__afl_fuzz_len = &__afl_fuzz_len_dummy;
+
+u8 __afl_func_area_initial[FUNC_MAP_INITIAL_SIZE];
+u8 * __afl_func_area_ptr = __afl_func_area_initial;
 
 u32 __afl_final_loc;
 u32 __afl_map_size = MAP_SIZE;
@@ -108,6 +114,7 @@ int __afl_sharedmem_fuzzing __attribute__((weak));
 
 struct cmp_map *__afl_cmp_map;
 struct cmp_map *__afl_cmp_map_backup;
+struct cmp_func_list * __afl_func_map;
 
 /* Child pid? */
 
@@ -522,6 +529,20 @@ static void __afl_map_shm(void) {
 
     }
 
+  }
+
+  id_str = getenv(AFL_FUNC_SHM_ENV_VAR);
+
+  if (getenv("AFL_DEBUG")) {
+    fprintf(stderr, "DEBUG: func id_str %s\n",
+            id_str == NULL ? "<null>" : id_str);
+  }
+
+  if(id_str) {
+    u32 shm_id = atoi(id_str);
+    __afl_func_map = shmat(shm_id, NULL, 0);
+
+    if (__afl_func_map == (void *)-1) _exit(1);
   }
 
 }
@@ -1208,6 +1229,18 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
 
   }
 
+}
+
+void __func_log_hook(uint32_t cmpid, uint32_t condition) {
+  if (unlikely(!__afl_func_map)) {
+    return;
+  }
+
+  uintptr_t k = (CMP_FUNC_MAP_SIZE - 1) & cmpid;
+
+  condition = condition ? 2 : 1;
+  __afl_func_map->entries[k].executed = 1; //mark executed
+  __afl_func_map->entries[k].condition |= condition;
 }
 
 ///// CmpLog instrumentation

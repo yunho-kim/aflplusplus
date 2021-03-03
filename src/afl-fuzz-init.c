@@ -596,7 +596,7 @@ void read_foreign_testcases(afl_state_t *afl, int first) {
         fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
         afl->syncing_party = foreign_name;
         afl->queued_imported +=
-            save_if_interesting(afl, mem, st.st_size, fault);
+            save_if_interesting(afl, mem, st.st_size, fault, (u32) -1, (u32) -1);
         afl->syncing_party = 0;
         munmap(mem, st.st_size);
         close(fd);
@@ -1819,6 +1819,30 @@ static void handle_existing_out_dir(afl_state_t *afl) {
   if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
   ck_free(fn);
 
+  fn = alloc_printf("%s/FRIEND/cmp_queue.stat", afl->out_dir);
+  if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
+  fn = alloc_printf("%s/FRIEND/findings.stat", afl->out_dir);
+  if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
+  fn = alloc_printf("%s/FRIEND/FRIEND.stat", afl->out_dir);
+  if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
+  fn = alloc_printf("%s/FRIEND/func_exec_table.csv", afl->out_dir);
+  if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
+  fn = alloc_printf("%s/FRIEND/tc_graph.stat", afl->out_dir);
+  if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
+  fn = alloc_printf("%s/FRIEND", afl->out_dir);
+  if (rmdir(fn)) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
   OKF("Output dir cleanup successful.");
 
   /* Wow... is that all? If yes, celebrate! */
@@ -2021,6 +2045,10 @@ void setup_dirs_fds(afl_state_t *afl) {
   fflush(afl->fsrv.plot_file);
 
   /* ignore errors */
+
+  tmp = alloc_printf("%s/FRIEND", afl->out_dir);
+  if (mkdir(tmp, 0700)) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
 
 }
 

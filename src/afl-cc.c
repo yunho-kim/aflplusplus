@@ -50,7 +50,7 @@ static u8 **cc_params;                 /* Parameters passed to the real CC  */
 static u32  cc_par_cnt = 1;            /* Param count, including argv0      */
 static u8   clang_mode;                /* Invoked as afl-clang*?            */
 static u8   llvm_fullpath[PATH_MAX];
-static u8   instrument_mode, instrument_opt_mode, ngram_size, lto_mode;
+static u8   instrument_mode, instrument_opt_mode, ngram_size, lto_mode, func_mode;
 static u8   compiler_mode, plusplus_mode, have_instr_env = 0;
 static u8   have_gcc, have_llvm, have_gcc_plugin, have_lto, have_instr_list = 0;
 static u8 * lto_flag = AFL_CLANG_FLTO, *argvnull;
@@ -571,14 +571,21 @@ static void edit_params(u32 argc, char **argv, char **envp) {
 
       cc_params[cc_par_cnt++] = "-Wl,--allow-multiple-definition";
 
-      if (instrument_mode == INSTRUMENT_CFG ||
-          instrument_mode == INSTRUMENT_PCGUARD)
+      if (func_mode) {
+        cc_params[cc_par_cnt++] = alloc_printf("-Wl,-mllvm=-load=%s/func-pass.so", obj_path);
+        
+      } else if (instrument_mode == INSTRUMENT_CFG ||
+          instrument_mode == INSTRUMENT_PCGUARD) {
+       
         cc_params[cc_par_cnt++] = alloc_printf(
             "-Wl,-mllvm=-load=%s/SanitizerCoverageLTO.so", obj_path);
-      else
+      
+      } else {
 
         cc_params[cc_par_cnt++] = alloc_printf(
             "-Wl,-mllvm=-load=%s/afl-llvm-lto-instrumentation.so", obj_path);
+      
+      }
       cc_params[cc_par_cnt++] = lto_flag;
 
     } else {
@@ -1883,6 +1890,9 @@ int main(int argc, char **argv, char **envp) {
 
   ck_free(ptr);
 #endif
+
+  func_mode = getenv("AFL_FUNC") != NULL;
+  if (func_mode) printf("Func mode\n");
 
   edit_params(argc, argv, envp);
 

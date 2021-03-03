@@ -185,6 +185,22 @@
 
 #define HAVOC_BLK_XL 32768U
 
+#define FUNC_HAVOC_BLK_SMALL_RATIO 0.001
+#define FUNC_HAVOC_BLK_MEDIUM_RATIO 0.004
+#define FUNC_HAVOC_BLK_LARGE_RATIO 0.016
+
+/* Extra-large blocks, selected very rarely (<5% of the time): */
+
+#define FUNC_HAVOC_BLK_XL_RATIO 0.04
+
+#define FUNC_HAVOC_BLK_SMALL_MIN 4
+#define FUNC_HAVOC_BLK_MEDIUM_MIN 16
+#define FUNC_HAVOC_BLK_LARGE_MIN 32
+
+/* Extra-large blocks, selected very rarely (<5% of the time): */
+
+#define FUNC_HAVOC_BLK_XL_MIN 128
+
 /* Probabilities of skipping non-favored entries in the queue, expressed as
    percentages: */
 
@@ -479,6 +495,63 @@
 /* Maximum mutations on a string */
 
 #define AFL_TXT_STRING_MAX_MUTATIONS 6
+
+/* func shm id */
+#define AFL_FUNC_SHM_ENV_VAR "__AFL_FUNC_SHM_ID"
+
+//# of cmp instructions, used for shm.func_map->entries to
+//fetch runtime information of cmp instructions
+#define CMP_FUNC_MAP_SIZE 65536
+//#define CMP_FUNC_MAP_SIZE 262144
+
+//buffer size
+#define BYTE_CHANGE_RATIO 0.1
+#define BYTE_CHANGE_MIN 256
+#define CUR_BYTES_SIZE 256
+
+//maximum # of children to record
+#define TC_CHILDREN_MAX 32
+
+//initial size of tc graph
+#define INIT_TC_GRAPH_SIZE 1024
+
+//how close tc is related tc?
+#define CLOSE_TC_THRESHOLD 2
+
+//# of bytes to mutate with function relevance
+#define FUZZ_ONE_FUNC_BYTE_SIZE_RATIO 0.5
+
+//size of executing tcs buffer, used in cmp_queue_entry
+#define EXEC_TCS_SIZE 128
+
+//size of # of changed cmps buffer, used in tc_graph_entry
+#define CHANGED_CMPS_SIZE_RATIO 0.02
+
+#define CHANGED_CMPS_SIZE_MIN 256
+
+#define REL_FUNC_THRESHOLD 0.95
+
+//Maximum # of close tcs for each tc, used in tc_graph_entry
+#define CLOSE_TCS_SIZE 64
+
+//# of bytes set to try, used in tc_graph_entry
+#define NUM_BYTES_SETS 16
+
+#define NUM_TRY_MAXIMUM 128
+
+#define HAVOC_STACK_POW2_FUNC 4
+
+#define CMP_CHECK_MAX_EXEC_TC_TRESHOLD 3000
+
+#define CMP_MAX_EXEC_TC_TRESHOLD 0.8
+
+#define TC_ITER_LIMIT 100
+
+#define MINING_LIMIT 100
+
+#define TC_LEN_MIN 512
+
+#define GET_BYTE_TIMEOUT 1000
 
 #endif                                                  /* ! _HAVE_CONFIG_H */
 

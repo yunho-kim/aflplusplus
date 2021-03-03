@@ -212,6 +212,43 @@ struct auto_extra_data {
 
 };
 
+struct cmp_queue_entry {
+  struct cmp_queue_entry * next;
+  struct queue_entry * tc;
+  u32 * executing_tcs;
+  u32 num_executing_tcs;
+  u32 executing_tcs_size;
+  u32 mutating_tc_idx;
+  u32 num_fuzzed;
+  u32 num_skipped;
+  u32 id;
+  //2 bits, MSB : true, LSB : false,  true | false covered
+  u8 condition : 2;
+  u8 has_been_fuzzed : 1;
+  u8 exec_max_reached : 1;
+  //u8 is_max_bytes : 1;
+};
+
+struct byte_cmp_set {
+  u32 * changed_cmps;
+  u32 * changed_bytes;
+  u32 num_changed_cmps;
+  u32 num_changed_bytes;
+};
+
+struct tc_graph_entry {
+  //At most 2 parents (splicing)
+  u32 parents[2];
+  //change children allocation
+  u32 * children;
+  struct byte_cmp_set ** byte_cmp_sets_ptr;
+  u32 num_children;
+  u8  num_parents;
+  u8  num_byte_cmp_sets;
+  u8  children_max_reached : 1;
+  u8  initialized : 1;
+};
+
 /* Fuzzing stages */
 
 enum {
@@ -237,6 +274,8 @@ enum {
   /* 18 */ STAGE_CUSTOM_MUTATOR,
   /* 19 */ STAGE_COLORIZATION,
   /* 20 */ STAGE_ITS,
+  /* 21 */ STAGE_HAVOC_FUNC,
+  /* 22 */ STAGE_MINING,
 
   STAGE_NUM_MAX
 
@@ -750,6 +789,61 @@ typedef struct afl_state {
    * is too large) */
   struct queue_entry **q_testcase_cache;
 
+  char * func_binary;
+  afl_forkserver_t func_fsrv;
+  u32 ** func_exec_count_table;
+  u8 * func_list;
+
+  //cmp queue alloc location
+  struct cmp_queue_entry ** cmp_queue_entries_ptr;
+
+  //cmp queue head, tail, cur entry
+  struct cmp_queue_entry * cmp_queue, *cmp_queue_top, *cmp_queue_cur;
+  u32 cmp_queue_size;
+
+  //List of mutated bytes indexes
+  u32 * cur_bytes;
+
+  //number of mutated bytes
+  u32 cur_num_bytes;
+
+  u32 func_cur_num_bytes;
+
+  u8 get_func_info : 1;
+  u8 is_spliced : 1;
+
+  //cmpid (index) -> funcid
+  u32 * cmp_func_map;
+
+  //function cmp information text file name
+  u8 * func_info_txt;
+
+  //Total number of function
+  u32 num_func;
+
+  //Total number of cmp instructions
+  u32 num_cmp;
+
+  u32 num_change_cmp_limit;
+
+  //Total number of covered branches respect to cmp instructions
+  u32 covered_branch;
+
+  //# of new path with spliced input
+  u32 num_new_path_spliced;
+
+  struct tc_graph_entry ** tc_graph;
+  u32 tc_graph_size;
+
+  u32 * fuzz_one_func_byte_offsets;
+
+  u64 tc_len_sum;
+
+  //DEBUG
+  FILE * debug_file;
+
+  u32 mining_done_idx;
+
 #ifdef INTROSPECTION
   char  mutation[8072];
   char  m_tmp[4096];
@@ -1051,9 +1145,9 @@ void discover_word(u8 *ret, u32 *current, u32 *virgin);
 void init_count_class16(void);
 void minimize_bits(afl_state_t *, u8 *, u8 *);
 #ifndef SIMPLE_FILES
-u8 *describe_op(afl_state_t *, u8, size_t);
+u8 *describe_op(afl_state_t *, u8, size_t, u32, u32);
 #endif
-u8 save_if_interesting(afl_state_t *, void *, u32, u8);
+u8 save_if_interesting(afl_state_t *, void *, u32, u8, u32, u32);
 u8 has_new_bits(afl_state_t *, u8 *);
 u8 has_new_bits_unclassified(afl_state_t *, u8 *);
 
@@ -1135,6 +1229,17 @@ void   read_foreign_testcases(afl_state_t *, int);
 /* CmpLog */
 
 u8 common_fuzz_cmplog_stuff(afl_state_t *afl, u8 *out_buf, u32 len);
+
+/* Func */
+void init_func(afl_state_t *);
+void write_func_stats(afl_state_t *);
+void fuzz_one_func(afl_state_t *);
+void destroy_func(afl_state_t *);
+void init_trim_and_func(afl_state_t *);
+void update_tc_graph(afl_state_t *, u32, u32, u32);
+void get_byte_cmps(afl_state_t *, u8 *, u32, u32);
+void get_byte_cmps_main(afl_state_t *);
+void func_common_fuzz_stuff(afl_state_t *, u8 *, u32, u32);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len);
