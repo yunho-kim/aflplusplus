@@ -26,9 +26,6 @@
 
 #define AFL_MAIN
 
-#ifdef __ANDROID__
-  #include "android-ashmem.h"
-#endif
 #include "config.h"
 #include "types.h"
 #include "debug.h"
@@ -78,9 +75,9 @@ static u64 mem_limit = MEM_LIMIT;      /* Memory limit (MB)                 */
 
 static s32 dev_null_fd = -1;           /* FD to /dev/null                   */
 
-static u8 edges_only,                  /* Ignore hit counts?                */
+static bool edges_only,                  /* Ignore hit counts?              */
     use_hex_offsets,                   /* Show hex offsets?                 */
-    use_stdin = 1;                     /* Use stdin for program input?      */
+    use_stdin = true;                     /* Use stdin for program input?   */
 
 static volatile u8 stop_soon,          /* Ctrl-C pressed?                   */
     child_timed_out;                   /* Child timed out?                  */
@@ -103,19 +100,30 @@ static u32 map_size = MAP_SIZE;
 /* Classify tuple counts. This is a slow & naive version, but good enough here.
  */
 
+#define TIMES4(x) x, x, x, x
+#define TIMES8(x) TIMES4(x), TIMES4(x)
+#define TIMES16(x) TIMES8(x), TIMES8(x)
+#define TIMES32(x) TIMES16(x), TIMES16(x)
+#define TIMES64(x) TIMES32(x), TIMES32(x)
 static u8 count_class_lookup[256] = {
 
     [0] = 0,
     [1] = 1,
     [2] = 2,
     [3] = 4,
-    [4 ... 7] = 8,
-    [8 ... 15] = 16,
-    [16 ... 31] = 32,
-    [32 ... 127] = 64,
-    [128 ... 255] = 128
+    [4] = TIMES4(8),
+    [8] = TIMES8(16),
+    [16] = TIMES16(32),
+    [32] = TIMES32(64),
+    [128] = TIMES64(128)
 
 };
+
+#undef TIMES64
+#undef TIMES32
+#undef TIMES16
+#undef TIMES8
+#undef TIMES4
 
 static void classify_counts(u8 *mem) {
 
@@ -743,11 +751,14 @@ static void set_up_environment(void) {
 
     }
 
-    if (!strstr(x, "symbolize=0")) {
+#ifndef ASAN_BUILD
+    if (!getenv("AFL_DEBUG") && !strstr(x, "symbolize=0")) {
 
       FATAL("Custom ASAN_OPTIONS set without symbolize=0 - please fix!");
 
     }
+
+#endif
 
   }
 
@@ -889,8 +900,8 @@ static void usage(u8 *argv0) {
       "Execution control settings:\n"
 
       "  -f file       - input file read by the tested program (stdin)\n"
-      "  -t msec       - timeout for each run (%d ms)\n"
-      "  -m megs       - memory limit for child process (%d MB)\n"
+      "  -t msec       - timeout for each run (%u ms)\n"
+      "  -m megs       - memory limit for child process (%u MB)\n"
       "  -Q            - use binary-only instrumentation (QEMU mode)\n"
       "  -U            - use unicorn-based instrumentation (Unicorn mode)\n"
       "  -W            - use qemu-based instrumentation with Wine (Wine "
@@ -922,11 +933,12 @@ static void usage(u8 *argv0) {
 
 /* Main entry point */
 
-int main(int argc, char **argv, char **envp) {
+int main(int argc, char **argv_orig, char **envp) {
 
   s32    opt;
   u8     mem_limit_given = 0, timeout_given = 0, unicorn_mode = 0, use_wine = 0;
   char **use_argv;
+  char **argv = argv_cpy_dup(argc, argv_orig);
 
   doc_path = access(DOC_PATH, F_OK) ? "docs" : DOC_PATH;
 
@@ -1065,6 +1077,31 @@ int main(int argc, char **argv, char **envp) {
   }
 
   if (optind == argc || !in_file) { usage(argv[0]); }
+
+  if (qemu_mode && getenv("AFL_USE_QASAN")) {
+
+    u8 *preload = getenv("AFL_PRELOAD");
+    u8 *libqasan = get_libqasan_path(argv_orig[0]);
+
+    if (!preload) {
+
+      setenv("AFL_PRELOAD", libqasan, 0);
+
+    } else {
+
+      u8 *result = ck_alloc(strlen(libqasan) + strlen(preload) + 2);
+      strcpy(result, libqasan);
+      strcat(result, " ");
+      strcat(result, preload);
+
+      setenv("AFL_PRELOAD", result, 1);
+      ck_free(result);
+
+    }
+
+    ck_free(libqasan);
+
+  }
 
   map_size = get_map_size();
 

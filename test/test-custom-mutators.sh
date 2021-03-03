@@ -5,7 +5,7 @@
 $ECHO "$BLUE[*] Testing: custom mutator"
 test "1" = "`../afl-fuzz | grep -i 'without python' >/dev/null; echo $?`" && {
   # normalize path
-  CUSTOM_MUTATOR_PATH=$(cd $(pwd)/../examples/custom_mutators;pwd)
+  CUSTOM_MUTATOR_PATH=$(cd $(pwd)/../utils/custom_mutators;pwd)
   test -e test-custom-mutator.c -a -e ${CUSTOM_MUTATOR_PATH}/example.c -a -e ${CUSTOM_MUTATOR_PATH}/example.py && {
     unset AFL_CC
     # Compile the vulnerable program for single mutator
@@ -29,8 +29,8 @@ test "1" = "`../afl-fuzz | grep -i 'without python' >/dev/null; echo $?`" && {
       }
     }
     # Compile the custom mutator
-    cc -D_FIXED_CHAR=0x41 -g -fPIC -shared -I../include ../examples/custom_mutators/simple_example.c -o libexamplemutator.so > /dev/null 2>&1
-    cc -D_FIXED_CHAR=0x42 -g -fPIC -shared -I../include ../examples/custom_mutators/simple_example.c -o libexamplemutator2.so > /dev/null 2>&1
+    cc -D_FIXED_CHAR=0x41 -g -fPIC -shared -I../include ../utils/custom_mutators/simple_example.c -o libexamplemutator.so > /dev/null 2>&1
+    cc -D_FIXED_CHAR=0x42 -g -fPIC -shared -I../include ../utils/custom_mutators/simple_example.c -o libexamplemutator2.so > /dev/null 2>&1
     test -e test-custom-mutator -a -e ./libexamplemutator.so && {
       # Create input directory
       mkdir -p in
@@ -43,7 +43,7 @@ test "1" = "`../afl-fuzz | grep -i 'without python' >/dev/null; echo $?`" && {
       } >>errors 2>&1
 
       # Check results
-      test -n "$( ls out/crashes/id:000000* 2>/dev/null )" && {  # TODO: update here
+      test -n "$( ls out/default/crashes/id:000000* 2>/dev/null )" && {  # TODO: update here
         $ECHO "$GREEN[+] afl-fuzz is working correctly with the C mutator"
       } || {
         echo CUT------------------------------------------------------------------CUT
@@ -62,7 +62,7 @@ test "1" = "`../afl-fuzz | grep -i 'without python' >/dev/null; echo $?`" && {
         AFL_CUSTOM_MUTATOR_LIBRARY="./libexamplemutator.so;./libexamplemutator2.so" AFL_CUSTOM_MUTATOR_ONLY=1 ../afl-fuzz -V1 -m ${MEM_LIMIT} -i in -o out -- ./test-multiple-mutators >>errors 2>&1
       } >>errors 2>&1
 
-      test -n "$( ls out/crashes/id:000000* 2>/dev/null )" && {  # TODO: update here
+      test -n "$( ls out/default/crashes/id:000000* 2>/dev/null )" && {  # TODO: update here
         $ECHO "$GREEN[+] afl-fuzz is working correctly with multiple C mutators"
       } || {
         echo CUT------------------------------------------------------------------CUT
@@ -86,7 +86,7 @@ test "1" = "`../afl-fuzz | grep -i 'without python' >/dev/null; echo $?`" && {
       } >>errors 2>&1
 
       # Check results
-      test -n "$( ls out/crashes/id:000000* 2>/dev/null )" && {  # TODO: update here
+      test -n "$( ls out/default/crashes/id:000000* 2>/dev/null )" && {  # TODO: update here
         $ECHO "$GREEN[+] afl-fuzz is working correctly with the Python mutator"
       } || {
         echo CUT------------------------------------------------------------------CUT
@@ -109,7 +109,7 @@ test "1" = "`../afl-fuzz | grep -i 'without python' >/dev/null; echo $?`" && {
 
     #test "$CODE" = 1 && { $ECHO "$YELLOW[!] custom mutator tests currently will not fail travis" ; CODE=0 ; }
 
-    make -C ../examples/custom_mutators clean > /dev/null 2>&1
+    make -C ../utils/custom_mutators clean > /dev/null 2>&1
     rm -f test-custom-mutator
     rm -f test-custom-mutators
   } || {

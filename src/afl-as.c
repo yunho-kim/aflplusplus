@@ -27,7 +27,7 @@
    utility has right now is to be able to skip them gracefully and allow the
    compilation process to continue.
 
-   That said, see examples/clang_asm_normalize/ for a solution that may
+   That said, see utils/clang_asm_normalize/ for a solution that may
    allow clang users to make things work even with hand-crafted assembly. Just
    note that there is no equivalent for GCC.
 
@@ -47,6 +47,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <limits.h>
 #include <ctype.h>
 #include <fcntl.h>
 
@@ -131,6 +132,11 @@ static void edit_params(int argc, char **argv) {
   if (!tmp_dir) { tmp_dir = "/tmp"; }
 
   as_params = ck_alloc((argc + 32) * sizeof(u8 *));
+  if (unlikely((INT_MAX - 32) < argc || !as_params)) {
+
+    FATAL("Too many parameters passed to as");
+
+  }
 
   as_params[0] = afl_as ? afl_as : (u8 *)"as";
 

@@ -18,8 +18,8 @@ export AFL_DISABLE_TRIM=1
 cmd="${FUZZER} -M 1 -d -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &"
 
 echo $cmd
-AFL_NO_UI=1 eval $cmd
-#eval $cmd
+#AFL_NO_UI=1 eval $cmd
+eval $cmd
 
 
 cmd="${FUZZER} -S 2 -r ./subjects/${subject}.func -a ./FInfos/func-${subject} ${sancmd}  &> /dev/null &"

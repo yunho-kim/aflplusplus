@@ -15,7 +15,7 @@
   high enough. Otherwise try retrowrite, afl-dyninst and if these
   fail too then try standard qemu_mode with AFL_ENTRYPOINT to where you need it.
 
-  If your target is a library use examples/afl_frida/.
+  If your target is a library use utils/afl_frida/.
 
   If your target is non-linux then use unicorn_mode/.
 
@@ -65,14 +65,14 @@
 ## AFL FRIDA
 
    If you want to fuzz a binary-only shared library then you can fuzz it with
-   frida-gum via examples/afl_frida/, you will have to write a harness to
+   frida-gum via utils/afl_frida/, you will have to write a harness to
    call the target function in the library, use afl-frida.c as a template.
 
 
 ## AFL UNTRACER
 
    If you want to fuzz a binary-only shared library then you can fuzz it with
-   examples/afl_untracer/, use afl-untracer.c as a template.
+   utils/afl_untracer/, use afl-untracer.c as a template.
    It is slower than AFL FRIDA (see above).
 
 
@@ -174,7 +174,7 @@
 
   Pintool and Dynamorio are dynamic instrumentation engines, and they can be
   used for getting basic block information at runtime.
-  Pintool is only available for Intel x32/x64 on Linux, Mac OS and Windows
+  Pintool is only available for Intel x32/x64 on Linux, Mac OS and Windows,
   whereas Dynamorio is additionally available for ARM and AARCH64.
   Dynamorio is also 10x faster than Pintool.
 
@@ -182,7 +182,7 @@
   Dynamorio has a speed decrease of 98-99%
   Pintool has a speed decrease of 99.5%
 
-  Hence Dynamorio is the option to go for if everything fails, and Pintool
+  Hence Dynamorio is the option to go for if everything else fails, and Pintool
   only if Dynamorio fails too.
 
   Dynamorio solutions:
@@ -205,6 +205,7 @@
   * QSYM: [https://github.com/sslab-gatech/qsym](https://github.com/sslab-gatech/qsym)
   * Manticore: [https://github.com/trailofbits/manticore](https://github.com/trailofbits/manticore)
   * S2E: [https://github.com/S2E](https://github.com/S2E)
+  * Tinyinst [https://github.com/googleprojectzero/TinyInst](https://github.com/googleprojectzero/TinyInst) (Mac/Windows only)
   *  ... please send me any missing that are good
 
 

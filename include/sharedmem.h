@@ -52,6 +52,7 @@ typedef struct sharedmem {
   size_t map_size;                                 /* actual allocated size */
 
   int             cmplog_mode;
+  int             shmemfuzz_mode;
   struct cmp_map *cmp_map;
 
   u32 func_mode;

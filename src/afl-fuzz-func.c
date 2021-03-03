@@ -75,7 +75,6 @@ void init_func(afl_state_t* afl) {
 void init_trim_and_func(afl_state_t * afl) {
   printf("init trimming starts\n");
 
-  struct queue_entry * q = afl->queue;
   s32 fd, len;
   u8 * in_buf;
   u8 res;
@@ -84,13 +83,12 @@ void init_trim_and_func(afl_state_t * afl) {
 
   u32 tc_idx = 0;
 
-  while(q) {
-
+  for(tc_idx = 0; tc_idx < afl->queued_paths; tc_idx++) {
     printf("%u/%u\n",tc_idx, afl->queued_paths);
 
-    if (q->abandoned) {
-      q = q->next;
-      tc_idx++;
+    struct queue_entry * q = afl->queue_buf[tc_idx];
+
+    if (q->disabled) {
       continue;
     }
 
@@ -110,9 +108,6 @@ void init_trim_and_func(afl_state_t * afl) {
     q->trim_done = 1;
 
     update_tc_graph(afl, tc_idx, (u32) -1, (u32) -1);
-
-    q = q->next;
-    tc_idx++;
    
     munmap(in_buf, len);
   }
@@ -761,38 +756,17 @@ do {                                      \
           u32 tid;
           do
             tid = rand_below(afl, afl->queued_paths);
-          while (tid == afl->current_entry);
+          while (tid == afl->current_entry || afl->queue_buf[tid]->len < 4);
 
           struct queue_entry *target = afl->queue_buf[tid];
+          u32                 new_len = target->len;
+          u8 *                new_buf = queue_testcase_get(afl, target);
 
-          /* Make sure that the target has a reasonable length. */
-
-          while (target && (target->len < 2 || target == afl->queue_cur))
-            target = target->next;
-
-          if (!target) break;
-
-          /* Read the testcase into a new buffer. */
-
-          s32 fd = open(target->fname, O_RDONLY);
-
-          if (unlikely(fd < 0)) {
-
-            PFATAL("Unable to open '%s'", target->fname);
-
-          }
-
-          u32 new_len = target->len;
-          u8 *new_buf = afl_realloc(AFL_BUF_PARAM(in_scratch), new_len);
-          if (unlikely(!new_buf)) { PFATAL("alloc"); }
-
-          ck_read(fd, new_buf, new_len, target->fname);
-
-          close(fd);
+          //overwrite
 
           u32 copy_from, copy_to, copy_len;
 
-          copy_len = func_choose_block_len(afl, new_len - 1, len );
+          copy_len = func_choose_block_len(afl, new_len - 1, len);
           if (copy_len > len) copy_len = len;
 
           copy_from = rand_below(afl, new_len - copy_len + 1);
@@ -1103,8 +1077,8 @@ void write_func_stats (afl_state_t * afl) {
     fprintf(f, "havoc_func : %s/%s, %s/%s\n",
           u_stringify_int(IB(0), afl->stage_finds[STAGE_HAVOC_FUNC]),
           u_stringify_int(IB(2), afl->stage_cycles[STAGE_HAVOC_FUNC]),
-          u_stringify_int(IB(3), afl->stage_finds[STAGE_MINIG]),
-          u_stringify_int(IB(4), afl->stage_cycles[STAGE_MINIG]));
+          u_stringify_int(IB(3), afl->stage_finds[STAGE_MINING]),
+          u_stringify_int(IB(4), afl->stage_cycles[STAGE_MINING]));
 
     fclose(f);
   }

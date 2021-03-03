@@ -28,6 +28,9 @@
 #include <sys/time.h>
 #include <signal.h>
 #include <limits.h>
+#if !defined NAME_MAX
+  #define NAME_MAX _XOPEN_NAME_MAX
+#endif
 
 #include "cmplog.h"
 
@@ -62,8 +65,6 @@ fuzz_run_target(afl_state_t *afl, afl_forkserver_t *fsrv, u32 timeout) {
   time_spent_start = (spec.tv_sec * 1000000000) + spec.tv_nsec;
 #endif
 
-  // TODO: Don't classify for faults?
-  classify_counts(fsrv);
   return res;
 
 }
@@ -79,7 +80,8 @@ write_to_testcase(afl_state_t *afl, void *mem, u32 len) {
   s32  doc_fd;
   char fn[PATH_MAX];
   snprintf(fn, PATH_MAX, "%s/mutations/%09u:%s", afl->out_dir,
-           afl->document_counter++, describe_op(afl, 0));
+           afl->document_counter++,
+           describe_op(afl, 0, NAME_MAX - strlen("000000000:")));
 
   if ((doc_fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600)) >= 0) {
 
@@ -93,9 +95,9 @@ write_to_testcase(afl_state_t *afl, void *mem, u32 len) {
 
   if (unlikely(afl->custom_mutators_count)) {
 
-    u8 *    new_buf = NULL;
     ssize_t new_size = len;
-    void *  new_mem = mem;
+    u8 *    new_mem = mem;
+    u8 *    new_buf = NULL;
 
     LIST_FOREACH(&afl->custom_mutator_list, struct custom_mutator, {
 
@@ -151,13 +153,13 @@ static void write_with_gap(afl_state_t *afl, u8 *mem, u32 len, u32 skip_at,
   if (unlikely(!mem_trimmed)) { PFATAL("alloc"); }
 
   ssize_t new_size = len - skip_len;
-  void *  new_mem = mem;
-  u8 *    new_buf = NULL;
+  u8 *    new_mem = mem;
 
   bool post_process_skipped = true;
 
   if (unlikely(afl->custom_mutators_count)) {
 
+    u8 *new_buf = NULL;
     new_mem = mem_trimmed;
 
     LIST_FOREACH(&afl->custom_mutator_list, struct custom_mutator, {
@@ -204,9 +206,9 @@ static void write_with_gap(afl_state_t *afl, u8 *mem, u32 len, u32 skip_at,
 
     if (!post_process_skipped) {
 
-      // If we did post_processing, copy directly from the new_buf bufer
+      // If we did post_processing, copy directly from the new_mem buffer
 
-      memcpy(afl->fsrv.shmem_fuzz, new_buf, new_size);
+      memcpy(afl->fsrv.shmem_fuzz, new_mem, new_size);
 
     }
 
@@ -228,10 +230,10 @@ static void write_with_gap(afl_state_t *afl, u8 *mem, u32 len, u32 skip_at,
           hash64(afl->fsrv.shmem_fuzz, *afl->fsrv.shmem_fuzz_len, 0xa5b35705),
           *afl->fsrv.shmem_fuzz_len);
       fprintf(stderr, "SHM :");
-      for (int i = 0; i < *afl->fsrv.shmem_fuzz_len; i++)
+      for (u32 i = 0; i < *afl->fsrv.shmem_fuzz_len; i++)
         fprintf(stderr, "%02x", afl->fsrv.shmem_fuzz[i]);
       fprintf(stderr, "\nORIG:");
-      for (int i = 0; i < *afl->fsrv.shmem_fuzz_len; i++)
+      for (u32 i = 0; i < *afl->fsrv.shmem_fuzz_len; i++)
         fprintf(stderr, "%02x", (u8)((u8 *)mem)[i]);
       fprintf(stderr, "\n");
 
@@ -243,7 +245,7 @@ static void write_with_gap(afl_state_t *afl, u8 *mem, u32 len, u32 skip_at,
 
   } else if (afl->fsrv.out_file) {
 
-    if (afl->no_unlink) {
+    if (unlikely(afl->no_unlink)) {
 
       fd = open(afl->fsrv.out_file, O_WRONLY | O_CREAT | O_TRUNC, 0600);
 
@@ -264,7 +266,7 @@ static void write_with_gap(afl_state_t *afl, u8 *mem, u32 len, u32 skip_at,
 
   if (!post_process_skipped) {
 
-    ck_write(fd, new_buf, new_size, afl->fsrv.out_file);
+    ck_write(fd, new_mem, new_size, afl->fsrv.out_file);
 
   } else {
 
@@ -294,11 +296,11 @@ static void write_with_gap(afl_state_t *afl, u8 *mem, u32 len, u32 skip_at,
 u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
                   u32 handicap, u8 from_queue) {
 
+  if (unlikely(afl->shm.cmplog_mode)) { q->exec_cksum = 0; }
+
   u8 fault = 0, new_bits = 0, var_detected = 0, hnb = 0,
      first_run = (q->exec_cksum == 0);
-
-  u64 start_us, stop_us;
-
+  u64 start_us, stop_us, diff_us;
   s32 old_sc = afl->stage_cur, old_sm = afl->stage_max;
   u32 use_tmout = afl->fsrv.exec_tmout;
   u8 *old_sn = afl->stage_name;
@@ -332,7 +334,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
     }
 
     afl_fsrv_start(&afl->fsrv, afl->argv, &afl->stop_soon,
-                   afl->afl_env.afl_debug_child_output);
+                   afl->afl_env.afl_debug_child);
 
     if (afl->fsrv.support_shmem_fuzz && !afl->fsrv.use_shmem_fuzz) {
 
@@ -378,6 +380,11 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
     }
 
+#ifdef INTROSPECTION
+    if (unlikely(!q->bitsmap_size)) q->bitsmap_size = afl->bitsmap_size;
+#endif
+
+    classify_counts(&afl->fsrv);
     cksum = hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
     if (q->exec_cksum != cksum) {
 
@@ -394,6 +401,8 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
               unlikely(afl->first_trace[i] != afl->fsrv.trace_bits[i])) {
 
             afl->var_bytes[i] = 1;
+            // ignore the variable edge by setting it to fully discovered
+            afl->virgin_bits[i] = 0;
 
           }
 
@@ -413,15 +422,32 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
   }
 
-  stop_us = get_cur_time_us();
+  if (unlikely(afl->fixed_seed)) {
 
-  afl->total_cal_us += stop_us - start_us;
+    diff_us = (u64)(afl->fsrv.exec_tmout - 1) * (u64)afl->stage_max;
+
+  } else {
+
+    stop_us = get_cur_time_us();
+    diff_us = stop_us - start_us;
+    if (unlikely(!diff_us)) { ++diff_us; }
+
+  }
+
+  afl->total_cal_us += diff_us;
   afl->total_cal_cycles += afl->stage_max;
 
   /* OK, let's collect some stats about the performance of this test case.
      This is used for fuzzing air time calculations in calculate_score(). */
 
-  q->exec_us = (stop_us - start_us) / afl->stage_max;
+  if (unlikely(!afl->stage_max)) {
+
+    // Pretty sure this cannot happen, yet scan-build complains.
+    FATAL("BUG: stage_max should not be 0 here! Please report this condition.");
+
+  }
+
+  q->exec_us = diff_us / afl->stage_max;
   q->bitmap_size = count_bytes(afl, afl->fsrv.trace_bits);
   q->handicap = handicap;
   q->cal_failed = 0;
@@ -482,7 +508,7 @@ void sync_fuzzers(afl_state_t *afl) {
   DIR *          sd;
   struct dirent *sd_ent;
   u32            sync_cnt = 0, synced = 0, entries = 0;
-  u8             path[PATH_MAX + 256];
+  u8             path[PATH_MAX + 1 + NAME_MAX];
 
   sd = opendir(afl->sync_dir);
   if (!sd) { PFATAL("Unable to open '%s'", afl->sync_dir); }
@@ -585,9 +611,10 @@ void sync_fuzzers(afl_state_t *afl) {
 
     u8 entry[12];
     sprintf(entry, "id:%06u", next_min_accept);
+
     while (m < n) {
 
-      if (memcmp(namelist[m]->d_name, entry, 9)) {
+      if (strncmp(namelist[m]->d_name, entry, 9)) {
 
         m++;
 
@@ -600,9 +627,8 @@ void sync_fuzzers(afl_state_t *afl) {
     }
 
     if (m >= n) { goto close_sync; }  // nothing new
-    o = n - 1;
 
-    while (o >= m) {
+    for (o = m; o < n; o++) {
 
       s32         fd;
       struct stat st;
@@ -610,7 +636,6 @@ void sync_fuzzers(afl_state_t *afl) {
       snprintf(path, sizeof(path), "%s/%s", qd_path, namelist[o]->d_name);
       afl->syncing_case = next_min_accept;
       next_min_accept++;
-      o--;
 
       /* Allow this to fail in case the other fuzzer is resuming or so... */
 
@@ -672,7 +697,7 @@ void sync_fuzzers(afl_state_t *afl) {
     // same time. If so, the first temporary main node running again will demote
     // themselves so this is not an issue
 
-    u8 path[PATH_MAX];
+    //    u8 path2[PATH_MAX];
     afl->is_main_node = 1;
     sprintf(path, "%s/is_main_node", afl->out_dir);
     int fd = open(path, O_CREAT | O_RDWR, 0644);
@@ -682,6 +707,8 @@ void sync_fuzzers(afl_state_t *afl) {
 
   if (afl->foreign_sync_cnt) read_foreign_testcases(afl, 0);
 
+  afl->last_sync_time = get_cur_time();
+
 }
 
 /* Trim all new test cases to save cycles when doing deterministic checks. The
@@ -689,6 +716,8 @@ void sync_fuzzers(afl_state_t *afl) {
    file size, to keep the stage short and sweet. */
 
 u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
+
+  u32 orig_len = q->len;
 
   /* Custom mutator trimmer */
   if (afl->custom_mutators_count) {
@@ -706,6 +735,12 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
       }
 
     });
+
+    if (orig_len != q->len || custom_trimmed) {
+
+      queue_testcase_retake(afl, q, orig_len);
+
+    }
 
     if (custom_trimmed) return trimmed_case;
 
@@ -755,13 +790,14 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
       write_with_gap(afl, in_buf, q->len, remove_pos, trim_avail);
 
       fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
-      ++afl->trim_execs;
 
       if (afl->stop_soon || fault == FSRV_RUN_ERROR) { goto abort_trimming; }
 
       /* Note that we don't keep track of crashes or hangs here; maybe TODO?
        */
 
+      ++afl->trim_execs;
+      classify_counts(&afl->fsrv);
       cksum = hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
 
       /* If the deletion had no impact on the trace, make it permanent. This
@@ -813,7 +849,7 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
 
     s32 fd;
 
-    if (afl->no_unlink) {
+    if (unlikely(afl->no_unlink)) {
 
       fd = open(q->fname, O_WRONLY | O_CREAT | O_TRUNC, 0600);
 
@@ -839,6 +875,8 @@ u8 trim_case(afl_state_t *afl, struct queue_entry *q, u8 *in_buf) {
     }
 
     close(fd);
+
+    queue_testcase_retake_mem(afl, q, in_buf, q->len, orig_len);
 
     memcpy(afl->fsrv.trace_bits, afl->clean_trace, afl->fsrv.map_size);
     update_bitmap_score(afl, q);
