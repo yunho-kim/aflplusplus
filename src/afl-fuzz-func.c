@@ -22,10 +22,6 @@ void init_func(afl_state_t* afl) {
   afl->num_change_cmp_limit = (u32) ((float) afl->num_cmp * CHANGED_CMPS_SIZE_RATIO);
   if (afl->num_change_cmp_limit < CHANGED_CMPS_SIZE_MIN) afl->num_change_cmp_limit = CHANGED_CMPS_SIZE_MIN;
 
-  if (afl->num_cmp > CMP_FUNC_MAP_SIZE) {
-    FATAL("# of cmp (%u) is bigger than CMP_FUNC_MAP_SIZE(%u)", afl->num_cmp, CMP_FUNC_MAP_SIZE);
-  }
-
   afl->cmp_func_map = malloc(sizeof(u32) * afl->num_cmp);
 
   OKF("Number of function : %u, cmp Instr. : %u", afl->num_func, afl->num_cmp);
@@ -121,26 +117,44 @@ void init_trim_and_func(afl_state_t * afl) {
 
 void get_byte_cmps_main(afl_state_t * afl) {
 
-  s32 fd, len;
+  s32  len;
   u8 * in_buf;
 
   afl->mining_done_idx++;
 
   struct queue_entry * q = afl->queue_buf[afl->mining_done_idx];
 
-  fd = open(q->fname, O_RDONLY);
-  if (unlikely(fd < 0)) PFATAL("Unable to open '%s'", q->fname);
+  
 
   len = q->len;
-  in_buf = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+  in_buf = queue_testcase_get(afl, q);
 
-  if (unlikely(in_buf == MAP_FAILED)) PFATAL("Unable to mmap '%s' with len %d", q->fname, len);
+  //trimming
+  if (!q->trim_done) {
+    u32 old_len = q->len;
 
-  close(fd);
+    u8 res = trim_case(afl, q, in_buf);
+    in_buf = queue_testcase_get(afl, q);
+
+    if (res == FSRV_RUN_ERROR) {
+
+      FATAL("Unable to execute target application");
+
+    }
+
+    /* Don't retry trimming, even if it failed. */
+
+    q->trim_done = 1;
+
+    len = q->len;
+
+    /* maybe current entry is not ready for splicing anymore */
+    if (unlikely(len <= 4 && old_len > 4)) --afl->ready_for_splicing_count;
+  }
+
 
   get_byte_cmps(afl, in_buf, len, afl->mining_done_idx);
-
-  munmap(in_buf, len);
+  
 }
 
 
@@ -268,7 +282,7 @@ void get_byte_cmps(afl_state_t *afl, u8 * out_buf, u32 len, u32 tc_idx) {
 
   u64 get_time = get_cur_time();
   u32 i1, i2, cmp_id;
-  struct cmp_func_entry * entries = afl->shm.func_map->entries;
+  struct cmp_func_entry * entries = afl->shm.func_map;
   struct tc_graph_entry * new_tc = afl->tc_graph[tc_idx];
   struct queue_entry * tc_queue_entry = afl->queue_buf[tc_idx];
 
@@ -793,8 +807,8 @@ do {                                      \
 
     //execute
     for (i2 = 0; i2 < afl->num_cmp; i2++) {
-      afl->shm.func_map->entries[i2].executed = 0;
-      afl->shm.func_map->entries[i2].condition = 0;
+      afl->shm.func_map[i2].executed = 0;
+      afl->shm.func_map[i2].condition = 0;
     }
 
     fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);

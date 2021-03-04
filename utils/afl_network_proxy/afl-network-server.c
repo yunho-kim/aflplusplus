@@ -564,7 +564,7 @@ int main(int argc, char **argv_orig, char **envp) {
   check_environment_vars(envp);
 
   sharedmem_t shm = {0};
-  fsrv->trace_bits = afl_shm_init(&shm, map_size, 0);
+  fsrv->trace_bits = afl_shm_init(&shm, map_size, 0, 0);
 
   in_data = afl_realloc((void **)&in_data, 65536);
   if (unlikely(!in_data)) { PFATAL("Alloc"); }

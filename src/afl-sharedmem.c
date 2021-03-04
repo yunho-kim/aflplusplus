@@ -142,7 +142,7 @@ void afl_shm_deinit(sharedmem_t *shm) {
 */
 
 u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
-                 unsigned char non_instrumented_mode) {
+                 unsigned char non_instrumented_mode, u32 num_cmp) {
 
   shm->map_size = 0;
 
@@ -260,14 +260,22 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
   }
 
-  shm->func_shm_id = shmget(IPC_PRIVATE, sizeof(struct cmp_func_list), IPC_CREAT | IPC_EXCL | 0600);
-  
-  if (shm->func_shm_id < 0) {
-    shmctl(shm->shm_id, IPC_RMID, NULL);
-    if (shm->cmplog_mode) {
-      shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);
+  if (num_cmp) {
+    u32 func_shm_size;
+    {
+      struct cmp_func_entry tmp[num_cmp];
+      func_shm_size = sizeof(tmp);
     }
-    PFATAL("shmget() failed func");
+
+    shm->func_shm_id = shmget(IPC_PRIVATE, func_shm_size, IPC_CREAT | IPC_EXCL | 0600);
+    
+    if (shm->func_shm_id < 0) {
+      shmctl(shm->shm_id, IPC_RMID, NULL);
+      if (shm->cmplog_mode) {
+        shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);
+      }
+      PFATAL("shmget() failed func");
+    }
   }
 
   if (!non_instrumented_mode) {
@@ -295,7 +303,7 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
   }
 
-  if (!non_instrumented_mode) {
+  if (num_cmp && !non_instrumented_mode) {
     shm_str = alloc_printf("%d", shm->func_shm_id);
     setenv(AFL_FUNC_SHM_ENV_VAR, shm_str, 1);
     ck_free(shm_str);
@@ -333,13 +341,15 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
   }
 
-  shm->func_map = shmat(shm->func_shm_id, NULL, 0);
-  if (shm->func_map == (void *) -1 || !shm->func_map) {
-    shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
-    if (shm->cmplog_mode) {
-      shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
+  if (num_cmp) {
+    shm->func_map = shmat(shm->func_shm_id, NULL, 0);
+    if (shm->func_map == (void *) -1 || !shm->func_map) {
+      shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
+      if (shm->cmplog_mode) {
+        shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
+      }
+      shmctl(shm->func_shm_id, IPC_RMID, NULL);
     }
-    shmctl(shm->func_shm_id, IPC_RMID, NULL);
   }
 
 #endif

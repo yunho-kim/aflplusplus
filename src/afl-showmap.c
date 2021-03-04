@@ -1002,7 +1002,7 @@ int main(int argc, char **argv_orig, char **envp) {
   set_up_environment(fsrv);
 
   fsrv->target_path = find_binary(argv[optind]);
-  fsrv->trace_bits = afl_shm_init(&shm, map_size, 0);
+  fsrv->trace_bits = afl_shm_init(&shm, map_size, 0, 0);
 
   if (!quiet_mode) {
 
@@ -1053,7 +1053,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   /* initialize cmplog_mode */
   shm_fuzz->cmplog_mode = 0;
-  u8 *map = afl_shm_init(shm_fuzz, MAX_FILE + sizeof(u32), 1);
+  u8 *map = afl_shm_init(shm_fuzz, MAX_FILE + sizeof(u32), 1, 0);
   shm_fuzz->shmemfuzz_mode = 1;
   if (!map) { FATAL("BUG: Zero return from afl_shm_init."); }
 #ifdef USEMMAP
@@ -1092,7 +1092,7 @@ int main(int argc, char **argv_orig, char **envp) {
         afl_shm_deinit(&shm);
         afl_fsrv_kill(fsrv);
         fsrv->map_size = new_map_size;
-        fsrv->trace_bits = afl_shm_init(&shm, new_map_size, 0);
+        fsrv->trace_bits = afl_shm_init(&shm, new_map_size, 0, 0);
 
       }
 

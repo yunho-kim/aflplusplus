@@ -198,6 +198,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
     func_cmp.push_back(cmp_id);
 
     func_id ++;
+    
   }
 
   func << func_id << "," << cmp_id << "\n";

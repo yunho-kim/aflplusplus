@@ -40,11 +40,6 @@ struct cmp_func_entry {
   u8 executed : 1;
 };
 
-struct cmp_func_list {
-  //index : cmp id
-  struct cmp_func_entry entries[CMP_FUNC_MAP_SIZE];
-};
-
 void func_exec_child(afl_forkserver_t *fsrv, char ** argv);
 
 #endif

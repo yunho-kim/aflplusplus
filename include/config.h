@@ -499,11 +499,6 @@
 /* func shm id */
 #define AFL_FUNC_SHM_ENV_VAR "__AFL_FUNC_SHM_ID"
 
-//# of cmp instructions, used for shm.func_map->entries to
-//fetch runtime information of cmp instructions
-#define CMP_FUNC_MAP_SIZE 65536
-//#define CMP_FUNC_MAP_SIZE 262144
-
 //buffer size
 #define BYTE_CHANGE_RATIO 0.1
 #define BYTE_CHANGE_MIN 256

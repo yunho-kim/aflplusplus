@@ -114,7 +114,7 @@ int __afl_sharedmem_fuzzing __attribute__((weak));
 
 struct cmp_map *__afl_cmp_map;
 struct cmp_map *__afl_cmp_map_backup;
-struct cmp_func_list * __afl_func_map;
+struct cmp_func_entry * __afl_func_map;
 
 /* Child pid? */
 
@@ -1236,11 +1236,9 @@ void __func_log_hook(uint32_t cmpid, uint32_t condition) {
     return;
   }
 
-  uintptr_t k = (CMP_FUNC_MAP_SIZE - 1) & cmpid;
-
   condition = condition ? 2 : 1;
-  __afl_func_map->entries[k].executed = 1; //mark executed
-  __afl_func_map->entries[k].condition |= condition;
+  __afl_func_map[cmpid].executed = 1; //mark executed
+  __afl_func_map[cmpid].condition |= condition;
 }
 
 ///// CmpLog instrumentation

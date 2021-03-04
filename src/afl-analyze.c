@@ -1113,7 +1113,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   /* initialize cmplog_mode */
   shm.cmplog_mode = 0;
-  trace_bits = afl_shm_init(&shm, map_size, 0);
+  trace_bits = afl_shm_init(&shm, map_size, 0, 0);
   atexit(at_exit_handler);
   setup_signal_handlers();
 
