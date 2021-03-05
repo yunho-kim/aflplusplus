@@ -13,7 +13,7 @@ sancmd=$(echo $* | sed 's,\.afl,\.san,g')
 subject=$(echo $* | sed 's,.*subjects\/,,g')
 subject=$(echo ${subject} | sed 's,\.afl.*,,g')
 
-#export AFL_DISABLE_TRIM=1
+export AFL_DISABLE_TRIM=1
 
 cmd="${FUZZER} -M 1 -d -r ./subjects/${subject}.func -a ./FInfos/func-${subject} $* &"
 

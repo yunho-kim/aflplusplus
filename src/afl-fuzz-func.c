@@ -124,37 +124,11 @@ void get_byte_cmps_main(afl_state_t * afl) {
 
   struct queue_entry * q = afl->queue_buf[afl->mining_done_idx];
 
-  
-
   len = q->len;
   in_buf = queue_testcase_get(afl, q);
 
-  //trimming
-  if (!q->trim_done) {
-    u32 old_len = q->len;
-
-    u8 res = trim_case(afl, q, in_buf);
-    in_buf = queue_testcase_get(afl, q);
-
-    if (res == FSRV_RUN_ERROR) {
-
-      FATAL("Unable to execute target application");
-
-    }
-
-    /* Don't retry trimming, even if it failed. */
-
-    q->trim_done = 1;
-
-    len = q->len;
-
-    /* maybe current entry is not ready for splicing anymore */
-    if (unlikely(len <= 4 && old_len > 4)) --afl->ready_for_splicing_count;
-  }
-
-
   get_byte_cmps(afl, in_buf, len, afl->mining_done_idx);
-  
+
 }
 
 
