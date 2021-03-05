@@ -124,6 +124,8 @@ void get_byte_cmps_main(afl_state_t * afl) {
 
   struct queue_entry * q = afl->queue_buf[afl->mining_done_idx];
 
+  if (q->disabled) return;
+
   len = q->len;
   in_buf = queue_testcase_get(afl, q);
 
