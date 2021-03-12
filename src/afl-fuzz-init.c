@@ -880,44 +880,19 @@ void perform_dry_run(afl_state_t *afl) {
 
       case FSRV_RUN_TMOUT:
 
-        if (afl->timeout_given) {
+        q->cal_failed = CAL_CHANCES;
+        q->disabled = 1;
+        q->perf_score = 0;
 
-          /* if we have a timeout but a timeout value was given then always
-             skip. The '+' meaning has been changed! */
-          WARNF("Test case results in a timeout (skipping)");
-          ++cal_failures;
-          q->cal_failed = CAL_CHANCES;
-          q->disabled = 1;
-          q->perf_score = 0;
+        if (!q->was_fuzzed) {
 
-          if (!q->was_fuzzed) {
-
-            q->was_fuzzed = 1;
-            --afl->pending_not_fuzzed;
-            --afl->active_paths;
-
-          }
-
-          break;
-
-        } else {
-
-          SAYF("\n" cLRD "[-] " cRST
-               "The program took more than %u ms to process one of the initial "
-               "test cases.\n"
-               "    This is bad news; raising the limit with the -t option is "
-               "possible, but\n"
-               "    will probably make the fuzzing process extremely slow.\n\n"
-
-               "    If this test case is just a fluke, the other option is to "
-               "just avoid it\n"
-               "    altogether, and find one that is less of a CPU hog.\n",
-               afl->fsrv.exec_tmout);
-
-          FATAL("Test case '%s' results in a timeout", fn);
-
+          q->was_fuzzed = 1;
+          --afl->pending_not_fuzzed;
+          --afl->active_paths;
         }
-
+ 
+        break;
+        
       case FSRV_RUN_CRASH:
 
         if (afl->crash_mode) { break; }
