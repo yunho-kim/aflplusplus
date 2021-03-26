@@ -363,7 +363,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   while ((opt = getopt(
               argc, argv,
-              "+b:a:B:c:CdDe:E:hi:I:f:F:l:L:m:M:nNo:p:Rr:Qs:S:t:T:UV:Wx:Z")) > 0) {
+              "+b:B:c:CdD:e:E:hi:I:f:F:l:L:m:M:nNo:p:RQs:S:t:T:UV:Wx:Z")) > 0) {
 
     switch (opt) {
 
@@ -689,9 +689,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
       break;
 
-      case 'D':                                    /* enforce deterministic */
-
-        afl->skip_deterministic = 0;
+      case 'D':
+        afl->func_infos_dir = optarg;
         break;
 
       case 'd':                                       /* skip deterministic */
@@ -1008,15 +1007,6 @@ int main(int argc, char **argv_orig, char **envp) {
             "Radamsa is now a custom mutator, please use that "
             "(custom_mutators/radamsa/).");
 
-      case 'r':
-        afl->shm.func_mode = 1;
-        afl->func_binary = ck_strdup(optarg);
-
-        break;
-
-      //func information text file
-      case 'a':
-        afl->func_info_txt = ck_strdup(optarg);
         break;
 
       default:
@@ -1032,7 +1022,24 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  if (!afl->func_info_txt || !afl->func_binary) FATAL("No func info txt and exectuable");
+  if (!afl->func_infos_dir) FATAL("No directed info");
+
+  afl->func_info_txt = (char *) calloc (PATH_MAX, sizeof(u8));
+  afl->func_binary = (char *) calloc (PATH_MAX, sizeof(u8));
+  snprintf(afl->func_info_txt, PATH_MAX, "%s/FRIEND_func_cmp_id_info", afl->func_infos_dir);
+  {
+    u8 * buf = (u8 *) calloc (PATH_MAX, sizeof(u8));
+    char * trim = strrchr(argv[optind], '/');
+    trim ++;
+    u32 trim_len = strrchr(trim, '.') - trim;
+    memcpy(buf, trim, trim_len);
+    snprintf(afl->func_binary, PATH_MAX, "%s/%s.func", afl->func_infos_dir, buf);
+    free(buf);
+  }
+
+  OKF("func info txt : %s\nfunc binary : %s\n", afl->func_info_txt, afl->func_binary);
+
+  if (!afl->func_info_txt || !afl->func_binary) FATAL("Can't allocate string for path?");
 
   if (afl->fsrv.qemu_mode && getenv("AFL_USE_QASAN")) {
 

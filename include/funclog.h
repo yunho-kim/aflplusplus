@@ -37,7 +37,7 @@ struct cmp_func_entry {
   u8 precondition : 3;
   //condition recored at the execution, MSB : true, LSB : false,  true | false covered  
   u8 condition : 3;
-  u8 executed : 1;
+  u8 executed : 2;
 };
 
 void func_exec_child(afl_forkserver_t *fsrv, char ** argv);

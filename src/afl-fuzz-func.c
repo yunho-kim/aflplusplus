@@ -23,6 +23,7 @@ void init_func(afl_state_t* afl) {
   if (afl->num_change_cmp_limit < CHANGED_CMPS_SIZE_MIN) afl->num_change_cmp_limit = CHANGED_CMPS_SIZE_MIN;
 
   afl->cmp_func_map = malloc(sizeof(u32) * afl->num_cmp);
+  afl->func_cmp_map = malloc(sizeof(struct func_cmp_info *) * afl->num_func);
 
   OKF("Number of function : %u, cmp Instr. : %u", afl->num_func, afl->num_cmp);
 
@@ -31,11 +32,14 @@ void init_func(afl_state_t* afl) {
     res = fscanf(f, "%u\n", &num_func_cmp);
     if (res == EOF) PFATAL("Can't read func txt file");
     //SAYF("funcid : %u, # of cmp : %u\n",i, num_func_cmp);
+    afl->func_cmp_map[i] = malloc(sizeof(struct func_cmp_info));
+    afl->func_cmp_map[i]->cmp_id_begin = cur_cmp_idx;
     tmp = num_func_cmp - cur_cmp_idx;
     for (j = 0; j < tmp; j++) {
       //SAYF("%u : %u\n", cur_cmp_idx, i);
       afl->cmp_func_map[cur_cmp_idx++] = i;
     }
+    afl->func_cmp_map[i]->cmp_id_end = num_func_cmp;
   }
   fclose(f);
   
@@ -44,6 +48,9 @@ void init_func(afl_state_t* afl) {
   afl->func_exec_count_table =
     (u32 **) calloc (sizeof(u32*), afl->num_func);
   if (!afl->func_exec_count_table) PFATAL("Can't alloc func_exec_count_table");
+
+  afl->func_cmp_exec_count_table = (u32 ***) calloc (afl->num_func, sizeof (u32 **));
+  if (!afl->func_cmp_exec_count_table) PFATAL("Can't alloc func_cmp_exec_count_table");
 
   afl->func_list = (u8 *) malloc (sizeof(u8) * afl->num_func);
   if (!afl->func_list) PFATAL("Can't alloc func_exec_exec");
@@ -257,7 +264,7 @@ void update_tc_graph(afl_state_t * afl, u32 tc_idx, u32 parent_idx, u32 parent2_
 void get_byte_cmps(afl_state_t *afl, u8 * out_buf, u32 len, u32 tc_idx) {
 
   u64 get_time = get_cur_time();
-  u32 i1, i2, cmp_id;
+  u32 i1, i2, i3, cmp_id;
   struct cmp_func_entry * entries = afl->shm.func_map;
   struct tc_graph_entry * new_tc = afl->tc_graph[tc_idx];
   struct queue_entry * tc_queue_entry = afl->queue_buf[tc_idx];
@@ -353,6 +360,23 @@ void get_byte_cmps(afl_state_t *afl, u8 * out_buf, u32 len, u32 tc_idx) {
       }
       for (i2 = 0; i2 < afl->num_func; i2++) {
         afl->func_exec_count_table[i1][i2] += afl->func_list[i2]; 
+      }
+
+      struct func_cmp_info * cur_func_info = afl->func_cmp_map[i1];
+      u32 num_cmp = cur_func_info->cmp_id_end - cur_func_info->cmp_id_begin;
+      if (unlikely(afl->func_cmp_exec_count_table[i1] == NULL)) {        
+        afl->func_cmp_exec_count_table[i1] = (u32 **) calloc(num_cmp, sizeof (u32 *));
+        for (i2 = 0; i2 < num_cmp; i2++) {
+          afl->func_cmp_exec_count_table[i1][i2] = (u32 *) calloc (num_cmp, sizeof (u32));
+        }
+      }
+
+      for (i2 = 0; i2 < num_cmp; i2++) {
+        if (entries[i2 + cur_func_info->cmp_id_begin].executed) {
+          for (i3 = 0; i3 < num_cmp; i3++) {
+            afl->func_cmp_exec_count_table[i1][i2][i3] += entries[i3 + cur_func_info->cmp_id_begin].executed;
+          }
+        }
       }
     }
   }
@@ -1125,6 +1149,28 @@ void destroy_func(afl_state_t * afl) {
     }
     free(afl->func_exec_count_table);
   }
+
+  if (afl->func_cmp_exec_count_table) {
+    for (idx1 = 0; idx1 < afl->num_func; idx1++) {
+      if (afl->func_cmp_exec_count_table[idx1]) {
+        u32 num_cmp = afl->func_cmp_map[idx1]->cmp_id_end - afl->func_cmp_map[idx1]->cmp_id_begin;
+        for (idx2 = 0; idx2 < num_cmp; idx2++) {
+          if (afl->func_cmp_exec_count_table[idx1][idx2]) {
+            free(afl->func_cmp_exec_count_table[idx1][idx2]);
+          }
+        }
+        free(afl->func_cmp_exec_count_table[idx1]);
+      }
+    }
+    free(afl->func_cmp_exec_count_table);
+  }
+
+  if (afl->func_cmp_map) {
+    for (idx1 = 0; idx1 < afl->num_func; idx1++) {
+      free(afl->func_cmp_map[idx1]);
+    }
+    free(afl->func_cmp_map);
+  }
 }
 
 void func_common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len, u32 parent_id) {
@@ -1217,17 +1263,10 @@ void fuzz_one_func (afl_state_t *afl) {
   //get related funcs
   memset(afl->func_list, 0, sizeof(u8) * afl->num_func);
   u32 target_func = afl->cmp_func_map[target_cmp_id];
-  u32 target_func_exec = afl->func_exec_count_table[target_func][target_func];
-  u32 num_rel_funcs = 0;
-  u32 num_exec_funcs = 0;
-  for (i = 0; i < afl->num_func; i++) {
-    if (((float) afl->func_exec_count_table[target_func][i] / target_func_exec)
-         >= REL_FUNC_THRESHOLD ) {
-      afl->func_list[i] = 1; 
-      num_rel_funcs++;
-    }
-    if (afl->func_exec_count_table[i]) num_exec_funcs ++;
-  }
+  u32 target_func_begin_id = afl->func_cmp_map[target_func]->cmp_id_begin;
+  u32 target_cmp_id_in_func = target_cmp_id - target_func_begin_id;
+  float target_cmp_exec = (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][target_cmp_id_in_func];
+  float target_func_exec = (float) afl->func_exec_count_table[target_func][target_func];
 
   u32 * close_tcs = (u32 *) malloc(sizeof(u32) * CLOSE_TCS_SIZE);
   memset(close_tcs, 255, sizeof(u32) * CLOSE_TCS_SIZE);
@@ -1252,32 +1291,38 @@ void fuzz_one_func (afl_state_t *afl) {
     //TODO: why?
     if (unlikely(tc_id >= afl->tc_graph_size)) continue;
     struct tc_graph_entry * cur_tc = afl->tc_graph[tc_id];
-    u32 contains_rel_cmp = 0;
 
     if (unlikely(!cur_tc->initialized)) continue;
     if (cur_tc->byte_cmp_sets_ptr == NULL) continue;
 
     u32 num_changed_cmps;
-    u32 num_changed_cmp_max = 0;
+    float changed_cmp_rel_avg_max = 0.0;
     u32 max_idx = (u32) -1;
 
     for (j = 0 ; j < cur_tc->num_byte_cmp_sets; j++) {
       num_changed_cmps = cur_tc->byte_cmp_sets_ptr[j]->num_changed_cmps;
-      contains_rel_cmp = 0;
 
-      if (cur_tc->byte_cmp_sets_ptr[j]->changed_cmps == NULL) continue;
+      if (num_changed_cmps == 0) continue;
+
+      float cur_cmp_rel_avg = 0.0;
 
       for (k = 0; k < num_changed_cmps; k++) {
-        if (afl->func_list[afl->cmp_func_map[cur_tc->byte_cmp_sets_ptr[j]->changed_cmps[k]]]) {
-          contains_rel_cmp++;
+        u32 cmp_func_id = afl->cmp_func_map[cur_tc->byte_cmp_sets_ptr[j]->changed_cmps[k]];
+        if (cmp_func_id == target_func) {
+          cur_cmp_rel_avg += 1.0;
+          cur_cmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][target_func_begin_id]
+            / target_cmp_exec;
+        } else {
+          cur_cmp_rel_avg += (float) afl->func_exec_count_table[target_func][cmp_func_id]
+            / target_func_exec;
         }
       }
 
-      if (contains_rel_cmp) {
-        if (num_changed_cmp_max < contains_rel_cmp) {
-          num_changed_cmp_max = contains_rel_cmp;
-          max_idx = j;
-        }
+      cur_cmp_rel_avg /= num_changed_cmps;
+
+      if (changed_cmp_rel_avg_max < cur_cmp_rel_avg) {
+        changed_cmp_rel_avg_max = cur_cmp_rel_avg;
+        max_idx = j;
       }
     }
 

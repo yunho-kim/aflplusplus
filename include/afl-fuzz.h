@@ -249,6 +249,11 @@ struct tc_graph_entry {
   u8  initialized : 1;
 };
 
+struct func_cmp_info {
+  u32 cmp_id_begin;  //included
+  u32 cmp_id_end;    //not included
+};
+
 /* Fuzzing stages */
 
 enum {
@@ -792,6 +797,7 @@ typedef struct afl_state {
   char * func_binary;
   afl_forkserver_t func_fsrv;
   u32 ** func_exec_count_table;
+  u32 *** func_cmp_exec_count_table;
   u8 * func_list;
 
   //cmp queue alloc location
@@ -814,6 +820,8 @@ typedef struct afl_state {
 
   //cmpid (index) -> funcid
   u32 * cmp_func_map;
+
+  struct func_cmp_info ** func_cmp_map;
 
   //function cmp information text file name
   u8 * func_info_txt;
@@ -843,6 +851,8 @@ typedef struct afl_state {
   FILE * debug_file;
 
   u32 mining_done_idx;
+
+  char * func_infos_dir;
 
 #ifdef INTROSPECTION
   char  mutation[8072];
