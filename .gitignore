@@ -52,6 +52,7 @@ dkms.conf
 
 subjects/
 subjects_friend/
+subjects_orig/
 subjects_directed/
 FInfos/
 
