@@ -116,7 +116,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   unsigned int func_id = 0;
   unsigned int cmp_id = 0;
   std::ofstream func;
-  func.open("FRIEND_func_cmp_loc_info" , std::ofstream::out | std::ofstream::trunc);
+  func.open("FRIEND_func_cmp_id_info" , std::ofstream::out | std::ofstream::trunc);
 
   std::vector<unsigned int> func_cmp;
   /* iterate over all functions, bbs and instruction and add suitable calls */
@@ -136,20 +136,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
         if ((selectcmpInst = dyn_cast<CmpInst>(&IN))) {
 
-          if (selectcmpInst->getPredicate() == CmpInst::ICMP_EQ ||
-              selectcmpInst->getPredicate() == CmpInst::ICMP_NE ||
-              selectcmpInst->getPredicate() == CmpInst::ICMP_UGT ||
-              selectcmpInst->getPredicate() == CmpInst::ICMP_SGT ||
-              selectcmpInst->getPredicate() == CmpInst::ICMP_ULT ||
-              selectcmpInst->getPredicate() == CmpInst::ICMP_SLT ||
-              selectcmpInst->getPredicate() == CmpInst::ICMP_UGE ||
-              selectcmpInst->getPredicate() == CmpInst::ICMP_SGE ||
-              selectcmpInst->getPredicate() == CmpInst::ICMP_ULE ||
-              selectcmpInst->getPredicate() == CmpInst::ICMP_SLE) {
-
-            icomps.push_back(selectcmpInst);
-
-          }
+          icomps.push_back(selectcmpInst);
 
         }
 

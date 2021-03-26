@@ -51,6 +51,8 @@ Mkfile.old
 dkms.conf
 
 subjects/
+subjects_friend/
+subjects_directed/
 FInfos/
 
 .vscode/

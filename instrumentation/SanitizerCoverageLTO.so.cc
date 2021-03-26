@@ -886,7 +886,7 @@ bool ModuleSanitizerCoverage::instrumentModule(
 
             }
 
-            if (!be_quiet) {
+            if (debug) {
 
               std::string outstring;
               fprintf(stderr, "%s: length %zu/%zu \"", FuncName.c_str(), optLen,
