@@ -80,7 +80,7 @@ void init_trim_and_func(afl_state_t * afl) {
 
   s32 fd, len;
   u8 * in_buf;
-  u8 res;
+  //u8 res;
 
   u64 cur_time = get_cur_time();
 
@@ -105,8 +105,8 @@ void init_trim_and_func(afl_state_t * afl) {
 
     close(fd);
 
-    res = trim_case(afl, q, in_buf);
-    if (unlikely(res == FSRV_RUN_ERROR)) FATAL("Unable to execute target application");
+    //res = trim_case(afl, q, in_buf);
+    //if (unlikely(res == FSRV_RUN_ERROR)) FATAL("Unable to execute target application");
 
     q->trim_done = 1;
 
