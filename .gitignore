@@ -50,10 +50,7 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
-subjects/
-subjects_friend/
-subjects_orig/
-subjects_directed/
+subjects*
 FInfos/
 
 .vscode/
