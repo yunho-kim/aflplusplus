@@ -17,8 +17,5 @@ for i in range(1, 3 + 1):
     cmd = sys.argv[2].replace("@@", file_path).split(" ")
     print(" ".join(cmd))
     run = subprocess.run(cmd , stdout = subprocess.PIPE, stderr = subprocess.STDOUT, timeout=2)
-    try:
-      print(run.stdout.decode("utf-8"))
-    except:
-      for a in run.stdout.split(b"\n"):
-        print(a)
+    for a in run.stdout.split(b"\n"):
+      print(a)
