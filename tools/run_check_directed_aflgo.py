@@ -31,7 +31,8 @@ checks = [
 ]
 
 subjects = ["/home/cheong/aflgo/subjects_aflgo/{}/pngtest.san @@"] * 3 + \
-  ["cat @@ | /home/cheong/aflgo/subjects_aflgo/{}/cxxfilt.san" ] * 7
+  ["cat @@ | /home/cheong/afl++/subjects_aflgo/{}/cxxfilt.san" ] * 7
+  #["/home/cheong/aflgo/subjects_aflgo/{}/cxxfilt.san @@" ] * 7
 
 outdir = sys.argv[1]
 target_idx = int(sys.argv[2])
@@ -44,8 +45,8 @@ min_crash_stdout = b""
 min_queue_filename = ""
 min_crash_filename = ""
 
-tcs = glob.glob("/home/cheong/results/{}/default/queue/*".format(outdir)) + \
-  glob.glob("/home/cheong/results/{}/default/crashes/*".format(outdir))
+tcs = glob.glob("/home/cheong/results/{}/queue/*".format(outdir)) + \
+  glob.glob("/home/cheong/results/{}/crashes/*".format(outdir))
 
 if len(tcs) == 0:
   print("Zero testcases!")
@@ -57,12 +58,12 @@ idx = 0
 
 for filename in tcs:
   if idx%10 == 0:
-    #print("executed {}/{}, current min idx : {}".format(idx, num_tc, min_idx))
+    print("executed {}/{}, current min idx : {},{}".format(idx, num_tc, min_queue_idx, min_crash_idx))
     pass
   idx+= 1
   if "id:" not in filename:
     continue
-  
+
   file_idx = int(filename.split("/")[-1].split(",")[0][3:])
   if "queue" in filename : 
     if min_queue_idx != -1 and min_queue_idx < file_idx:
@@ -90,7 +91,6 @@ for filename in tcs:
     tcstring += "'"
     tc.close()
     '''
-
     cmd = subject.replace("@@", filename)
 
     bashscript = open("tmp.sh", "w")
@@ -104,9 +104,9 @@ for filename in tcs:
       continue
 
  # if not b"No stack." in run.stdout:
-#  if b"AddressSanitizer" in out:
+ # if b"AddressSanitizer" in out:
  #   for t in out.split(b"\n"):   
-  #    print(t)
+ #     print(t)
 
   target_crashed = True
   for c in check:
@@ -128,7 +128,7 @@ if min_queue_idx == -1 and min_crash_idx == -1:
   print("Not detected")
   exit(0)
 
-plot_file = open("/home/cheong/results/{}/default/plot_data".format(outdir), "r")
+plot_file = open("/home/cheong/results/{}/plot_data".format(outdir), "r")
 plot_file.readline()
 firstline = plot_file.readline()
 firsttime = int(firstline.split(", ")[0])
@@ -136,7 +136,7 @@ for line in plot_file:
   line = line.strip().split(", ")
   time = int(line[0]) - firsttime
   pcov = int(line[3])
-  ccov = int(line[8])
+  ccov = int(line[7])
   if min_queue_idx != -1 and  pcov > min_queue_idx:
     print("tc : {}\ntime : {}".format(min_queue_filename, time))
     for a in min_queue_stdout.split(b"\n"):
