@@ -22,16 +22,16 @@ checks = [
  [b"pngrutil.c:1040"],
  [b"pngwutil.c:1572"],
  [b"register_Btype", b"SEGV"],
- [b"remember_Ktype"],
+ [b"remember_Ktype", b"SEGV", b"WRITE memory access"],
  [b"string_appendn", b"negative-size-param", b"gnu_special"],
- [b"d_unqualified_name", b"d_peek_char", b"SIGSEGV"],
+ [b"d_unqualified_name", b"READ memory access", b"SEGV"],
  [b"d_print_comp_inner", b"stack-overflow", b"d_print_comp", b"#100"],
  [b"do_type", b"READ", b"SEGV on unknown address"],
  [b"do_type", b"stack-overflow", b"#100"],
 ]
 
-subjects = ["/home/cheong/aflgo/subjects_aflgo/{}/pngtest.san @@"] * 3 + \
-  ["cat @@ | /home/cheong/afl++/subjects_aflgo/{}/cxxfilt.san" ] * 7
+subjects = ["/home/cheong/afl++/subjects_directed/{}/pngtest.san @@"] * 3 + \
+  ["cat @@ | /home/cheong/afl++/subjects_directed/{}/cxxfilt.san" ] * 7
   #["/home/cheong/aflgo/subjects_aflgo/{}/cxxfilt.san @@" ] * 7
 
 outdir = sys.argv[1]
@@ -94,6 +94,7 @@ for filename in tcs:
     cmd = subject.replace("@@", filename)
 
     bashscript = open("tmp.sh", "w")
+    bashscript.write("export ASAN_OPTIONS=allocator_may_return_null=1\n")
     bashscript.write(cmd + "\n")
     bashscript.close()
 
