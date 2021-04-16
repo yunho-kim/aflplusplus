@@ -2202,7 +2202,7 @@ int main(int argc, char **argv_orig, char **envp) {
     while (((afl->mining_done_idx + 1) < afl->queued_paths) && idx < MINING_LIMIT) {
       afl->stage_cur = afl->mining_done_idx;
       afl->stage_max = afl->queued_paths;
-      get_byte_cmps_main(afl);
+      mining_wrapper(afl);
       show_stats(afl);
       if (afl->stop_soon) {break;}
       idx++;

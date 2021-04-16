@@ -858,7 +858,7 @@ void show_stats(afl_state_t *afl) {
     afl->num_cmp * 2,  (double) afl->covered_branch * 100.0 / afl->num_cmp / 2.0);
 
 
-  SAYF(bV bSTOP "  cur # of bytes : " cRST "%-17d" bSTG  bV , afl->cur_num_bytes);
+  SAYF(bV bSTOP "                                    " bSTG  bV);
   SAYF(bSTOP "  cmp queue size : " cRST "%-18d  " bSTG  bV "\n", afl->cmp_queue_size);
   
   if (afl->cmp_queue_cur != NULL) 

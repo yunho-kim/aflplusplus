@@ -1814,6 +1814,10 @@ static void handle_existing_out_dir(afl_state_t *afl) {
   if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
   ck_free(fn);
 
+  fn = alloc_printf("%s/FRIEND/mining", afl->out_dir);
+  if (delete_files(fn, CASE_PREFIX)) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
   fn = alloc_printf("%s/FRIEND", afl->out_dir);
   if (rmdir(fn)) { goto dir_cleanup_failed; }
   ck_free(fn);
@@ -2022,6 +2026,10 @@ void setup_dirs_fds(afl_state_t *afl) {
   /* ignore errors */
 
   tmp = alloc_printf("%s/FRIEND", afl->out_dir);
+  if (mkdir(tmp, 0700)) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+
+  tmp = alloc_printf("%s/FRIEND/mining", afl->out_dir);
   if (mkdir(tmp, 0700)) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
 

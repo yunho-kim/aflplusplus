@@ -548,5 +548,12 @@
 
 #define GET_BYTE_TIMEOUT 1000
 
+#define MINING_FRAG_LEN_MIN_POW2 5
+
+#define MINING_MUT_TIME 512
+
+#define CMP_BUF_SIZE 512
+
+
 #endif                                                  /* ! _HAVE_CONFIG_H */
 

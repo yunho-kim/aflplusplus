@@ -60,6 +60,7 @@
 #include <termios.h>
 #include <dlfcn.h>
 #include <sched.h>
+#include <float.h>
 
 #include <netdb.h>
 #include <netinet/in.h>
@@ -231,9 +232,10 @@ struct cmp_queue_entry {
 
 struct byte_cmp_set {
   u32 * changed_cmps;
-  u32 * changed_bytes;
+  u32 * abandoned_cmps;
   u32 num_changed_cmps;
-  u32 num_changed_bytes;
+  u32 num_abandoned_cmps;
+  u8  timeout;
 };
 
 struct tc_graph_entry {
@@ -241,12 +243,13 @@ struct tc_graph_entry {
   u32 parents[2];
   //change children allocation
   u32 * children;
-  struct byte_cmp_set ** byte_cmp_sets_ptr;
   u32 num_children;
+  u32 mining_frag_len;
+  u32 mining_frag_offset;
+  u32 num_mining_set;
   u8  num_parents;
-  u8  num_byte_cmp_sets;
-  u8  children_max_reached : 1;
-  u8  initialized : 1;
+  u8  children_max_reached : 2;
+  u8  initialized : 2;
 };
 
 struct func_cmp_info {
@@ -744,6 +747,8 @@ typedef struct afl_state {
   // TODO: see which we can reuse
   u8 *out_buf;
 
+  u8 *mining_buf;
+
   u8 *out_scratch_buf;
 
   u8 *eff_buf;
@@ -807,12 +812,6 @@ typedef struct afl_state {
   struct cmp_queue_entry * cmp_queue, *cmp_queue_top, *cmp_queue_cur;
   u32 cmp_queue_size;
 
-  //List of mutated bytes indexes
-  u32 * cur_bytes;
-
-  //number of mutated bytes
-  u32 cur_num_bytes;
-
   u32 func_cur_num_bytes;
 
   u8 get_func_info : 1;
@@ -844,6 +843,7 @@ typedef struct afl_state {
   u32 tc_graph_size;
 
   u32 * fuzz_one_func_byte_offsets;
+  u32 fuzz_one_func_byte_offsets_size;
 
   u64 tc_len_sum;
 
@@ -853,6 +853,8 @@ typedef struct afl_state {
   u32 mining_done_idx;
 
   char * func_infos_dir;
+  float * byte_scores;
+  u32 byte_score_size;
 
 #ifdef INTROSPECTION
   char  mutation[8072];
@@ -1247,8 +1249,11 @@ void fuzz_one_func(afl_state_t *);
 void destroy_func(afl_state_t *);
 void init_trim_and_func(afl_state_t *);
 void update_tc_graph(afl_state_t *, u32, u32, u32);
-void get_byte_cmps(afl_state_t *, u8 *, u32, u32);
-void get_byte_cmps_main(afl_state_t *);
+void mining_bytes(afl_state_t *, u8 *, u32, u32);
+void mining_wrapper(afl_state_t *);
+void mining_serialize(afl_state_t *, struct byte_cmp_set **, u32, u32);
+struct byte_cmp_set ** mining_deserialize(afl_state_t *, u32);
+void mining_deserialize_free(struct byte_cmp_set **, u32);
 void func_common_fuzz_stuff(afl_state_t *, u8 *, u32, u32);
 
 /* RedQueen */
