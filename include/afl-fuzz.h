@@ -61,6 +61,7 @@
 #include <dlfcn.h>
 #include <sched.h>
 #include <float.h>
+#include <assert.h>
 
 #include <netdb.h>
 #include <netinet/in.h>
