@@ -245,11 +245,12 @@ struct tc_graph_entry {
   //change children allocation
   u32 * children;
   u32 num_children;
+  u32 children_size;
   u32 mining_frag_len;
   u32 mining_frag_offset;
   u32 num_mining_set;
+
   u8  num_parents;
-  u8  children_max_reached : 2;
   u8  initialized : 2;
 };
 
@@ -855,7 +856,14 @@ typedef struct afl_state {
 
   char * func_infos_dir;
   float * byte_scores;
+  float * byte_scores_sum;
   u32 byte_score_size;
+  u32 byte_scores_sum_size;
+  u32 byte_scores_sum_record;
+
+  float score_threshold;
+
+  u32 ** synced_tcs;
 
 #ifdef INTROSPECTION
   char  mutation[8072];
@@ -1249,7 +1257,7 @@ void write_func_stats(afl_state_t *);
 void fuzz_one_func(afl_state_t *);
 void destroy_func(afl_state_t *);
 void init_trim_and_func(afl_state_t *);
-void update_tc_graph(afl_state_t *, u32, u32, u32);
+void update_tc_graph_and_branch_cov(afl_state_t *, u32, u32, u32, u8 *, u32);
 void mining_bytes(afl_state_t *, u8 *, u32, u32);
 void mining_wrapper(afl_state_t *);
 void mining_serialize(afl_state_t *, struct byte_cmp_set **, u32, u32);

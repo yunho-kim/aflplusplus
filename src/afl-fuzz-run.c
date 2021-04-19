@@ -666,7 +666,7 @@ void sync_fuzzers(afl_state_t *afl) {
         afl->syncing_party = sd_ent->d_name;
         afl->queued_imported +=
             save_if_interesting(afl, mem, st.st_size, fault, afl->syncing_case, (u32) -1);
-        afl->syncing_party = 0;
+        afl->syncing_party = NULL;
 
         munmap(mem, st.st_size);
 

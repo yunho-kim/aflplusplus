@@ -503,6 +503,7 @@ void destroy_queue(afl_state_t *afl) {
     struct queue_entry *q;
 
     q = afl->queue_buf[i];
+    if (q->testcase_buf) free(q->testcase_buf);
     ck_free(q->fname);
     ck_free(q->trace_mini);
     ck_free(q);

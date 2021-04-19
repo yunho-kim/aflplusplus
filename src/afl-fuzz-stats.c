@@ -623,7 +623,7 @@ void show_stats(afl_state_t *afl) {
       tmp + banner_pad,
       "%s " cLCY VERSION cLGN " (%s) " cPIN "[%s]" cBLU " {%d}",
       afl->crash_mode ? cPIN "peruvian were-rabbit" : cYEL "american fuzzy lop",
-      afl->use_banner, afl->power_name, afl->cpu_aff);
+      afl->out_dir, afl->power_name, afl->cpu_aff);
 #else
   sprintf(
       tmp + banner_pad, "%s " cLCY VERSION cLGN " (%s) " cPIN "[%s]",

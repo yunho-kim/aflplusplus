@@ -586,7 +586,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
 
     afl->tc_len_sum += len;
 
-    update_tc_graph(afl, afl->queued_paths - 1, parent_id1, parent_id2);
+    update_tc_graph_and_branch_cov(afl, afl->queued_paths - 1, afl->syncing_party ? (u32) -1 : parent_id1, parent_id2, mem, len);
 
   }
 

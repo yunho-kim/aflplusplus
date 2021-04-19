@@ -135,6 +135,8 @@ void afl_state_init(afl_state_t *afl, uint32_t map_size) {
   afl->fsrv.child_pid = -1;
   afl->fsrv.out_dir_fd = -1;
 
+  afl->score_threshold = 0.8;
+
   init_mopt_globals(afl);
 
   list_append(&afl_states, afl);
@@ -515,6 +517,8 @@ void afl_state_deinit(afl_state_t *afl) {
   afl_free(afl->in_buf);
   afl_free(afl->in_scratch_buf);
   afl_free(afl->ex_buf);
+  afl_free(afl->alias_table);
+  afl_free(afl->alias_probability);
 
   ck_free(afl->virgin_bits);
   ck_free(afl->virgin_tmout);
