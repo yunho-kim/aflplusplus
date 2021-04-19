@@ -1037,6 +1037,8 @@ int main(int argc, char **argv_orig, char **envp) {
     free(buf);
   }
 
+  afl->disable_trim = 1;
+
   OKF("func info txt : %s\nfunc binary : %s\n", afl->func_info_txt, afl->func_binary);
 
   if (!afl->func_info_txt || !afl->func_binary) FATAL("Can't allocate string for path?");
@@ -2288,6 +2290,7 @@ stop_fuzzing:
   ck_free(afl->fsrv.target_path);
   ck_free(afl->fsrv.out_file);
   ck_free(afl->sync_id);
+  if (afl->n_fuzz) ck_free(afl->n_fuzz);
   if (afl->q_testcase_cache) { ck_free(afl->q_testcase_cache); }
   afl_state_deinit(afl);
   free(afl);                                                 /* not tracked */
