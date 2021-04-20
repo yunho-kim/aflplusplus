@@ -536,7 +536,7 @@ void mining_bytes(afl_state_t *afl, u8 * out_buf, u32 len, u32 tc_idx) {
   u8 * out_buf2 = afl_realloc(AFL_BUF_PARAM(mining), len);
   memcpy(out_buf2, out_buf, len);
 
-  u32 byte_mining_frag_len = (len / (MINING_MUT_TIME) + 1;
+  u32 byte_mining_frag_len = (len / MINING_MUT_TIME) + 1;
   u32 len_pow2 = MINING_FRAG_LEN_MIN_POW2;
   if (byte_mining_frag_len < (1u << len_pow2)) {
     byte_mining_frag_len = 1u << len_pow2;
