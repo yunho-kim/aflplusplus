@@ -536,7 +536,7 @@ void mining_bytes(afl_state_t *afl, u8 * out_buf, u32 len, u32 tc_idx) {
   u8 * out_buf2 = afl_realloc(AFL_BUF_PARAM(mining), len);
   memcpy(out_buf2, out_buf, len);
 
-  u32 byte_mining_frag_len = (len / MINING_MUT_TIME) + 1;
+  u32 byte_mining_frag_len = (len / (MINING_MUT_TIME) + 1;
   u32 len_pow2 = MINING_FRAG_LEN_MIN_POW2;
   if (byte_mining_frag_len < (1u << len_pow2)) {
     byte_mining_frag_len = 1u << len_pow2;
@@ -548,7 +548,7 @@ void mining_bytes(afl_state_t *afl, u8 * out_buf, u32 len, u32 tc_idx) {
   new_tc->mining_frag_len = 1 << len_pow2;
   new_tc->mining_frag_offset = rand_below(afl, (1 << len_pow2) - 4) + 4;
 
-  struct byte_cmp_set ** mining_result = malloc(sizeof(struct byte_cmp_set*) * MINING_MUT_TIME);
+  struct byte_cmp_set ** mining_result = malloc(sizeof(struct byte_cmp_set*) * (MINING_MUT_TIME + 1));
 
   //mutate and get new byte/cmps sets
   u32 r, cur_offset = 0, cur_len =  new_tc->mining_frag_offset;
@@ -856,8 +856,8 @@ do {                                      \
 
     fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
 
-    fprintf(stderr, "mining_idx : %u/%u, frag_len : %u, len : %u, offset : %u\n", mining_idx, MINING_MUT_TIME, new_tc->mining_frag_len, len, new_tc->mining_frag_offset);
-    assert(mining_idx < MINING_MUT_TIME);
+    fprintf(stderr, "mining_idx : %u/%u, frag_len : %u, len : %u, offset : %u\n", mining_idx, MINING_MUT_TIME + 1, new_tc->mining_frag_len, len, new_tc->mining_frag_offset);
+    assert(mining_idx < (MINING_MUT_TIME + 1));
 
     mining_result[mining_idx] = (struct byte_cmp_set *) calloc(1, sizeof(struct byte_cmp_set));
     cur_offset += cur_len;
