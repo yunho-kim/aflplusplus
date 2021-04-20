@@ -856,9 +856,6 @@ do {                                      \
 
     fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
 
-    fprintf(stderr, "mining_idx : %u/%u, frag_len : %u, len : %u, offset : %u\n", mining_idx, MINING_MUT_TIME + 1, new_tc->mining_frag_len, len, new_tc->mining_frag_offset);
-    assert(mining_idx < (MINING_MUT_TIME + 1));
-
     mining_result[mining_idx] = (struct byte_cmp_set *) calloc(1, sizeof(struct byte_cmp_set));
     cur_offset += cur_len;
 
