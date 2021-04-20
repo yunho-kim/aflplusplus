@@ -19,9 +19,6 @@ void init_func(afl_state_t* afl) {
   res = fscanf(f, "%u,%u\n", &afl->num_func, &afl->num_cmp);
   if (res == EOF) PFATAL("Can't read func txt file");
 
-  afl->num_change_cmp_limit = (u32) ((float) afl->num_cmp * CHANGED_CMPS_SIZE_RATIO);
-  if (afl->num_change_cmp_limit < CHANGED_CMPS_SIZE_MIN) afl->num_change_cmp_limit = CHANGED_CMPS_SIZE_MIN;
-
   afl->cmp_func_map = malloc(sizeof(u32) * afl->num_cmp);
   afl->func_cmp_map = malloc(sizeof(struct func_cmp_info *) * afl->num_func);
 
@@ -425,8 +422,6 @@ void mining_serialize(afl_state_t *afl, struct byte_cmp_set ** mining_result, u3
 
     fwrite(&(tmp->num_changed_cmps), sizeof(u32), 1, f);
     fwrite(&(tmp->num_abandoned_cmps), sizeof(u32), 1, f);
-    assert(tmp->num_changed_cmps < afl->num_cmp);
-    assert(tmp->num_abandoned_cmps < afl->num_cmp);
     fwrite(&(tmp->timeout), sizeof(u8), 1, f);
     if (tmp->timeout == 0) {
       fwrite(tmp->changed_cmps, sizeof(u32), tmp->num_changed_cmps, f);
@@ -860,6 +855,8 @@ do {                                      \
     }
 
     fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
+
+    assert(mining_idx < MINING_MUT_TIME);
 
     mining_result[mining_idx] = (struct byte_cmp_set *) calloc(1, sizeof(struct byte_cmp_set));
     cur_offset += cur_len;

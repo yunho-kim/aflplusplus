@@ -519,20 +519,8 @@
 //size of executing tcs buffer, used in cmp_queue_entry
 #define EXEC_TCS_SIZE 128
 
-//size of # of changed cmps buffer, used in tc_graph_entry
-#define CHANGED_CMPS_SIZE_RATIO 0.02
-
-#define CHANGED_CMPS_SIZE_MIN 256
-
-#define REL_FUNC_THRESHOLD 0.95
-
 //Maximum # of close tcs for each tc, used in tc_graph_entry
 #define CLOSE_TCS_SIZE 512
-
-//# of bytes set to try, used in tc_graph_entry
-#define NUM_BYTES_SETS 16
-
-#define NUM_TRY_MAXIMUM 128
 
 #define HAVOC_STACK_POW2_FUNC 4
 
