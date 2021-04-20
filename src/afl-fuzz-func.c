@@ -127,9 +127,15 @@ void mining_wrapper(afl_state_t * afl) {
   if (q->disabled) return;
 
   len = q->len;
+
+  struct queue_entry * tmp = afl->queue_cur;
+  afl->queue_cur = q;
+
   in_buf = queue_testcase_get(afl, q);
 
   mining_bytes(afl, in_buf, len, afl->mining_done_idx);
+
+  afl->queue_cur = tmp;
 
 }
 
@@ -822,7 +828,7 @@ do {                                      \
           u32 tid;
           do
             tid = rand_below(afl, afl->queued_paths);
-          while (tid == afl->current_entry || afl->queue_buf[tid]->len < 4);
+          while (tid == afl->queue_cur->id || afl->queue_buf[tid]->len < 4);
 
           struct queue_entry *target = afl->queue_buf[tid];
           u32                 new_len = target->len;
