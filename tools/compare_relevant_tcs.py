@@ -70,6 +70,8 @@ while len(dists) < NUM_PAIR:
   max_dist = max(os.stat(tclist[tclistidx[tc1]]).st_size,os.stat(tclist[tclistidx[tc2]]).st_size)
 
   rel_dist = dist / max_dist
+  if rel_dist > 1.0:
+    rel_dist = 1.0
   dists.append(rel_dist)
 
   dists.append(rel_dist)
