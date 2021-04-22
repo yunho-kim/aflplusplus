@@ -12,7 +12,7 @@ class tctree:
   def add_parent(self, id):
     self.parents.append(id)
 
-  def is_relevant(self, tcs, anotherid, chonsu = CHONSU):
+  def get_relevants(self, tcs, chonsu = CHONSU):
     def get_relevants_set(tcid, chonsu, get_parent):
       if chonsu == 1:
         ret = set()
@@ -34,8 +34,7 @@ class tctree:
 
       return ret
 
-    relevants = get_relevants_set(self.id, chonsu)
-    return anotherid in relevants
+    return get_relevants_set(self.id, chonsu, True)
 
   def __repr__(self):
     return "{}:{}:{}".format(self.id, ",".join(list(map(str, self.parents))), ",".join(list(map(str,self.children))))

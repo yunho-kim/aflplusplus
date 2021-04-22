@@ -2,7 +2,7 @@ import subprocess
 import glob
 import random
 from gen_tree import tctree
-
+import editdistance
 
 NUM_PAIR = 1000
 
@@ -14,13 +14,15 @@ for i in range(num_tc):
   tcs.append(tctree(i))
 
 
-for tcline in tclist:
+#tcid -> tclist idx
+tclistidx = {}
+
+for idx, tcline in enumerate(tclist):
   if "orig" in tcline or "sync" in tcline:
     continue
 
-
   tcid = int(tcline.split("/")[-1].split(",")[0][3:])
-
+  tclistidx[tcid] = idx
   parents = tcline.split("/")[-1].split(",")[1][4:]
   if "+" in parents:
     parents = parents.split("+")
@@ -36,41 +38,37 @@ for tcline in tclist:
 
 dists = []
 
-i = 0
-while i < NUM_PAIR:
+while len(dists) < NUM_PAIR:
+  print(len(dists))
   tc1 = random.randrange(0,num_tc)
-  tc2 = random.randrange(0,num_tc)
-  if tc1 == tc2:
+
+  relevants = tcs[tc1].get_relevants(tcs)
+  if tc1 in relevants:
+    relevants.remove(tc1)
+
+  if len(relevants) == 0:
     continue
 
-  if not tcs[tc1].is_relevant(tcs, tc2):
+  tc2 = random.choice(tuple(relevants))
+
+  if tc1 not in tclistidx or tc2 not in tclistidx:
     continue
 
-  i += 1
-
-  f1 = open(tclist[tc1], "rb")
-  f2 = open(tclist[tc2], "rb")
+  f1 = open(tclist[tclistidx[tc1]], "rb")
+  f2 = open(tclist[tclistidx[tc2]], "rb")
   bytes1 = f1.read()
   bytes2 = f2.read()
   f1.close()
   f2.close()
 
-  if len(bytes1) < len(bytes2):
+  if len(bytes1) > len(bytes2):
     bytes1, bytes2 = bytes2, bytes1
 
-  prev_row = range(len(bytes2) + 1)
-  for i, b1 in enumerate(bytes1):
-    cur_row = [i + 1]
-    for j, b2 in enumerate(bytes2):
-      insertions = prev_row[j+1] + 1
-      deletions = cur_row[j] + 1
-      substitutions = prev_row[j] + (b1 != b2)
-      cur_row.append(min(insertions, deletions, substitutions))
-    prev_row = cur_row
-
-  dist = prev_row[-1]
+  dist = editdistance.eval(bytes1,bytes2)
 
   rel_dist = dist / len(bytes2)
+
+  dists.append(rel_dist)
   
 print("Avg. dist : {:.3f}%".format(sum(dists) / len(dists) * 100))
 print("Max. dist : {:.3f}%".format(max(dists) * 100))

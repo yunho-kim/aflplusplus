@@ -1,4 +1,5 @@
 import subprocess
+import editdistance
 import glob
 import random
 
@@ -10,16 +11,14 @@ num_tc = len(tclist)
 
 dists = []
 
-i = 0
+while len(dists) < NUM_PAIR:
+  print(len(dists))
 
-
-while i < NUM_PAIR:
   tc1 = random.randrange(0,num_tc)
   tc2 = random.randrange(0,num_tc)
   if tc1 == tc2:
     continue
 
-  i += 1
 
   f1 = open(tclist[tc1], "rb")
   f2 = open(tclist[tc2], "rb")
@@ -31,21 +30,13 @@ while i < NUM_PAIR:
   if len(bytes1) < len(bytes2):
     bytes1, bytes2 = bytes2, bytes1
 
-  prev_row = range(len(bytes2) + 1)
-  for i, b1 in enumerate(bytes1):
-    cur_row = [i + 1]
-    for j, b2 in enumerate(bytes2):
-      insertions = prev_row[j+1] + 1
-      deletions = cur_row[j] + 1
-      substitutions = prev_row[j] + (b1 != b2)
-      cur_row.append(min(insertions, deletions, substitutions))
-    prev_row = cur_row
+  dist = editdistance.eval(bytes1, bytes2)
 
-  dist = prev_row[-1]
+  rel_dist = dist / len(bytes1)
+  dists.append(rel_dist)
 
-  rel_dist = dist / len(bytes2)
-  
 print("Avg. dist : {:.3f}%".format(sum(dists) / len(dists) * 100))
+
 print("Max. dist : {:.3f}%".format(max(dists) * 100))
 
 score_split = [0] * 21
