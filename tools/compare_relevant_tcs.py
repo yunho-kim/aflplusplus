@@ -2,7 +2,6 @@ import subprocess
 import glob
 import random
 from gen_tree import tctree
-import editdistance
 
 NUM_PAIR = 1000
 
@@ -56,17 +55,21 @@ while len(dists) < NUM_PAIR:
 
   f1 = open(tclist[tclistidx[tc1]], "rb")
   f2 = open(tclist[tclistidx[tc2]], "rb")
-  bytes1 = f1.read()
-  bytes2 = f2.read()
-  f1.close()
-  f2.close()
 
-  if len(bytes1) > len(bytes2):
-    bytes1, bytes2 = bytes2, bytes1
+  cmd = ["cp", tclist[tc1], "tmp1"]
+  subprocess.run(cmd)
 
-  dist = editdistance.eval(bytes1,bytes2)
+  cmd = ["cp", tclist[tc2], "tmp2"]
+  subprocess.run(cmd)
 
-  rel_dist = dist / len(bytes2)
+  cmd = ["./distance"]
+  out = subprocess.run(cmd, stdout=subprocess.PIPE).stdout
+  dist = int(out.strip().split(" ")[-1])
+
+  max_dist = max(os.stat(tclist[tclistidx[tc1]]).st_size,os.stat(tclist[tclistidx[tc2]]).st_size)
+
+  rel_dist = dist / max_dist
+  dists.append(rel_dist)
 
   dists.append(rel_dist)
   

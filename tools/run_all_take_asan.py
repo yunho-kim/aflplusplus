@@ -45,7 +45,8 @@ asan2 = False
 
 for i in range(1, 3 + 1):
   out_tmp_dir = out_dir + "/" + str(i)
-  for file_path in glob.glob(out_tmp_dir + "/queue/*"): # + glob.glob(out_tmp_dir + "/crashes/*"):
+  queue_list = glob.glob(out_tmp_dir + "/queue/*") # + glob.glob(out_tmp_dir + "/crashes/*")
+  for file_path in queue_list:
     filename = file_path 
     cmd = sys.argv[2].replace("@@", file_path).split(" ")
     timeout = False
@@ -56,7 +57,7 @@ for i in range(1, 3 + 1):
     if not timeout and b"AddressSanitizer" in run.stderr and b"LeakSanitizer" not in run.stderr:
       for line in run.stderr.split(b"\n"):
         if asan:
-          fullstack += line
+          fullstack += line + b"\n"
           if asan2 and b" in " in line and b"#" in line:
             stack.append(line.split(b" ")[7])
             if len(stack) > 5:
