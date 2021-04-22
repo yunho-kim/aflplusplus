@@ -1,3 +1,4 @@
+import os
 import subprocess
 import editdistance
 import glob
@@ -13,6 +14,7 @@ dists = []
 
 while len(dists) < NUM_PAIR:
 
+  #print(len(dists))
   tc1 = random.randrange(0,num_tc)
   tc2 = random.randrange(0,num_tc)
   if tc1 == tc2:
@@ -29,16 +31,19 @@ while len(dists) < NUM_PAIR:
 
   cmd = ["./distance"]
   out = subprocess.run(cmd, stdout=subprocess.PIPE).stdout
-  dist = int(out.strip().split(" ")[-1])
+  dist = int(out.strip().split(b" ")[-1].decode())
 
   max_dist = max(os.stat(tclist[tc1]).st_size,os.stat(tclist[tc2]).st_size)
 
   rel_dist = dist / max_dist
   dists.append(rel_dist)
 
-print("Avg. dist : {:.3f}%".format(sum(dists) / len(dists) * 100))
 
-print("Max. dist : {:.3f}%".format(max(dists) * 100))
+#print(dists)
+
+#print("Avg. dist : {:.3f}%".format(sum(dists) / len(dists) * 100))
+
+#print("Max. dist : {:.3f}%".format(max(dists) * 100))
 
 score_split = [0] * 21
 

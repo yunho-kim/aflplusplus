@@ -64,7 +64,7 @@ while len(dists) < NUM_PAIR:
 
   cmd = ["./distance"]
   out = subprocess.run(cmd, stdout=subprocess.PIPE).stdout
-  dist = int(out.strip().split(" ")[-1])
+  dist = int(out.strip().split(b" ")[-1].decode())
 
   max_dist = max(os.stat(tclist[tclistidx[tc1]]).st_size,os.stat(tclist[tclistidx[tc2]]).st_size)
 
@@ -73,8 +73,8 @@ while len(dists) < NUM_PAIR:
 
   dists.append(rel_dist)
   
-print("Avg. dist : {:.3f}%".format(sum(dists) / len(dists) * 100))
-print("Max. dist : {:.3f}%".format(max(dists) * 100))
+#print("Avg. dist : {:.3f}%".format(sum(dists) / len(dists) * 100))
+#print("Max. dist : {:.3f}%".format(max(dists) * 100))
 
 score_split = [0] * 21
 
