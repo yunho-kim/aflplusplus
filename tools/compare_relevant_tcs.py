@@ -80,7 +80,6 @@ while len(dists) < NUM_PAIR:
   rel_dist = dist / max_dist
   if rel_dist > 1.0:
     rel_dist = 1.0
-  dists.append(rel_dist)
 
   dists.append(rel_dist)
   
@@ -92,7 +91,7 @@ score_split = [0] * 21
 for s in dists:
   score_split[int(s* 20)] += 1
 
-f = open("byte_similarity.csv", "w")
+f = open("rel_byte_similarity.csv", "w")
 f.write("0-5,5-10,10-15,15-20,20-25,25-30,30-35,35-40,40-45,45-50,50-55,55-60,60-65,65-70,70-75,75-80,80-85,85-90,90-95,95-100\n")
 for s in score_split:
   f.write("{},".format(s))
