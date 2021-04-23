@@ -1233,7 +1233,7 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
 
 void __func_log_hook(uint32_t cmpid, uint32_t condition) {
   if (unlikely(!__afl_func_map)) {
-    //fprintf(stderr, "cmpid : %u, condition : %u\n", cmpid, condition);
+    fprintf(stderr, "cmpid : %u, condition : %u\n", cmpid, condition);
     return;
   }
 
