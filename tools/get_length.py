@@ -23,11 +23,12 @@ f.close()
 f = open("crashes.list", "w")
 
 for tc in glob.glob("./*/crashes/*"):
-  f.write("{}\n".format(tc))
+  if "README" not in tc:
+    f.write("{}\n".format(tc))
 
 for tc in glob.glob("./*/queue/*"):
   subject = os.getcwd().split("/")[-1].split("_")[1]
-  cmd = [ "/home/cheong/subjects_asan/{}/{}.san".format(subject,subject)  ] +  args[subject].replace("@@", subject).split(" ")
+  cmd = [ "/home/cheong/subjects_asan/{}/{}.san".format(subject,subject)  ] +  args[subject].replace("@@", tc).split(" ")
 
   timeout = False
   try:
