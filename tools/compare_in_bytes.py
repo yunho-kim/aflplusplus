@@ -5,7 +5,7 @@ import glob
 import random
 
 
-NUM_PAIR = 1000
+NUM_PAIR = 100
 
 tclist = glob.glob("./queue/*")
 num_tc = len(tclist)
@@ -31,16 +31,12 @@ while len(dists) < NUM_PAIR:
 
   cmd = ["./distance"]
 
-  timeout = False
   try :
     out = subprocess.run(cmd, stdout=subprocess.PIPE, timeout=1).stdout
   except:
-    timeout = True
+    continue
 
-  if timeout:
-    dist = abs(os.stat(tclist[tc1]).st_size - os.stat(tclist[tc2]).st_size)
-  else:
-    dist = int(out.strip().split(b" ")[-1].decode())
+  dist = int(out.strip().split(b" ")[-1].decode())
 
   max_dist = max(os.stat(tclist[tc1]).st_size,os.stat(tclist[tc2]).st_size)
 
