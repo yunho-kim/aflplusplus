@@ -47,7 +47,7 @@ for tc in glob.glob("./*/queue/*"):
       new_len = os.stat(tc).st_size
       if new_len < lens[9]:
         del crashes[lens[9]]
-        crahses[new_len] = tc
+        crashes[new_len] = tc
     
     else:
       crashes[os.stat(tc).st_size] = tc
