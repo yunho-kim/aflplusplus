@@ -76,6 +76,7 @@ while len(dists) < NUM_PAIR:
   if rel_dist > 1.0:
     rel_dist = 1.0
   '''
+  dists.append(dist)
 
   f.write("{}, {}\n".format(dist, max_dist))
   
