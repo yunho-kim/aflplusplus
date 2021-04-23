@@ -41,10 +41,13 @@ while len(dists) < NUM_PAIR:
 
   max_dist = max(os.stat(tclist[tc1]).st_size,os.stat(tclist[tc2]).st_size)
 
+  '''
   rel_dist = dist / max_dist
   if rel_dist > 1.0:
     rel_dist = 1.0
-  f.write("{}\n".format(rel_dist))
+  '''
+
+  f.write("{},{}\n".format(dist, max_dist))
 
 
 #print(dists)
