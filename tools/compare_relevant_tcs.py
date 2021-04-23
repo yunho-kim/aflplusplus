@@ -62,7 +62,7 @@ while len(dists) < NUM_PAIR:
 
   cmd = ["./distance"]
   try :
-    out = subprocess.run(cmd, stdout=subprocess.PIPE, timeout=1).stdout
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, timeout=5).stdout
   except:
     continue
 
