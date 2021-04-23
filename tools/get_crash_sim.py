@@ -24,7 +24,7 @@ for tc in glob.glob("./*/crashes/*"):
     crashes[os.stat(tc).st_size] = tc
 
 if len(crashes) > 10:
-  lens = crashes.keys()
+  lens = list(crashes.keys())
   lens.sort()
   lens = lens[10:]
   for l in lens:
@@ -42,7 +42,7 @@ for tc in glob.glob("./*/queue/*"):
    
   if not timeout and b"AddressSanitizer" in run.stderr and b"LeakSanitizer" not in run.stderr:
     if len(crashes) == 10:
-      lens = crashes.keys()
+      lens = list(crashes.keys())
       lens.sort()
       new_len = os.stat(tc).st_size
       if new_len < lens[9]:
