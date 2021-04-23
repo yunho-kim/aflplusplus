@@ -35,7 +35,6 @@ for tc in glob.glob("./*/queue/*"):
   if timeout: 
     continue
 
-  num_tc += 1
   exec_time = time.time() - starttime  
   f.write("{}\n".format(exec_time))
 
