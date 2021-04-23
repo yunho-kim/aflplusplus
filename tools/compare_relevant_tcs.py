@@ -6,7 +6,7 @@ from gen_tree import tctree
 
 NUM_PAIR = 100
 
-tclist = glob.glob("./queue/*")
+tclist = list(glob.glob("./queue/*"))
 num_tc = len(tclist)
 
 tcs = []
@@ -54,13 +54,10 @@ while len(dists) < NUM_PAIR:
   if tc1 not in tclistidx or tc2 not in tclistidx:
     continue
 
-  f1 = open(tclist[tclistidx[tc1]], "rb")
-  f2 = open(tclist[tclistidx[tc2]], "rb")
-
-  cmd = ["cp", tclist[tc1], "tmp1"]
+  cmd = ["cp", tclist[tclistidx[tc1]], "tmp1"]
   subprocess.run(cmd)
 
-  cmd = ["cp", tclist[tc2], "tmp2"]
+  cmd = ["cp", tclist[tclistidx[tc2]], "tmp2"]
   subprocess.run(cmd)
 
   cmd = ["./distance"]

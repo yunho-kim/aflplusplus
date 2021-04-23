@@ -14,24 +14,21 @@ class tctree:
 
   def get_relevants(self, tcs, chonsu = CHONSU):
     def get_relevants_set(tcid, chonsu, get_parent):
+      ret = set()
       if chonsu == 1:
-        ret = set()
         for child in tcs[tcid].children:
           ret.add(child)
 
         if get_parent:
           for parent in tcs[tcid].parents:
             ret.add(parent)
+      else:
+        for child in tcs[tcid].children:
+          ret = ret.union(get_relevants_set(child, chonsu - 1, False))
 
-        return ret
-
-      ret = set()
-      for child in tcs[tcid].children:
-        ret = ret.union(get_relevants_set(child, chonsu - 1, False))
-
-      for parent in tcs[tcid].parents:
-        ret = ret.union(get_relevants_set(parent, chonsu - 1, True))
-
+        if get_parent:
+          for parent in tcs[tcid].parents:
+            ret = ret.union(get_relevants_set(parent, chonsu - 1, True))
       return ret
 
     return get_relevants_set(self.id, chonsu, True)
