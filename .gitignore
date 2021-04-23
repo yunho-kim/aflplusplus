@@ -88,6 +88,8 @@ afl-lto++
 afl-lto++.8
 afl-lto.8
 
+afl-showcmp
+
 *.swp
 
 out_*
