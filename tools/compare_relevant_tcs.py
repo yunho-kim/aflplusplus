@@ -64,8 +64,16 @@ while len(dists) < NUM_PAIR:
   subprocess.run(cmd)
 
   cmd = ["./distance"]
-  out = subprocess.run(cmd, stdout=subprocess.PIPE).stdout
-  dist = int(out.strip().split(b" ")[-1].decode())
+  timeout = False
+  try :
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, timeout=1).stdout
+  except:
+    timeout = True
+
+  if timeout:
+    dist = abs(os.stat(tclist[tc1]).st_size - os.stat(tclist[tc2]).st_size)
+  else:
+    dist = int(out.strip().split(b" ")[-1].decode())
 
   max_dist = max(os.stat(tclist[tclistidx[tc1]]).st_size,os.stat(tclist[tclistidx[tc2]]).st_size)
 
