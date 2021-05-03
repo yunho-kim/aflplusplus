@@ -197,9 +197,6 @@ u32 func_choose_block_len(afl_state_t *afl, u32 limit, u32 len) {
 
 void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_idx, u32 parent2_idx, u8 * buf, u32 len) {
 
-  u8    fn[PATH_MAX];
-  FILE *f;
-  s32 fd;
   u32 i1,i2,i3;
 
   if ((tc_idx >= afl->tc_graph_size) ||
@@ -377,6 +374,10 @@ void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_id
 
   //write tc_graph for syncing, TODO
   /*
+  u8    fn[PATH_MAX];
+  FILE *f;
+  s32 fd;
+
   snprintf(fn, PATH_MAX, "%s/tc_graph/id:%06u", afl->out_dir, tc_idx);
   fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) PFATAL("Unable to create '%s'", fn);
@@ -428,12 +429,15 @@ void mining_serialize(afl_state_t *afl, struct byte_cmp_set ** mining_result, u3
 
     fwrite(&(tmp->num_changed_cmps), sizeof(u32), 1, f);
     fwrite(&(tmp->num_abandoned_cmps), sizeof(u32), 1, f);
+    fwrite(&(tmp->num_new_cmps), sizeof(u32), 1, f);
     fwrite(&(tmp->timeout), sizeof(u8), 1, f);
     if (tmp->timeout == 0) {
       fwrite(tmp->changed_cmps, sizeof(u32), tmp->num_changed_cmps, f);
       fwrite(tmp->abandoned_cmps, sizeof(u32), tmp->num_abandoned_cmps, f);
+      fwrite(tmp->new_cmps, sizeof(u32), tmp->num_new_cmps, f);
       free(tmp->changed_cmps);
       free(tmp->abandoned_cmps);
+      free(tmp->new_cmps);
     }
     free(tmp);
 
@@ -456,17 +460,18 @@ struct byte_cmp_set ** mining_deserialize(afl_state_t * afl, u32 tc_idx) {
   assert(likely(read_size == 1));
   u32 num_mining_set = buffer[0];
 
-  u32 num_changed_cmps, num_abandoned_cmps;
+  u32 num_changed_cmps, num_abandoned_cmps, num_new_cmps;
   struct byte_cmp_set ** mining_result =
     (struct byte_cmp_set **) malloc(sizeof(struct byte_cmp_set *) * num_mining_set);
 
   for (idx1 = 0; idx1 < num_mining_set; idx1++) {
     struct byte_cmp_set * tmp = (struct byte_cmp_set *) malloc(sizeof(struct byte_cmp_set));
     mining_result[idx1] = tmp;
-    read_size = fread(buffer, sizeof(u32), 2, f);
-    assert(likely(read_size == 2));
+    read_size = fread(buffer, sizeof(u32), 3, f);
+    assert(likely(read_size == 3));
     num_changed_cmps = buffer[0];
     num_abandoned_cmps = buffer[1];
+    num_new_cmps = buffer[2];
     read_size = fread(buffer, sizeof(u8), 1, f);
     assert(likely(read_size == 1));
     tmp->timeout = ((u8 *) buffer)[0];
@@ -474,6 +479,7 @@ struct byte_cmp_set ** mining_deserialize(afl_state_t * afl, u32 tc_idx) {
     if (tmp->timeout == 0) {
       tmp->num_changed_cmps = num_changed_cmps;
       tmp->num_abandoned_cmps = num_abandoned_cmps;
+      tmp->num_new_cmps = num_new_cmps;
       if (num_changed_cmps) {
         tmp->changed_cmps = (u32 *) malloc(sizeof(u32) * num_changed_cmps);
         read_size = fread(tmp->changed_cmps, sizeof(u32), num_changed_cmps, f);
@@ -488,9 +494,17 @@ struct byte_cmp_set ** mining_deserialize(afl_state_t * afl, u32 tc_idx) {
       } else {
         tmp->abandoned_cmps = NULL;
       }
+      if (num_new_cmps) {
+        tmp->new_cmps = (u32 *) malloc(sizeof(u32) * num_new_cmps);
+        read_size = fread(tmp->new_cmps, sizeof(u32), num_new_cmps, f);
+        assert(likely(read_size == num_new_cmps));
+      } else {
+        tmp->new_cmps = NULL;
+      }
     } else {
       tmp->changed_cmps = NULL;
       tmp->abandoned_cmps = NULL;
+      tmp->new_cmps = NULL;
     }
   }
 
@@ -506,6 +520,7 @@ void mining_deserialize_free(struct byte_cmp_set ** mining_result, u32 num_minin
     struct byte_cmp_set * tmp = mining_result[idx1];
     if (tmp->changed_cmps) free(tmp->changed_cmps);
     if (tmp->abandoned_cmps) free(tmp->abandoned_cmps);
+    if (tmp->new_cmps) free(tmp->new_cmps);
     free(tmp);
   }
 
@@ -856,8 +871,8 @@ do {                                      \
 
     //execute
     for (i2 = 0; i2 < afl->num_cmp; i2++) {
-      afl->shm.func_map[i2].executed = 0;
-      afl->shm.func_map[i2].condition = 0;
+      entries[i2].executed = 0;
+      entries[i2].condition = 0;
     }
 
     fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
@@ -872,11 +887,12 @@ do {                                      \
       continue;
     }
 
-    u32 num_changed_cmps = 0, num_abandoned_cmps = 0;
-    u32 changed_cmps_buf_size = CMP_BUF_SIZE, abandoned_cmps_buf_size = CMP_BUF_SIZE;
+    u32 num_changed_cmps = 0, num_abandoned_cmps = 0, num_new_cmps = 0;
+    u32 changed_cmps_buf_size = CMP_BUF_SIZE, abandoned_cmps_buf_size = CMP_BUF_SIZE, new_cmps_buf_size = CMP_BUF_SIZE;
 
     mining_result[mining_idx]->changed_cmps = (u32 *) malloc (sizeof(u32) * changed_cmps_buf_size);
     mining_result[mining_idx]->abandoned_cmps = (u32 *) malloc (sizeof(u32) * abandoned_cmps_buf_size);
+    mining_result[mining_idx]->new_cmps = (u32 *) malloc (sizeof(u32) * new_cmps_buf_size);
 
     u8 precondition, postcondition;
 
@@ -891,6 +907,12 @@ do {                                      \
             changed_cmps_buf_size += CMP_BUF_SIZE;
             mining_result[mining_idx]->changed_cmps = (u32 *) realloc (mining_result[mining_idx]->changed_cmps, sizeof(u32) * changed_cmps_buf_size);
           }
+        } else if (precondition == 0 ) {
+          mining_result[mining_idx]->new_cmps[num_new_cmps++] = cmp_id;
+          if (unlikely(num_new_cmps >= new_cmps_buf_size)) {
+            new_cmps_buf_size += CMP_BUF_SIZE;
+            mining_result[mining_idx]->new_cmps = (u32 *) realloc (mining_result[mining_idx]->new_cmps, sizeof(u32) * new_cmps_buf_size);
+          }
         }
       } else if (entries[cmp_id].precondition) {
         mining_result[mining_idx]->abandoned_cmps[num_abandoned_cmps++] = cmp_id;
@@ -903,12 +925,15 @@ do {                                      \
 
     mining_result[mining_idx]->num_changed_cmps = num_changed_cmps;
     mining_result[mining_idx]->num_abandoned_cmps = num_abandoned_cmps;
+    mining_result[mining_idx]->num_new_cmps = num_new_cmps;
 
-    if (num_changed_cmps == 0 && num_abandoned_cmps == 0) {
+    if (num_changed_cmps == 0 && num_abandoned_cmps == 0 && num_new_cmps == 0) {
       free(mining_result[mining_idx]->changed_cmps);
       free(mining_result[mining_idx]->abandoned_cmps);
+      free(mining_result[mining_idx]->new_cmps);
       mining_result[mining_idx]->changed_cmps = NULL;
       mining_result[mining_idx]->abandoned_cmps = NULL;
+      mining_result[mining_idx]->new_cmps = NULL;
       mining_result[mining_idx]->timeout = 1;
     }
 
@@ -1036,71 +1061,69 @@ void write_func_stats (afl_state_t * afl) {
   }
 
   // FRIEND related stats
-  if (afl->func_binary) {
-    snprintf(fn, PATH_MAX, "%s/FRIEND/FRIEND.stat", afl->out_dir);
-    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  snprintf(fn, PATH_MAX, "%s/FRIEND/FRIEND.stat", afl->out_dir);
+  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", fn);
 
-    f = fdopen(fd, "w");
-    fprintf(f, "# of func :%u\n", afl->num_func);
-    fprintf(f, "# of cmp :%u\n", afl->num_cmp);
-    fprintf(f, "# of covered branch:%u\n", afl->covered_branch);
-    fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
-    fprintf(f, "Avg. length of tcs : %llu/%u=%.1f", afl->tc_len_sum, afl->queued_paths, (double)afl->tc_len_sum / afl->queued_paths);
-    fclose(f);
+  f = fdopen(fd, "w");
+  fprintf(f, "# of func :%u\n", afl->num_func);
+  fprintf(f, "# of cmp :%u\n", afl->num_cmp);
+  fprintf(f, "# of covered branch:%u\n", afl->covered_branch);
+  fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
+  fprintf(f, "Avg. length of tcs : %llu/%u=%.1f", afl->tc_len_sum, afl->queued_paths, (double)afl->tc_len_sum / afl->queued_paths);
+  fclose(f);
 
-    snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_queue.stat", afl->out_dir);
-    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (fd < 0) PFATAL("Unable to create '%s'", fn);
-    f = fdopen(fd, "w");
+  snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_queue.stat", afl->out_dir);
+  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  f = fdopen(fd, "w");
 
-    fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
-    struct cmp_queue_entry * q = afl->cmp_queue;
-    fprintf(f, "cmpid, condition, # changed tcs, # executing tcs, executing tcs, mutating tc idx, exec_max_reached, num_fuzzed, num_skipped\n");
-    while (q != NULL) {
-      fprintf(f, "%u,%u,%u,%u,%u,%u,%u\n",
-        q->id, q->condition, q->num_executing_tcs, q->mutating_tc_idx, q->exec_max_reached, q->num_fuzzed, q->num_skipped);
+  fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
+  struct cmp_queue_entry * q = afl->cmp_queue;
+  fprintf(f, "cmpid, condition, # changed tcs, # executing tcs, executing tcs, mutating tc idx, exec_max_reached, num_fuzzed, num_skipped\n");
+  while (q != NULL) {
+    fprintf(f, "%u,%u,%u,%u,%u,%u,%u\n",
+      q->id, q->condition, q->num_executing_tcs, q->mutating_tc_idx, q->exec_max_reached, q->num_fuzzed, q->num_skipped);
 
-      q = q->next;
-    }
-    fclose(f);
+    q = q->next;
+  }
+  fclose(f);
 
-    snprintf(fn, PATH_MAX, "%s/FRIEND/tc_graph.stat", afl->out_dir);
-    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  snprintf(fn, PATH_MAX, "%s/FRIEND/tc_graph.stat", afl->out_dir);
+  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", fn);
 
-    f = fdopen(fd, "w");
-    fprintf(f, "# of queued_tcs : %u\n", afl->queued_paths);
-    struct tc_graph_entry * e;
-    for(idx1= 0; idx1 < afl->queued_paths ; idx1++) {
-      e = afl->tc_graph[idx1];
-      if (e != NULL)
-        fprintf(f, "tc_idx:%u,num_children:%u\n", idx1, e->num_children);
-    }
-    fclose(f);
+  f = fdopen(fd, "w");
+  fprintf(f, "# of queued_tcs : %u\n", afl->queued_paths);
+  struct tc_graph_entry * e;
+  for(idx1= 0; idx1 < afl->queued_paths ; idx1++) {
+    e = afl->tc_graph[idx1];
+    if (e != NULL)
+      fprintf(f, "tc_idx:%u,num_children:%u\n", idx1, e->num_children);
+  }
+  fclose(f);
 
-    snprintf(fn, PATH_MAX, "%s/FRIEND/findings.stat", afl->out_dir);
-    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  snprintf(fn, PATH_MAX, "%s/FRIEND/findings.stat", afl->out_dir);
+  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", fn);
 
-    u8 val_buf[6][STRINGIFY_VAL_SIZE_MAX];
+  u8 val_buf[6][STRINGIFY_VAL_SIZE_MAX];
 #define IB(i) (val_buf[(i)])
 
-    f = fdopen(fd, "w");
-    fprintf(f, "havoc/splice : %s/%s, %s/%s\n", 
-          u_stringify_int(IB(0), afl->stage_finds[STAGE_HAVOC]),
-          u_stringify_int(IB(2), afl->stage_cycles[STAGE_HAVOC]),
-          u_stringify_int(IB(3), afl->stage_finds[STAGE_SPLICE]),
-          u_stringify_int(IB(4), afl->stage_cycles[STAGE_SPLICE]));
-    
-    fprintf(f, "havoc_func : %s/%s, %s/%s\n",
-          u_stringify_int(IB(0), afl->stage_finds[STAGE_HAVOC_FUNC]),
-          u_stringify_int(IB(2), afl->stage_cycles[STAGE_HAVOC_FUNC]),
-          u_stringify_int(IB(3), afl->stage_finds[STAGE_MINING]),
-          u_stringify_int(IB(4), afl->stage_cycles[STAGE_MINING]));
+  f = fdopen(fd, "w");
+  fprintf(f, "havoc/splice : %s/%s, %s/%s\n", 
+        u_stringify_int(IB(0), afl->stage_finds[STAGE_HAVOC]),
+        u_stringify_int(IB(2), afl->stage_cycles[STAGE_HAVOC]),
+        u_stringify_int(IB(3), afl->stage_finds[STAGE_SPLICE]),
+        u_stringify_int(IB(4), afl->stage_cycles[STAGE_SPLICE]));
+  
+  fprintf(f, "havoc_func : %s/%s, %s/%s\n",
+        u_stringify_int(IB(0), afl->stage_finds[STAGE_HAVOC_FUNC]),
+        u_stringify_int(IB(2), afl->stage_cycles[STAGE_HAVOC_FUNC]),
+        u_stringify_int(IB(3), afl->stage_finds[STAGE_MINING]),
+        u_stringify_int(IB(4), afl->stage_cycles[STAGE_MINING]));
 
-    fclose(f);
-  }
+  fclose(f);
 
   if (afl->byte_scores_sum) {
     snprintf(fn, PATH_MAX, "%s/FRIEND/scores.csv", afl->out_dir);
@@ -1345,6 +1368,7 @@ void fuzz_one_func (afl_state_t *afl) {
       } else {
         u32 num_changed_cmps = close_tc_mining_result[j]->num_changed_cmps;
         u32 num_abandoned_cmps = close_tc_mining_result[j]->num_abandoned_cmps;
+        u32 num_new_cmps = close_tc_mining_result[j]->num_new_cmps;
 
         float cur_cmp_rel_avg = 0.0;
 
@@ -1365,26 +1389,47 @@ void fuzz_one_func (afl_state_t *afl) {
           cur_cmp_rel_avg /= num_changed_cmps;
         }
 
-        float cur_abandoned_rel_avg = 0.0;
+        float tmp_rel_avg = 0.0;
 
         for (k = 0; k < num_abandoned_cmps; k++) {
           u32 cmp_id = close_tc_mining_result[j]->abandoned_cmps[k];
           u32 cmp_func_id = afl->cmp_func_map[cmp_id];
           if (cmp_func_id == target_func) {
-            cur_abandoned_rel_avg += 1.0;
-            cur_abandoned_rel_avg += (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][cmp_id - target_func_begin_id]
+            tmp_rel_avg += 1.0;
+            tmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][cmp_id - target_func_begin_id]
               / target_cmp_exec;
           } else {
-            cur_abandoned_rel_avg += (float) afl->func_exec_count_table[target_func][cmp_func_id]
+            tmp_rel_avg += (float) afl->func_exec_count_table[target_func][cmp_func_id]
               / target_func_exec;
           }
         }
 
         if (num_abandoned_cmps > 0) {
-          cur_abandoned_rel_avg /= num_abandoned_cmps;
+          tmp_rel_avg /= num_abandoned_cmps;
         }
 
-        cur_cmp_rel_avg -= cur_abandoned_rel_avg;
+        cur_cmp_rel_avg -= tmp_rel_avg;
+
+        tmp_rel_avg = 0.0;
+
+        for (k = 0; k < num_new_cmps; k++) {
+          u32 cmp_id = close_tc_mining_result[j]->new_cmps[k];
+          u32 cmp_func_id = afl->cmp_func_map[cmp_id];
+          if (cmp_func_id == target_func) {
+            tmp_rel_avg += 1.0;
+            tmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][cmp_id - target_func_begin_id]
+              / target_cmp_exec;
+          } else {
+            tmp_rel_avg += (float) afl->func_exec_count_table[target_func][cmp_func_id]
+              / target_func_exec;
+          }
+        }
+
+        if (num_new_cmps > 0) {
+          tmp_rel_avg /= num_new_cmps;
+        }
+
+        cur_cmp_rel_avg += tmp_rel_avg;
 
         for(k = byte_offset; k < byte_offset + byte_len; k ++) {
           afl->byte_scores[k] += cur_cmp_rel_avg; //TODO : value?

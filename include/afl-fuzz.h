@@ -234,8 +234,10 @@ struct cmp_queue_entry {
 struct byte_cmp_set {
   u32 * changed_cmps;
   u32 * abandoned_cmps;
+  u32 * new_cmps;
   u32 num_changed_cmps;
   u32 num_abandoned_cmps;
+  u32 num_new_cmps;
   u8  timeout;
 };
 

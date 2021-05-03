@@ -538,7 +538,7 @@
 
 #define MINING_FRAG_LEN_MIN_POW2 5
 
-#define MINING_MUT_TIME 128
+#define MINING_MUT_TIME 32
 
 #define CMP_BUF_SIZE 512
 
