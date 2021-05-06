@@ -103,7 +103,7 @@ void init_trim_and_func(afl_state_t * afl) {
 
     q->trim_done = 1;
 
-    update_tc_graph_and_branch_cov(afl, tc_idx, (u32) -1, (u32) -1, in_buf, len);
+    update_tc_graph_and_branch_cov(afl, tc_idx, (u32) -1, in_buf, len);
    
     munmap(in_buf, len);
   }
@@ -195,13 +195,12 @@ u32 func_choose_block_len(afl_state_t *afl, u32 limit, u32 len) {
 
 }
 
-void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_idx, u32 parent2_idx, u8 * buf, u32 len) {
+void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_idx, u8 * buf, u32 len) {
 
   u32 i1,i2,i3;
 
-  if ((tc_idx >= afl->tc_graph_size) ||
-    ((parent_idx != (u32) -1) && parent_idx >= afl->tc_graph_size) ||
-    ((parent2_idx != (u32) -1) && (parent2_idx >= afl->tc_graph_size))) {
+  while ((tc_idx >= afl->tc_graph_size) ||
+    ((parent_idx != (u32) -1) && parent_idx >= afl->tc_graph_size)) {
     afl->tc_graph_size += INIT_TC_GRAPH_SIZE;
     afl->tc_graph = (struct tc_graph_entry **) realloc(afl->tc_graph,
       sizeof(struct tc_graph_entry *) * (afl->tc_graph_size));
@@ -236,29 +235,6 @@ void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_id
       }
 
       new_tc->num_parents = 1;
-    } else {
-      //TODO : why?
-    }
-  }
-  
-  if (parent2_idx != (u32) -1) {
-    if (likely(parent2_idx < tc_idx)) {
-      struct tc_graph_entry * parent = afl->tc_graph[parent2_idx];
-      if (parent == NULL) {
-        afl->tc_graph[parent2_idx] = (struct tc_graph_entry *) calloc(1, sizeof(struct tc_graph_entry));
-        parent = afl->tc_graph[parent2_idx];
-      }
-      new_tc->parents[new_tc->num_parents++] = parent2_idx;
-      if (parent->children == NULL) {
-        parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_SIZE);
-        parent->children_size = TC_CHILDREN_SIZE;
-      }
-
-      parent->children[parent->num_children++] = tc_idx;
-      if(unlikely(parent->num_children >= parent->children_size)){
-        parent->children_size += TC_CHILDREN_SIZE;
-        parent->children = realloc(parent->children, parent->children_size * sizeof(u32));
-      }
     } else {
       //TODO : why?
     }
@@ -1098,8 +1074,13 @@ void write_func_stats (afl_state_t * afl) {
   struct tc_graph_entry * e;
   for(idx1= 0; idx1 < afl->queued_paths ; idx1++) {
     e = afl->tc_graph[idx1];
-    if (e != NULL)
+    if (e != NULL) {
       fprintf(f, "tc_idx:%u,num_children:%u\n", idx1, e->num_children);
+      for (idx2 = 0; idx2 < e->num_children; idx2++) {
+        fprintf(f, "%u,", e->children[idx2]);
+      }
+      fprintf(f, "\n");
+    }
   }
   fclose(f);
 
@@ -1150,34 +1131,28 @@ void destroy_func(afl_state_t * afl) {
 
   for (idx1 = 0; idx1 < afl->num_cmp; idx1++) {
     if (afl->cmp_queue_entries_ptr[idx1]) {
-      if (afl->cmp_queue_entries_ptr[idx1]->executing_tcs != NULL)
-        free(afl->cmp_queue_entries_ptr[idx1]->executing_tcs);
+      free(afl->cmp_queue_entries_ptr[idx1]->executing_tcs);
       free(afl->cmp_queue_entries_ptr[idx1]);
     }
   }
   free(afl->cmp_queue_entries_ptr);
 
-  for (idx1 = 0; idx1 < afl->tc_graph_size ; idx1++ ) {
+  for (idx1 = 0; idx1 < afl->tc_graph_size ; idx1++) {
     if (afl->tc_graph[idx1]) {
-      if (afl->tc_graph[idx1]->children != NULL)
-        free(afl->tc_graph[idx1]->children);
-      }
+      free(afl->tc_graph[idx1]->children);
       free(afl->tc_graph[idx1]);
+    }
   }
 
   free(afl->tc_graph);
   ck_free(afl->func_binary);
 
-  if (afl->cmp_func_map)
-    free(afl->cmp_func_map);
-
-  if (afl->func_list)
-    free(afl->func_list);
+  free(afl->cmp_func_map);
+  free(afl->func_list);
   
   if(afl->func_exec_count_table) {
     for (idx1 = 0; idx1 < afl->num_func ; idx1 ++ ) {
-      if (afl->func_exec_count_table[idx1])
-        free(afl->func_exec_count_table[idx1]);
+      free(afl->func_exec_count_table[idx1]);
     }
     free(afl->func_exec_count_table);
   }
@@ -1298,7 +1273,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
   temp_len = len;
 
-  orig_hit_cnt = afl->queued_paths + afl->unique_crashes;
+  orig_hit_cnt = afl->queued_paths;
 
   havoc_queued = afl->queued_paths;
 
@@ -1333,7 +1308,6 @@ void fuzz_one_func (afl_state_t *afl) {
   // Select bytes
   afl->func_cur_num_bytes = 0;
 
-
   if(unlikely(afl->byte_scores == NULL)) {
     afl->byte_scores = (float *) malloc(sizeof(float) * len);
     afl->byte_score_size = len;
@@ -1342,6 +1316,9 @@ void fuzz_one_func (afl_state_t *afl) {
     afl->byte_scores = (float *) malloc(sizeof(float) * len);
     afl->byte_score_size = len;
   }
+
+  //debug
+  //fprintf(afl->debug_file, "**** Mutating stage *****\n%u: mutating : %u, len : %u, target cmp : %u, # of close : %u\n",afl->fr_idx++, afl->cmp_queue_cur->tc->id, len, target_cmp_id, num_close_tc);
 
   memset(afl->byte_scores, 0, sizeof(float) * len);
 
@@ -1352,6 +1329,8 @@ void fuzz_one_func (afl_state_t *afl) {
     struct tc_graph_entry * cur_tc = afl->tc_graph[tc_id];
 
     if (unlikely(!cur_tc->initialized)) continue;
+
+    //fprintf(afl->debug_file,"%u,", tc_id);
 
     struct byte_cmp_set ** close_tc_mining_result = mining_deserialize(afl, tc_id);
 
@@ -1371,6 +1350,7 @@ void fuzz_one_func (afl_state_t *afl) {
         u32 num_new_cmps = close_tc_mining_result[j]->num_new_cmps;
 
         float cur_cmp_rel_avg = 0.0;
+        /*
 
         for (k = 0; k < num_changed_cmps; k++) {
           u32 cmp_id = close_tc_mining_result[j]->changed_cmps[k];
@@ -1388,6 +1368,7 @@ void fuzz_one_func (afl_state_t *afl) {
         if (num_changed_cmps > 0) {
           cur_cmp_rel_avg /= num_changed_cmps;
         }
+        */
 
         float tmp_rel_avg = 0.0;
 
@@ -1429,7 +1410,7 @@ void fuzz_one_func (afl_state_t *afl) {
           tmp_rel_avg /= num_new_cmps;
         }
 
-        cur_cmp_rel_avg += tmp_rel_avg;
+        cur_cmp_rel_avg -= tmp_rel_avg;
 
         for(k = byte_offset; k < byte_offset + byte_len; k ++) {
           afl->byte_scores[k] += cur_cmp_rel_avg; //TODO : value?
@@ -1452,6 +1433,8 @@ void fuzz_one_func (afl_state_t *afl) {
 
     mining_deserialize_free(close_tc_mining_result, num_mining_set);
   }
+  //fprintf(afl->debug_file,"\n");
+
   free(close_tcs);
 
   float max_score = 0.0;
@@ -1480,17 +1463,21 @@ void fuzz_one_func (afl_state_t *afl) {
 
   float threshold = (max_score - min_score) * afl->score_threshold + min_score;
 
+  //fprintf(afl->debug_file, "threshold : %.2f, relative threshold : %.2f\n", threshold, afl->score_threshold);
+
   for (i = 0; i < len; i++) {
     if (afl->byte_scores[i] > threshold) {
       afl->fuzz_one_func_byte_offsets[afl->func_cur_num_bytes++] = i;
+      //fprintf(afl->debug_file, "%u,", i);
 
       if(unlikely(afl->func_cur_num_bytes >= num_mut_bytes)) {
         break;
       }
     }
   }
+  //fprintf(afl->debug_file, "\n# of bytes : %u\n", afl->func_cur_num_bytes);
 
-  if (afl->func_cur_num_bytes <= 100) {
+  if (afl->func_cur_num_bytes <= 10) {
     afl->score_threshold -= 0.01;
   } else if (afl->func_cur_num_bytes >= num_mut_bytes) {
     afl->score_threshold += 0.01;
@@ -1501,10 +1488,6 @@ void fuzz_one_func (afl_state_t *afl) {
   } else if (afl->score_threshold > 1.0) {
     afl->score_threshold = 0.9;
   }
-
-  fprintf(afl->debug_file, "mut bytes : %u/%u, num_close_tc %u, score: %.2f,", afl->func_cur_num_bytes, len, num_close_tc, afl->score_threshold);
-
-  //u32 num_mutated_bytes = 0;
   
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
 
@@ -1754,12 +1737,19 @@ void fuzz_one_func (afl_state_t *afl) {
     }
   }
 
-  new_hit_cnt = afl->queued_paths + afl->unique_crashes - orig_hit_cnt;
+  new_hit_cnt = afl->queued_paths - orig_hit_cnt;
 
   afl->stage_finds[STAGE_HAVOC_FUNC] += new_hit_cnt;
   afl->stage_cycles[STAGE_HAVOC_FUNC] += afl->stage_max;
-  fprintf(afl->debug_file, "new path : %llu\n", new_hit_cnt);
   
+  /*
+  fprintf(afl->debug_file, "new path : %llu\n", new_hit_cnt);
+  for (i= orig_hit_cnt; i < afl->queued_paths; i++) {
+    fprintf(afl->debug_file, "%u,", i);
+  }
+  fprintf(afl->debug_file,"\n");
+  */
+
   munmap(orig_in, afl->cmp_queue_cur->tc->len);
 
   return ;

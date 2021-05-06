@@ -31,6 +31,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Pass.h"
@@ -196,6 +197,71 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   func.close();
 
   errs() << "Hooking " << cmp_id << " cmp instructions (func rel mode)\n";
+
+
+  if (getenv("AFL_PRINT_IR") != NULL) {
+    std::error_code Errinfo;
+    raw_fd_ostream result_ir("FRIEND_result.ir", Errinfo, sys::fs::OpenFlags::OF_Text);
+
+    func_id = 0;
+    cmp_id = 0;
+
+    for (auto &F : M) {
+      if (!isInInstrumentList(&F)) { 
+        continue;
+      }
+
+      std::vector<Instruction *> icomps;
+      
+      for (auto &BB : F) {
+        for (auto &IN : BB) {
+          CmpInst *selectcmpInst = nullptr;
+          if ((selectcmpInst = dyn_cast<CmpInst>(&IN))) {
+            icomps.push_back(selectcmpInst); 
+          } 
+        }
+      }
+
+
+      if (icomps.size() == 0) continue;
+    
+      const char * fname = F.getName().data();
+      result_ir << "FUNCTION reading " << fname  << ":" << func_id << " ############\n"; 
+      func_id ++;
+
+      for (auto &BB : F) {
+        result_ir << "BLOCK " <<  " *********************\n";
+        for (auto &IN : BB) {
+          DILocation * Loc = IN.getDebugLoc();
+          result_ir << IN;
+          if (Loc) {
+            result_ir << Loc->getFilename().str() << ":" << Loc->getLine();
+          }
+
+          CmpInst *selectcmpInst = nullptr;
+          if ((selectcmpInst = dyn_cast<CmpInst>(&IN))) {
+            Instruction * InsertPoint = selectcmpInst->getNextNode();
+            if (!InsertPoint || isa<ConstantInt>(selectcmpInst)) {
+              result_ir << "\n";
+              continue;
+            }
+
+            Type::TypeID InstrTypeId = selectcmpInst->getType()->getTypeID();
+            if (InstrTypeId == Type::TypeID::FixedVectorTyID) {
+              result_ir << "\n";
+              continue;
+            }
+    
+            result_ir << " #### cmp id : " << cmp_id;
+            cmp_id ++;
+          }
+
+          result_ir << "\n";
+        }
+      }
+    }
+    result_ir.close();
+  }
 
   return true;
 

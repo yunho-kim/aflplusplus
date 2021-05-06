@@ -1030,6 +1030,9 @@ int main(int argc, char **argv_orig, char **envp) {
   {
     u8 * buf = (u8 *) calloc (PATH_MAX, sizeof(u8));
     char * trim = strrchr(argv[optind], '/');
+    if (unlikely(trim == NULL)) {
+      FATAL("check argv");
+    }
     trim ++;
     u32 trim_len = strrchr(trim, '.') - trim;
     memcpy(buf, trim, trim_len);
