@@ -1006,7 +1006,7 @@ void get_close_tcs(afl_state_t * afl, u32 target_id, u32 * close_tcs, u32 * num_
 void write_func_stats (afl_state_t * afl) {
   u8    fn[PATH_MAX];
   FILE *f;
-  u32 idx1, idx2;
+  u32 idx1, idx2, idx3;
   s32 fd;
 
   if (afl->func_exec_count_table) {
@@ -1035,6 +1035,27 @@ void write_func_stats (afl_state_t * afl) {
     }
     fclose(f);
   }
+
+  snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_exec_table.csv", afl->out_dir);
+  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  f = fdopen(fd, "w");
+  for (idx1 = 0; idx1 < afl->num_func; idx1++) {
+    if (afl->func_cmp_exec_count_table[idx1]) {
+      struct func_cmp_info * cur_func_info = afl->func_cmp_map[idx1];
+      u32 num_cmp = cur_func_info->cmp_id_end - cur_func_info->cmp_id_begin;
+      fprintf(f, "Func : %u, %u:%u,\n", idx1, cur_func_info->cmp_id_begin, cur_func_info->cmp_id_end);
+      for (idx2 = 0; idx2 < num_cmp; idx2++) {
+        for(idx3 = 0; idx3 < num_cmp; idx3++) {
+          fprintf(f, "%u,", afl->func_cmp_exec_count_table[idx1][idx2][idx3]);
+        }
+        fprintf(f,"\n");
+      }
+    } else {
+      fprintf(f, "Func : %u, no exec\n", idx1);
+    }
+  }
+  fclose(f);
 
   // FRIEND related stats
   snprintf(fn, PATH_MAX, "%s/FRIEND/FRIEND.stat", afl->out_dir);
@@ -1106,19 +1127,6 @@ void write_func_stats (afl_state_t * afl) {
 
   fclose(f);
 
-  if (afl->byte_scores_sum) {
-    snprintf(fn, PATH_MAX, "%s/FRIEND/scores.csv", afl->out_dir);
-    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (fd < 0) PFATAL("Unable to create '%s'", fn);
-
-    f = fdopen(fd, "w");
-
-    for (idx1 = 0; idx1 < afl->byte_scores_sum_size; idx1++) {
-      fprintf(f, "%.2f\n", afl->byte_scores_sum[idx1] / afl->byte_scores_sum_record);
-    }
-    fclose(f);
-  }
-
   return;
 }
 
@@ -1187,8 +1195,6 @@ void destroy_func(afl_state_t * afl) {
     free(afl->fuzz_one_func_byte_offsets);
   }
   
-  if(afl->byte_scores_sum)
-    free(afl->byte_scores_sum);
 }
 
 void func_common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len, u32 parent_id) {
@@ -1321,6 +1327,7 @@ void fuzz_one_func (afl_state_t *afl) {
   //fprintf(afl->debug_file, "**** Mutating stage *****\n%u: mutating : %u, len : %u, target cmp : %u, # of close : %u\n",afl->fr_idx++, afl->cmp_queue_cur->tc->id, len, target_cmp_id, num_close_tc);
 
   memset(afl->byte_scores, 0, sizeof(float) * len);
+  u32 num_score_entry = 0;
 
   for (i = 0; i < num_close_tc; i++) {  
     u32 tc_id = close_tcs[i];
@@ -1341,22 +1348,22 @@ void fuzz_one_func (afl_state_t *afl) {
 
     for (j = 0; j < num_mining_set; j++) {
       if (close_tc_mining_result[j]->timeout) {
-        for(k = byte_offset; k < byte_offset + byte_len; k ++) {
-          afl->byte_scores[k] -= 1.0; //TODO : value?
-        }
+        //for(k = byte_offset; k < byte_offset + byte_len; k ++) {
+        //  afl->byte_scores[k] -= 2.0; //TODO : value?
+        //}
       } else {
         u32 num_changed_cmps = close_tc_mining_result[j]->num_changed_cmps;
         u32 num_abandoned_cmps = close_tc_mining_result[j]->num_abandoned_cmps;
         u32 num_new_cmps = close_tc_mining_result[j]->num_new_cmps;
 
         float cur_cmp_rel_avg = 0.0;
-        /*
-
+        
+        
         for (k = 0; k < num_changed_cmps; k++) {
           u32 cmp_id = close_tc_mining_result[j]->changed_cmps[k];
           u32 cmp_func_id = afl->cmp_func_map[cmp_id];
           if (cmp_func_id == target_func) {
-            cur_cmp_rel_avg += 1.0;
+            cur_cmp_rel_avg += 10.0;
             cur_cmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][cmp_id - target_func_begin_id]
               / target_cmp_exec;
           } else {
@@ -1368,7 +1375,7 @@ void fuzz_one_func (afl_state_t *afl) {
         if (num_changed_cmps > 0) {
           cur_cmp_rel_avg /= num_changed_cmps;
         }
-        */
+        
 
         float tmp_rel_avg = 0.0;
 
@@ -1376,7 +1383,7 @@ void fuzz_one_func (afl_state_t *afl) {
           u32 cmp_id = close_tc_mining_result[j]->abandoned_cmps[k];
           u32 cmp_func_id = afl->cmp_func_map[cmp_id];
           if (cmp_func_id == target_func) {
-            tmp_rel_avg += 1.0;
+            tmp_rel_avg += 10.0;
             tmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][cmp_id - target_func_begin_id]
               / target_cmp_exec;
           } else {
@@ -1397,7 +1404,7 @@ void fuzz_one_func (afl_state_t *afl) {
           u32 cmp_id = close_tc_mining_result[j]->new_cmps[k];
           u32 cmp_func_id = afl->cmp_func_map[cmp_id];
           if (cmp_func_id == target_func) {
-            tmp_rel_avg += 1.0;
+            tmp_rel_avg += 10.0;
             tmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][cmp_id - target_func_begin_id]
               / target_cmp_exec;
           } else {
@@ -1415,6 +1422,7 @@ void fuzz_one_func (afl_state_t *afl) {
         for(k = byte_offset; k < byte_offset + byte_len; k ++) {
           afl->byte_scores[k] += cur_cmp_rel_avg; //TODO : value?
         }
+        num_score_entry++;
       }
 
       byte_offset += byte_len;
@@ -1437,17 +1445,14 @@ void fuzz_one_func (afl_state_t *afl) {
 
   free(close_tcs);
 
-  float max_score = 0.0;
-  float min_score = FLT_MAX;
-
-  if(unlikely(afl->byte_scores_sum == NULL)) {
-    afl->byte_scores_sum = calloc(len, sizeof(float));
-    afl->byte_scores_sum_size = len;
-  } else if (afl->byte_scores_sum_size < len) {
-    afl->byte_scores_sum = realloc(afl->byte_scores_sum, sizeof(float) * len);
-    memset(afl->byte_scores_sum + afl->byte_scores_sum_size, 0, sizeof(float) * (len - afl->byte_scores_sum_size));
-    afl->byte_scores_sum_size = len;
+  if (num_score_entry == 0) {
+    //TODO : what?
+    munmap(orig_in, afl->cmp_queue_cur->tc->len);
+    return ;
   }
+
+  float max_score = FLT_MIN;
+  float min_score = FLT_MAX;
 
   for (i = 0; i < len; i++) {
     float score = afl->byte_scores[i];
@@ -1457,16 +1462,17 @@ void fuzz_one_func (afl_state_t *afl) {
     if (score < min_score) {
       min_score = score;
     }
-    afl->byte_scores_sum[i] += score;
+    //fprintf(afl->debug_file, "%f,", (score / (float) num_score_entry));
   }
-  afl->byte_scores_sum_record ++;
+  //fprintf(afl->debug_file, "\n");
 
   float threshold = (max_score - min_score) * afl->score_threshold + min_score;
 
   //fprintf(afl->debug_file, "threshold : %.2f, relative threshold : %.2f\n", threshold, afl->score_threshold);
 
   for (i = 0; i < len; i++) {
-    if (afl->byte_scores[i] > threshold) {
+    float score = afl->byte_scores[i];
+    if (score > threshold ) {
       afl->fuzz_one_func_byte_offsets[afl->func_cur_num_bytes++] = i;
       //fprintf(afl->debug_file, "%u,", i);
 
@@ -1484,9 +1490,9 @@ void fuzz_one_func (afl_state_t *afl) {
   }
 
   if (afl->score_threshold < 0.0) {
-    afl->score_threshold = 0.1;
+    afl->score_threshold = 0.02;
   } else if (afl->score_threshold > 1.0) {
-    afl->score_threshold = 0.9;
+    afl->score_threshold = 0.98;
   }
   
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {

@@ -853,10 +853,7 @@ typedef struct afl_state {
 
   char * func_infos_dir;
   float * byte_scores;
-  float * byte_scores_sum;
   u32 byte_score_size;
-  u32 byte_scores_sum_size;
-  u32 byte_scores_sum_record;
 
   float score_threshold;
 
