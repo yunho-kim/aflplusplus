@@ -1237,9 +1237,9 @@ void __func_log_hook(uint32_t cmpid, uint32_t condition) {
     return;
   }
 
-  condition = condition ? 2 : 1;
+  __afl_func_map[cmpid].condition_val = condition;
   __afl_func_map[cmpid].executed = 1; //mark executed
-  __afl_func_map[cmpid].condition |= condition;
+  __afl_func_map[cmpid].condition |= condition ? 2 : 1;
 }
 
 ///// CmpLog instrumentation

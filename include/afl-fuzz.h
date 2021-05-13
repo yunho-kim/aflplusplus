@@ -218,24 +218,30 @@ struct cmp_queue_entry {
   struct cmp_queue_entry * next;
   struct queue_entry * tc;
   u32 * executing_tcs;
+  u32 * value_changing_tcs;
   u32 num_executing_tcs;
   u32 executing_tcs_size;
+  u32 num_value_changing_tcs;
+  u32 value_changing_tcs_size;
   u32 mutating_tc_idx;
+  u32 value_changing_tc_idx;
   u32 num_fuzzed;
   u32 num_skipped;
   u32 id;
   //2 bits, MSB : true, LSB : false,  true | false covered
-  u8 condition : 2;
+  u8 condition : 3;
   u8 has_been_fuzzed : 1;
   u8 exec_max_reached : 1;
-  //u8 is_max_bytes : 1;
+  u8 is_magic_bytes : 1;
 };
 
 struct byte_cmp_set {
   u32 * changed_cmps;
+  u32 * changed_val_cmps;
   u32 * abandoned_cmps;
   u32 * new_cmps;
   u32 num_changed_cmps;
+  u32 num_changed_val_cmps;
   u32 num_abandoned_cmps;
   u32 num_new_cmps;
   u8  timeout;
@@ -856,8 +862,11 @@ typedef struct afl_state {
   u32 byte_score_size;
 
   float score_threshold;
+  float magic_score_threshold;
 
   u32 ** synced_tcs;
+
+  u32 * precondition_values;
 
 #ifdef INTROSPECTION
   char  mutation[8072];
@@ -869,8 +878,6 @@ typedef struct afl_state {
 //Debug
   FILE * debug_file;
   u32 fr_idx;
-  
-  
 
 } afl_state_t;
 

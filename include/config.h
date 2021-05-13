@@ -514,7 +514,7 @@
 #define CLOSE_TC_THRESHOLD 3
 
 //# of bytes to mutate with function relevance
-#define FUZZ_ONE_FUNC_BYTE_SIZE_RATIO 0.1
+#define FUZZ_ONE_FUNC_BYTE_SIZE_RATIO 0.05
 
 //size of executing tcs buffer, used in cmp_queue_entry
 #define EXEC_TCS_SIZE 128
@@ -538,7 +538,7 @@
 
 #define MINING_FRAG_LEN_MIN_POW2 5
 
-#define MINING_MUT_TIME 32
+#define MINING_MUT_TIME 64
 
 #define CMP_BUF_SIZE 512
 

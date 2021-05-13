@@ -31,7 +31,7 @@ VERSION     = $(shell grep '^$(HASH)define VERSION ' ../config.h | cut -d '"' -f
 
 # PROGS intentionally omit afl-as, which gets installed elsewhere.
 
-PROGS       = afl-fuzz afl-showmap afl-tmin afl-gotcpu afl-analyze afl-showcmp
+PROGS       = afl-fuzz afl-showmap afl-tmin afl-gotcpu afl-analyze 
 SH_PROGS    = afl-plot afl-cmin afl-cmin.bash afl-whatsup afl-system-config
 MANPAGES=$(foreach p, $(PROGS) $(SH_PROGS), $(p).8) afl-as.8
 ASAN_OPTIONS=detect_leaks=0
@@ -135,6 +135,10 @@ ifdef DEBUG
   CFLAGS += -ggdb3 -O0 -Wall -Wextra -Werror
 else
   CFLAGS ?= -O3 -funroll-loops $(CFLAGS_OPT)
+endif
+
+ifdef DEBUG_FUNC
+  CFLAGS += -DDEBUG_FUNC
 endif
 
 override CFLAGS += -g -Wno-pointer-sign -Wno-variadic-macros -Wall -Wextra -Wpointer-arith \

@@ -93,3 +93,5 @@ afl-showcmp
 *.swp
 
 out_*
+
+*.csv

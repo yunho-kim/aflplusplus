@@ -33,6 +33,8 @@
 
 //cmp entries used for tracking branch coverage
 struct cmp_func_entry {
+  //last execution condition value
+  u32 condition_val;
   //Accumulated condition coverage before execution, true | false covered
   u8 precondition : 3;
   //condition recored at the execution, MSB : true, LSB : false,  true | false covered  

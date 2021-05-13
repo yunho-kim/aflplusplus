@@ -116,10 +116,9 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
   unsigned int func_id = 0;
   unsigned int cmp_id = 0;
-  std::ofstream func;
-  func.open("FRIEND_func_cmp_id_info" , std::ofstream::out | std::ofstream::trunc);
-
+  
   std::vector<unsigned int> func_cmp;
+  std::vector<std::tuple<unsigned int, unsigned, uint64_t>> magic_bytes;
   /* iterate over all functions, bbs and instruction and add suitable calls */
   for (auto &F : M) {
 
@@ -178,6 +177,18 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
       IRB.CreateCall(cmplogHookIns, args);
 
+      CmpInst * cmpinst = dyn_cast<CmpInst>(selectcmpInst);
+
+      //TODO : float
+      if ((cmpinst->getPredicate() == CmpInst::Predicate::ICMP_EQ) && cmpinst->getNumOperands() == 2) {
+        //Value * op1 = cmpinst->getOperand(0);
+        Value * op2 = cmpinst->getOperand(1);
+        ConstantInt * cop2;
+        if ((cop2 = dyn_cast<ConstantInt>(op2))) {
+          magic_bytes.push_back(std::make_tuple(cmp_id, cop2->getBitWidth() / 8, cop2->getZExtValue()));
+        }
+      }
+
       cmp_id ++;
     }
 
@@ -189,12 +200,25 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
     
   }
 
+  std::ofstream func;
+  func.open("FRIEND_func_cmp_id_info" , std::ofstream::out | std::ofstream::trunc);
+
   func << func_id << "," << cmp_id << "\n";
   for (auto iter = func_cmp.begin() ; iter != func_cmp.end(); iter++) {
     func << *iter << "\n";
   }
 
   func.close();
+
+  std::ofstream magic_bytes_file;
+  magic_bytes_file.open("FRIEND_magic_byte_cmps" , std::ofstream::out | std::ofstream::trunc);
+  
+  magic_bytes_file << magic_bytes.size() << "\n";
+  for (auto iter = magic_bytes.begin(); iter != magic_bytes.end(); iter++) {
+    magic_bytes_file << std::get<0>(*iter) << "\n"; // << "," << std::get<1>(*iter) << "," << std::get<2>(*iter) << "\n";
+  }
+
+  magic_bytes_file.close();
 
   errs() << "Hooking " << cmp_id << " cmp instructions (func rel mode)\n";
 

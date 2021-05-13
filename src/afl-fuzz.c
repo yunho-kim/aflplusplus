@@ -1026,7 +1026,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   afl->func_info_txt = (char *) calloc (PATH_MAX, sizeof(u8));
   afl->func_binary = (char *) calloc (PATH_MAX, sizeof(u8));
-  snprintf(afl->func_info_txt, PATH_MAX, "%s/FRIEND_func_cmp_id_info", afl->func_infos_dir);
+  if (!afl->func_info_txt || !afl->func_binary) FATAL("Can't allocate string for path?");
   {
     u8 * buf = (u8 *) calloc (PATH_MAX, sizeof(u8));
     char * trim = strrchr(argv[optind], '/');
@@ -1041,10 +1041,6 @@ int main(int argc, char **argv_orig, char **envp) {
   }
 
   afl->disable_trim = 1;
-
-  OKF("func info txt : %s\nfunc binary : %s\n", afl->func_info_txt, afl->func_binary);
-
-  if (!afl->func_info_txt || !afl->func_binary) FATAL("Can't allocate string for path?");
 
   if (afl->fsrv.qemu_mode && getenv("AFL_USE_QASAN")) {
 
@@ -2104,47 +2100,55 @@ int main(int argc, char **argv_orig, char **envp) {
           afl->cmp_queue_cur = afl->cmp_queue;
         }
 
-        while (unlikely(afl->cmp_queue_cur->exec_max_reached)) {
+        while (unlikely(afl->cmp_queue_cur->exec_max_reached || (afl->cmp_queue_cur->condition == 3))) {
           afl->cmp_queue_cur = afl->cmp_queue_cur->next;
         }
 
         if (likely(afl->cmp_queue_cur)) {
-          //ITERATE through tcs
-          u32 num_tcs = afl->cmp_queue_cur->num_executing_tcs;
+          struct cmp_queue_entry * cq_cur = afl->cmp_queue_cur; 
+          if (cq_cur->is_magic_bytes && cq_cur->value_changing_tcs) {
+            u32 tc_idx = cq_cur->value_changing_tcs[cq_cur->value_changing_tc_idx++];
+            if (unlikely(cq_cur->value_changing_tc_idx >= cq_cur->num_value_changing_tcs)) {
+              cq_cur->value_changing_tc_idx = 0;
+            }
+            cq_cur->tc = afl->queue_buf[tc_idx];
+          } else {
+            //ITERATE through tcs
+            u32 num_tcs = cq_cur->num_executing_tcs;
 
-          if (unlikely(num_tcs == 0)) {
-            afl->cmp_queue_cur = afl->cmp_queue_cur->next;
-            continue;
+            if (unlikely(num_tcs == 0)) {
+              afl->cmp_queue_cur = cq_cur->next;
+              continue;
+            }
+
+            if (unlikely(!cq_cur->num_fuzzed)) {
+              cq_cur->mutating_tc_idx = rand_below(afl, num_tcs);
+            }
+
+            u32 idx = 0;
+            u32 tc_idx;
+            do {
+              tc_idx = cq_cur->executing_tcs[cq_cur->mutating_tc_idx++];
+              if (unlikely(cq_cur->mutating_tc_idx >= num_tcs))
+                cq_cur->mutating_tc_idx = 0;
+              idx ++;
+            } while(((tc_idx >= afl->tc_graph_size) ||
+              (!afl->tc_graph[tc_idx]->initialized)) && (idx < TC_ITER_LIMIT)
+            );
+
+            if(idx == TC_ITER_LIMIT) { 
+              cq_cur->num_skipped++;
+              afl->cmp_queue_cur = cq_cur->next;
+              continue;
+            }
+
+            cq_cur->tc = afl->queue_buf[tc_idx];
+            //assert(afl->tc_graph[tc_idx].initialized);
           }
-
-          if (unlikely(!afl->cmp_queue_cur->num_fuzzed)) {
-            afl->cmp_queue_cur->mutating_tc_idx = rand_below(afl, num_tcs);
-          }
-
-          u32 idx = 0;
-          u32 tc_id;
-          do {
-            tc_id = afl->cmp_queue_cur->executing_tcs[afl->cmp_queue_cur->mutating_tc_idx++];
-            if (unlikely(afl->cmp_queue_cur->mutating_tc_idx >= num_tcs))
-              afl->cmp_queue_cur->mutating_tc_idx = 0;
-            idx ++;
-          } while(((tc_id >= afl->tc_graph_size) ||
-            (!afl->tc_graph[tc_id]->initialized)) && (idx < TC_ITER_LIMIT)
-          );
-
-          if(idx == TC_ITER_LIMIT) { 
-            afl->cmp_queue_cur->num_skipped++;
-            afl->cmp_queue_cur = afl->cmp_queue_cur->next;
-            continue;
-          }
-
-          //assert(afl->tc_graph[tc_id].initialized);
-
-          afl->cmp_queue_cur->tc = afl->queue_buf[tc_id];
           
           fuzz_one_func(afl);
 
-          afl->cmp_queue_cur->num_fuzzed++;
+          cq_cur->num_fuzzed++;
 
           while (afl->cmp_queue_cur->next != NULL) {
             if ((afl->cmp_queue_cur->next->condition == 3) ||
