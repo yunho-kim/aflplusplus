@@ -514,6 +514,10 @@ struct byte_cmp_set ** mining_deserialize(afl_state_t * afl, u32 tc_idx) {
       tmp->changed_val_cmps = NULL;
       tmp->abandoned_cmps = NULL;
       tmp->new_cmps = NULL;
+      tmp->num_changed_cmps = 0;
+      tmp->num_changed_val_cmps = 0;
+      tmp->abandoned_cmps = 0;
+      tmp->num_new_cmps = 0;
     }
   }
 
@@ -1276,6 +1280,27 @@ void destroy_func(afl_state_t * afl) {
   free(afl->precondition_values);
 }
 
+#ifdef FUNC_OLD
+  #define cmp_func_score(target_func_id, target_cmp_id_in_func, cmp_id_in_func, target_cmp_exec) \
+  (float) afl->func_cmp_exec_count_table[target_func_id][target_cmp_id_in_func][cmp_id_in_func] \
+  / target_cmp_exec
+
+  #define func_score(target_func_id, cmp_func_id, target_func_exec) \
+    (float) afl->func_exec_count_table[target_func_id][cmp_func_id] \
+    / target_func_exec
+
+#else
+  #define cmp_func_score(target_func_id, target_cmp_id_in_func, cmp_id_in_func, target_cmp_exec) \
+    (float) afl->func_cmp_exec_count_table[target_func_id][target_cmp_id_in_func][cmp_id_in_func] \
+    / target_cmp_exec \
+    / ((float) afl->func_cmp_exec_count_table[target_func_id][cmp_id_in_func][cmp_id_in_func])
+
+  #define func_score(target_func_id, cmp_func_id, target_func_exec) \
+    (float) afl->func_exec_count_table[target_func_id][cmp_func_id] \
+    / target_func_exec \
+    / ((float) afl->func_exec_count_table[cmp_func_id][cmp_func_id])
+#endif
+
 static void cal_magic_score(afl_state_t * afl, struct tc_graph_entry * cur_close_tc,
   struct byte_cmp_set ** close_tc_mining_result, u32 len, u32 target_func_id,
   u32 magic_byte_begin_idx, u32 magic_byte_end_idx,
@@ -1307,12 +1332,11 @@ static void cal_magic_score(afl_state_t * afl, struct tc_graph_entry * cur_close
         u32 cmp_id = close_tc_mining_result[idx1]->changed_cmps[idx2];
         u32 cmp_func_id = afl->cmp_func_map[cmp_id];
         if (cmp_func_id == target_func_id) {
+          u32 cmp_id_in_func = cmp_id - target_func_begin_id;
           cur_cmp_rel_avg -= 1.0;
-          cur_cmp_rel_avg -= (float) afl->func_cmp_exec_count_table[target_func_id][target_cmp_id_in_func][cmp_id - target_func_begin_id]
-            / target_cmp_exec;
+          cur_cmp_rel_avg -= cmp_func_score(target_func_id, target_cmp_id_in_func, cmp_id_in_func, target_cmp_exec);
         } else {
-          cur_cmp_rel_avg -= (float) afl->func_exec_count_table[target_func_id][cmp_func_id]
-            / target_func_exec;
+          cur_cmp_rel_avg -= func_score(target_func_id, cmp_func_id, target_func_exec);
         }
       }
 
@@ -1335,12 +1359,11 @@ static void cal_magic_score(afl_state_t * afl, struct tc_graph_entry * cur_close
         u32 cmp_id = close_tc_mining_result[idx1]->abandoned_cmps[idx2];
         u32 cmp_func_id = afl->cmp_func_map[cmp_id];
         if (cmp_func_id == target_func_id) {
+          u32 cmp_id_in_func = cmp_id - target_func_begin_id;
           tmp_rel_avg += 1.0;
-          tmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func_id][target_cmp_id_in_func][cmp_id - target_func_begin_id]
-            / target_cmp_exec;
+          tmp_rel_avg += cmp_func_score(target_func_id, target_cmp_id_in_func, cmp_id_in_func, target_cmp_exec);
         } else {
-          tmp_rel_avg += (float) afl->func_exec_count_table[target_func_id][cmp_func_id]
-            / target_func_exec;
+          tmp_rel_avg += func_score(target_func_id, cmp_func_id, target_func_exec);
         }
       }
 
@@ -1356,12 +1379,11 @@ static void cal_magic_score(afl_state_t * afl, struct tc_graph_entry * cur_close
         u32 cmp_id = close_tc_mining_result[idx1]->new_cmps[idx2];
         u32 cmp_func_id = afl->cmp_func_map[cmp_id];
         if (cmp_func_id == target_func_id) {
+          u32 cmp_id_in_func = cmp_id - target_func_begin_id;
           tmp_rel_avg += 1.0;
-          tmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func_id][target_cmp_id_in_func][cmp_id - target_func_begin_id]
-            / target_cmp_exec;
+          tmp_rel_avg += cmp_func_score(target_func_id, target_cmp_id_in_func, cmp_id_in_func, target_cmp_exec);
         } else {
-          tmp_rel_avg += (float) afl->func_exec_count_table[target_func_id][cmp_func_id]
-            / target_func_exec;
+          tmp_rel_avg += func_score(target_func_id, cmp_func_id, target_func_exec);
         }
       }
 
@@ -1423,12 +1445,11 @@ static void cal_score(afl_state_t * afl, struct tc_graph_entry * cur_close_tc,
         u32 cmp_id = close_tc_mining_result[idx1]->changed_cmps[idx2];
         u32 cmp_func_id = afl->cmp_func_map[cmp_id];
         if (cmp_func_id == target_func_id) {
+          u32 cmp_id_in_func = cmp_id - target_func_begin_id;
           cur_cmp_rel_avg += 1.0;
-          cur_cmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func_id][target_cmp_id_in_func][cmp_id - target_func_begin_id]
-            / target_cmp_exec;
+          cur_cmp_rel_avg += cmp_func_score(target_func_id, target_cmp_id_in_func, cmp_id_in_func, target_cmp_exec);
         } else {
-          cur_cmp_rel_avg += (float) afl->func_exec_count_table[target_func_id][cmp_func_id]
-            / target_func_exec;
+          cur_cmp_rel_avg += func_score(target_func_id, cmp_func_id, target_func_exec);
         }
       }
 
@@ -1443,12 +1464,11 @@ static void cal_score(afl_state_t * afl, struct tc_graph_entry * cur_close_tc,
         u32 cmp_id = close_tc_mining_result[idx1]->abandoned_cmps[idx2];
         u32 cmp_func_id = afl->cmp_func_map[cmp_id];
         if (cmp_func_id == target_func_id) {
+          u32 cmp_id_in_func = cmp_id - target_func_begin_id;
           tmp_rel_avg += 1.0;
-          tmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func_id][target_cmp_id_in_func][cmp_id - target_func_begin_id]
-            / target_cmp_exec;
+          tmp_rel_avg += cmp_func_score(target_func_id, target_cmp_id_in_func, cmp_id_in_func, target_cmp_exec);
         } else {
-          tmp_rel_avg += (float) afl->func_exec_count_table[target_func_id][cmp_func_id]
-            / target_func_exec;
+          tmp_rel_avg += func_score(target_func_id, cmp_func_id, target_func_exec);
         }
       }
 
@@ -1464,12 +1484,11 @@ static void cal_score(afl_state_t * afl, struct tc_graph_entry * cur_close_tc,
         u32 cmp_id = close_tc_mining_result[idx1]->new_cmps[idx2];
         u32 cmp_func_id = afl->cmp_func_map[cmp_id];
         if (cmp_func_id == target_func_id) {
+          u32 cmp_id_in_func = cmp_id - target_func_begin_id;
           tmp_rel_avg += 1.0;
-          tmp_rel_avg += (float) afl->func_cmp_exec_count_table[target_func_id][target_cmp_id_in_func][cmp_id - target_func_begin_id]
-            / target_cmp_exec;
+          tmp_rel_avg += cmp_func_score(target_func_id, target_cmp_id_in_func, cmp_id_in_func, target_cmp_exec);
         } else {
-          tmp_rel_avg += (float) afl->func_exec_count_table[target_func_id][cmp_func_id]
-            / target_func_exec;
+          tmp_rel_avg += func_score(target_func_id, cmp_func_id, target_func_exec);
         }
       }
 

@@ -2161,6 +2161,9 @@ int main(int argc, char **argv_orig, char **envp) {
             }
           }
           afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+          while (afl->cmp_queue_cur && rand_below(afl, 10) && !afl->cmp_queue_cur->value_changing_tcs) {
+            afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+          }
         }
       }
 

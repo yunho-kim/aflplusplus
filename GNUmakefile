@@ -140,6 +140,10 @@ endif
 ifdef DEBUG_FUNC
   CFLAGS += -DDEBUG_FUNC
 endif
+ 
+ifdef FUNC_OLD
+  CFLAGS += -DFUNC_OLD
+endif
 
 override CFLAGS += -g -Wno-pointer-sign -Wno-variadic-macros -Wall -Wextra -Wpointer-arith \
 			  -I include/ -DAFL_PATH=\"$(HELPER_PATH)\" \
