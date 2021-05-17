@@ -2100,7 +2100,8 @@ int main(int argc, char **argv_orig, char **envp) {
           afl->cmp_queue_cur = afl->cmp_queue;
         }
 
-        while (unlikely(afl->cmp_queue_cur->exec_max_reached || (afl->cmp_queue_cur->condition == 3))) {
+        while (afl->cmp_queue_cur
+          && unlikely(afl->cmp_queue_cur->exec_max_reached || (afl->cmp_queue_cur->condition == 3))) {
           afl->cmp_queue_cur = afl->cmp_queue_cur->next;
         }
 
