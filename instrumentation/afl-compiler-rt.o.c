@@ -1242,6 +1242,47 @@ void __func_log_hook(uint32_t cmpid, uint32_t condition) {
   __afl_func_map[cmpid].condition |= condition ? 2 : 1;
 }
 
+ssize_t __read_wrapper(int fd, void * buf, size_t nbytes) {
+  size_t cur_pos = lseek(fd, 0, SEEK_CUR);
+  ssize_t read_bytes = read(fd, buf, nbytes);
+  fprintf(stderr, "fd : %i, offset : %ld~%ld\n", fd, cur_pos, cur_pos + read_bytes);
+  return read_bytes;
+}
+
+ssize_t __pread_wrapper(int fd, void * buf, size_t nbyte, off_t offset) {
+  size_t cur_pos = lseek(fd, 0, SEEK_CUR);
+  ssize_t read_bytes = pread(fd, buf, nbyte, offset);
+  fprintf(stderr, "fd : %i, offset : %ld~%ld\n", fd, cur_pos, cur_pos + read_bytes);
+  return read_bytes;
+}
+
+size_t __fread_wrapper(void *ptr, size_t size, size_t nmemb, FILE * stream) {
+  long cur_pos = ftell(stream);
+  size_t read_bytes = fread(ptr, size, nmemb, stream);
+  fprintf(stderr, "fstream : %p, offset : %lu~%lu\n", stream, cur_pos, cur_pos + (read_bytes * size));
+  return read_bytes;
+}
+
+int __fgetc_wrapper(FILE * stream) {
+  //TODO
+  return fgetc(stream);
+}
+
+char * __fgets_wrapper(char * str, int num, FILE * stream) {
+  //TODO
+  return fgtes(str, num, stream);
+}
+
+int __getc_wrapper(FILE * stream) {
+  //TODO
+  return getc(stream);
+}
+
+char * __gets_wrapper(char * str, int num, FILE * stream) {
+  //TODO
+  return gtes(str, num, stream);
+}
+
 ///// CmpLog instrumentation
 
 void __cmplog_ins_hook1(uint8_t arg1, uint8_t arg2, uint8_t attr) {

@@ -868,6 +868,8 @@ typedef struct afl_state {
 
   u32 * precondition_values;
 
+  
+
 #ifdef INTROSPECTION
   char  mutation[8072];
   char  m_tmp[4096];

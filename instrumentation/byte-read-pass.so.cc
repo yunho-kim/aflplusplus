@@ -54,11 +54,11 @@ using namespace llvm;
 
 namespace {
 
-class FuncLogInstructions : public ModulePass {
+class ReadBytes : public ModulePass {
 
  public:
   static char ID;
-  FuncLogInstructions() : ModulePass(ID) {
+  ReadBytes() : ModulePass(ID) {
 
     initInstrumentList();
 
@@ -84,19 +84,40 @@ class FuncLogInstructions : public ModulePass {
 
 }  // namespace
 
-char FuncLogInstructions::ID = 0;
+char ReadBytes::ID = 0;
 
-bool FuncLogInstructions::hookInstrs(Module &M) {
+bool ReadBytes::hookInstrs(Module &M) {
 
   
   LLVMContext &              C = M.getContext();
 
   Type *       VoidTy = Type::getVoidTy(C);
-  //IntegerType *Int8Ty = IntegerType::getInt8Ty(C);
+  IntegerType *Int8Ty = IntegerType::getInt8Ty(C);
   //IntegerType *Int16Ty = IntegerType::getInt16Ty(C);
+  //PointerType *VoidPtrTy = PointerType::get(VoidTy, 0);
   IntegerType *Int32Ty = IntegerType::getInt32Ty(C);
-  //IntegerType *Int64Ty = IntegerType::getInt64Ty(C);
+  IntegerType *Int64Ty = IntegerType::getInt64Ty(C);
+  PointerType *Int8PtrTy = PointerType::get(Int8Ty, 0);
+  Type *_IO_FILEPtrTy = nullptr;
   
+
+  errs() << "globalist\n";
+  for (auto &GT : M.getGlobalList()) {
+    if (GT.getName().str() == "stderr") {
+      errs() << "found stderr : " << GT << "\n";
+      errs() << *(GT.getType()->getPointerElementType()) << "\n";
+      _IO_FILEPtrTy = GT.getType()->getPointerElementType();
+    }
+  }
+
+  if (_IO_FILEPtrTy == nullptr) {
+    errs() << "Can't find IO_FILE type! Abort.\n";
+    return false;
+  }
+
+  errs() << "ptr type : " << *_IO_FILEPtrTy  << "\n";
+
+
 #if LLVM_VERSION_MAJOR < 9
   Constant *
 #else
@@ -114,6 +135,40 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   FunctionCallee cmplogHookIns = cmplogfunc;
 #endif
 
+#if LLVM_VERSION_MAJOR < 9
+  Constant *
+#else
+  FunctionCallee
+#endif
+      readwrapper = M.getOrInsertFunction("__read_wrapper", Int64Ty, Int32Ty, Int8PtrTy, Int64Ty
+#if LLVM_VERSION_MAJOR < 5
+                                 ,
+                                 NULL
+#endif
+      );
+#if LLVM_VERSION_MAJOR < 9
+  Function *readHookIns = cast<Function>(readwrapper);
+#else
+  FunctionCallee readHookIns = readwrapper;
+#endif
+
+#if LLVM_VERSION_MAJOR < 9
+  Constant *
+#else
+  FunctionCallee
+#endif
+      freadwrapper = M.getOrInsertFunction("__fread_wrapper", Int64Ty, Int8PtrTy, Int64Ty, Int64Ty, _IO_FILEPtrTy
+#if LLVM_VERSION_MAJOR < 5
+                                 ,
+                                 NULL
+#endif
+      );
+#if LLVM_VERSION_MAJOR < 9
+  Function *freadHookIns = cast<Function>(freadwrapper);
+#else
+  FunctionCallee freadHookIns = freadwrapper;
+#endif
+
   unsigned int func_id = 0;
   unsigned int cmp_id = 0;
   
@@ -123,27 +178,48 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
   for (auto &F : M) {
 
+    // print function info
+    AttributeSet X = F.getAttributes().getFnAttributes();
+    fprintf(stderr, "Module %s Function %s attributes %u\n",
+      M.getName().str().c_str(), F.getName().str().c_str(),
+      X.getNumAttributes());
+    
+
     if (!isInInstrumentList(&F)) continue;
 
     std::vector<Instruction *> icomps;
 
     //func << func_id << "," << F.getName().data() << "\n";
 
-    for (auto &BB : F) {
-
+    //insert read probe
+    for (auto &BB: F) {
       for (auto &IN : BB) {
+        CallInst *callInst = nullptr;
 
-        CmpInst *selectcmpInst = nullptr;
-
-        if ((selectcmpInst = dyn_cast<CmpInst>(&IN))) {
-
-          icomps.push_back(selectcmpInst);
-
+        if ((callInst = dyn_cast<CallInst>(&IN))) {
+          Function * calledFunction = nullptr;
+          if ((calledFunction = callInst->getCalledFunction())) {
+            const char * calledFunctionName = calledFunction->getName().str().c_str();
+            if (!strcmp(calledFunctionName, "read")) {
+              callInst->setCalledFunction(readHookIns);
+            } else if (!strcmp(calledFunctionName, "fread")) {
+              callInst->setCalledFunction(freadHookIns);
+            } else if (!strcmp(calledFunctionName, "fgetc")) {
+              errs() << "Warning : TODO!\n";
+            } else if (!strcmp(calledFunctionName, "fgets")) {
+              errs() << "Warning : TODO!\n";
+            } else if (!strcmp(calledFunctionName, "getc")) {
+              errs() << "Warning : TODO!\n";
+            } else if (!strcmp(calledFunctionName, "gets")) {
+              errs() << "Warning : TODO!\n";
+            } else if (!strcmp(calledFunctionName, "pread")) {
+              errs() << "Warning : TODO!\n";
+            }
+          }
         }
-
       }
-
     }
+    
 
     for (auto &selectcmpInst : icomps) {
       Instruction * InsertPoint = selectcmpInst->getNextNode();
@@ -210,16 +286,6 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   }
 
   func.close();
-
-  std::ofstream magic_bytes_file;
-  magic_bytes_file.open("FRIEND_magic_byte_cmps" , std::ofstream::out | std::ofstream::trunc);
-  
-  magic_bytes_file << magic_bytes.size() << "\n";
-  for (auto iter = magic_bytes.begin(); iter != magic_bytes.end(); iter++) {
-    magic_bytes_file << std::get<0>(*iter) << "\n"; // << "," << std::get<1>(*iter) << "," << std::get<2>(*iter) << "\n";
-  }
-
-  magic_bytes_file.close();
 
   errs() << "Hooking " << cmp_id << " cmp instructions (func rel mode)\n";
 
@@ -291,7 +357,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
 }
 
-bool FuncLogInstructions::runOnModule(Module &M) {
+bool ReadBytes::runOnModule(Module &M) {
 
   if (getenv("AFL_QUIET") == NULL)
     llvm::errs()
@@ -305,23 +371,23 @@ bool FuncLogInstructions::runOnModule(Module &M) {
 
 }
 
-static void registerFuncLogInstructionspass(const PassManagerBuilder &,
+static void registerReadBytespass(const PassManagerBuilder &,
                                              legacy::PassManagerBase &PM) {
 
-  PM.add(new FuncLogInstructions());
+  PM.add(new ReadBytes());
 
 }
 
-static RegisterStandardPasses RegisterFuncLogInstructionspass(
+static RegisterStandardPasses RegisterReadBytespass(
     PassManagerBuilder::EP_ModuleOptimizerEarly,
-    registerFuncLogInstructionspass);
+    registerReadBytespass);
 
-static RegisterStandardPasses RegisterFuncLogInstructionspass0(
+static RegisterStandardPasses RegisterReadBytespass0(
     PassManagerBuilder::EP_EnabledOnOptLevel0,
-    registerFuncLogInstructionspass);
+    registerReadBytespass);
 
 #if LLVM_VERSION_MAJOR >= 11
-static RegisterStandardPasses RegisterFuncLogInstructionspassLTO(
+static RegisterStandardPasses RegisterReadBytespassLTO(
     PassManagerBuilder::EP_FullLinkTimeOptimizationLast,
-    registerFuncLogInstructionspass);
+    registerReadBytespass);
 #endif

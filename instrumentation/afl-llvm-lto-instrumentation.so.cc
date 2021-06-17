@@ -227,12 +227,12 @@ bool AFLLTOPass::runOnModule(Module &M) {
 
   for (auto &F : M) {
 
-    /*For debugging
+    //For debugging
     AttributeSet X = F.getAttributes().getFnAttributes();
     fprintf(stderr, "DEBUG: Module %s Function %s attributes %u\n",
       M.getName().str().c_str(), F.getName().str().c_str(),
       X.getNumAttributes());
-    */
+    
 
     if (F.size() < function_minimum_size) continue;
     if (isIgnoreFunction(&F)) continue;

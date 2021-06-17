@@ -2655,7 +2655,7 @@ havoc_stage:
       }
 
     }
-
+    
     if (common_fuzz_stuff(afl, out_buf, temp_len)) { goto abandon_entry; }
 
     /* out_buf might have been mangled a bit, so let's restore it to its
