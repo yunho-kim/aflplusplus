@@ -1965,6 +1965,8 @@ havoc_stage:
 
   if (afl->stage_max < HAVOC_MIN) { afl->stage_max = HAVOC_MIN; }
 
+  afl->stage_max /= 2;
+
   temp_len = len;
 
   orig_hit_cnt = afl->queued_paths + afl->unique_crashes;

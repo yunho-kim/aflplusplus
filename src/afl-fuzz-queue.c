@@ -504,6 +504,7 @@ void destroy_queue(afl_state_t *afl) {
 
     q = afl->queue_buf[i];
     if (q->testcase_buf) free(q->testcase_buf);
+    free(q->children);
     ck_free(q->fname);
     ck_free(q->trace_mini);
     ck_free(q);

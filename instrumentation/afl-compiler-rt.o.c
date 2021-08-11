@@ -114,7 +114,12 @@ int __afl_sharedmem_fuzzing __attribute__((weak));
 
 struct cmp_map *__afl_cmp_map;
 struct cmp_map *__afl_cmp_map_backup;
-struct cmp_func_entry * __afl_func_map;
+static struct cmp_entry * __afl_branch_map;
+static struct cmp_entry2 * __afl_branch_condition;
+static u32 __afl_branch_condition_recorded;
+static s8 * __afl_magic_strings;
+static u32 __afl_magic_strings_idx;
+static u8 __afl_branch_condition_changed;
 
 /* Child pid? */
 
@@ -540,10 +545,40 @@ static void __afl_map_shm(void) {
 
   if(id_str) {
     u32 shm_id = atoi(id_str);
-    __afl_func_map = shmat(shm_id, NULL, 0);
+    __afl_branch_map = shmat(shm_id, NULL, 0);
 
-    if (__afl_func_map == (void *)-1) _exit(1);
+    if (__afl_branch_map == (void *)-1) _exit(1);
   }
+
+  id_str = getenv(AFL_MAGIC_SHM_ENV_VAR1);
+
+  if (getenv("AFL_DEBUG")) {
+    fprintf(stderr, "DEBUG: magid id_str %s\n",
+            id_str == NULL ? "<null>" : id_str);
+  }
+
+  if(id_str) {
+    u32 shm_id = atoi(id_str);
+    __afl_branch_condition = shmat(shm_id, NULL, 0);
+
+    if (__afl_branch_condition == (void *)-1) _exit(1);
+  }
+
+  id_str = getenv(AFL_MAGIC_SHM_ENV_VAR2);
+
+  if (getenv("AFL_DEBUG")) {
+    fprintf(stderr, "DEBUG: magid id_str2 %s\n",
+            id_str == NULL ? "<null>" : id_str);
+  }
+
+  if(id_str) {
+    u32 shm_id = atoi(id_str);
+    __afl_magic_strings = shmat(shm_id, NULL, 0);
+
+    if (__afl_magic_strings == (void *)-1) _exit(1);
+  }
+
+  __afl_branch_condition_changed = false;
 
 }
 
@@ -1231,15 +1266,87 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
 
 }
 
-void __func_log_hook(uint32_t cmpid, uint32_t condition) {
-  if (unlikely(!__afl_func_map)) {
+void __cmp_log_hook(uint32_t cmpid, uint32_t condition, uint32_t value) {
+  if (unlikely(!__afl_branch_map)) {
     fprintf(stderr, "cmpid : %u, condition : %u\n", cmpid, condition);
     return;
   }
 
-  __afl_func_map[cmpid].condition_val = condition;
-  __afl_func_map[cmpid].executed = 1; //mark executed
-  __afl_func_map[cmpid].condition |= condition ? 2 : 1;
+  __afl_branch_map[cmpid].value = condition;
+  __afl_branch_map[cmpid].condition |= condition ? 2 : 1;
+}
+
+void __cmp_log_hook2(uint32_t cmpid, uint32_t condition) {
+  if (!__afl_branch_condition) return;
+  if (__afl_branch_condition_recorded >= CMP_COV_RECORD) return;
+
+  __afl_branch_condition[__afl_branch_condition_recorded].cmp_id = cmpid;
+  __afl_branch_condition[__afl_branch_condition_recorded++].condition = condition ? 2 : 1;
+}
+
+void __magic_bytes_record_8(uint8_t byte) {
+  if (!__afl_branch_condition_changed) return;
+  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 2) return;
+
+  __afl_magic_strings[__afl_magic_strings_idx++] = byte;
+  __afl_magic_strings[__afl_magic_strings_idx++] = 0;
+}
+
+void __magic_bytes_record_16(uint16_t byte) {
+  if (!__afl_branch_condition_changed) return;
+  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 3) return;
+
+  *((uint16_t *)__afl_magic_strings[__afl_magic_strings_idx]) = byte;
+  __afl_magic_strings_idx += 2;
+  __afl_magic_strings[__afl_magic_strings_idx++] = 0;
+}
+
+void __magic_bytes_record_32(uint32_t byte) {
+  if (!__afl_branch_condition_changed) return;
+  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 5) return;
+
+  *((uint32_t *) __afl_magic_strings[__afl_magic_strings_idx]) = byte;
+  __afl_magic_strings_idx += 4;
+  __afl_magic_strings[__afl_magic_strings_idx++] = 0;
+}
+
+void __magic_bytes_record_64(uint64_t byte) {
+  if (!__afl_branch_condition_changed) return;
+  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 9) return;
+
+  *((uint64_t *) __afl_magic_strings[__afl_magic_strings_idx]) = byte;
+  __afl_magic_strings_idx += 8;
+  __afl_magic_strings[__afl_magic_strings_idx++] = 0;
+}
+
+void __magic_bytes_record_128(uint128_t byte) {
+  if (!__afl_branch_condition_changed) return;
+  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 17) return;
+
+  *((uint128_t *) __afl_magic_strings[__afl_magic_strings_idx]) = byte;
+  __afl_magic_strings_idx += 16;
+  __afl_magic_strings[__afl_magic_strings_idx++] = 0;
+}
+
+void __magic_bytes_record_ptr(s8 * bytes) {
+  if (!__afl_branch_condition_changed) return;
+  if (bytes == NULL) return;
+  size_t len = strlen(bytes);
+  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - len - 1) return;
+
+  strncpy(__afl_magic_strings_idx + __afl_magic_strings_idx, bytes, len);
+  __afl_magic_strings_idx += len;
+  __afl_magic_strings[__afl_magic_strings_idx++] = 0;
+}
+
+void __magic_bytes_record_nptr(s8 * bytes, uint32_t len) {
+  if (!__afl_branch_condition_changed) return;
+  if (bytes == NULL) return;
+  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - len - 1) return;
+
+  strncpy(__afl_magic_strings_idx + __afl_magic_strings_idx, bytes, len);
+  __afl_magic_strings_idx += len;
+  __afl_magic_strings[__afl_magic_strings_idx++] = 0;
 }
 
 ssize_t __read_wrapper(int fd, void * buf, size_t nbytes) {
@@ -1261,26 +1368,6 @@ size_t __fread_wrapper(void *ptr, size_t size, size_t nmemb, FILE * stream) {
   size_t read_bytes = fread(ptr, size, nmemb, stream);
   fprintf(stderr, "fstream : %p, offset : %lu~%lu\n", stream, cur_pos, cur_pos + (read_bytes * size));
   return read_bytes;
-}
-
-int __fgetc_wrapper(FILE * stream) {
-  //TODO
-  return fgetc(stream);
-}
-
-char * __fgets_wrapper(char * str, int num, FILE * stream) {
-  //TODO
-  return fgtes(str, num, stream);
-}
-
-int __getc_wrapper(FILE * stream) {
-  //TODO
-  return getc(stream);
-}
-
-char * __gets_wrapper(char * str, int num, FILE * stream) {
-  //TODO
-  return gtes(str, num, stream);
 }
 
 ///// CmpLog instrumentation

@@ -499,49 +499,34 @@
 /* func shm id */
 #define AFL_FUNC_SHM_ENV_VAR "__AFL_FUNC_SHM_ID"
 
-//buffer size
-#define BYTE_CHANGE_RATIO 0.1
-#define BYTE_CHANGE_MIN 256
-#define CUR_BYTES_SIZE 256
-
 //maximum # of children to record
-#define TC_CHILDREN_SIZE 32
-
-//initial size of tc graph
-#define INIT_TC_GRAPH_SIZE 1024
+#define TC_CHILDREN_SIZE 64
 
 //how close tc is related tc?
 #define CLOSE_TC_THRESHOLD 3
 
-//# of bytes to mutate with function relevance
-#define FUZZ_ONE_FUNC_BYTE_SIZE_RATIO 0.05
-
-//size of executing tcs buffer, used in cmp_queue_entry
-#define EXEC_TCS_SIZE 128
-
 //Maximum # of close tcs for each tc, used in tc_graph_entry
-#define CLOSE_TCS_SIZE 512
+#define CLOSE_TCS_SIZE 256
 
 #define HAVOC_STACK_POW2_FUNC 4
 
-#define CMP_CHECK_MAX_EXEC_TC_TRESHOLD 3000
-
-#define CMP_MAX_EXEC_TC_TRESHOLD 0.8
-
-#define TC_ITER_LIMIT 100
-
-#define MINING_LIMIT 100
-
-#define TC_LEN_MIN 512
-
-#define GET_BYTE_TIMEOUT 1000
-
-#define MINING_FRAG_LEN_MIN_POW2 5
-
-#define MINING_MUT_TIME 64
-
 #define CMP_BUF_SIZE 512
 
+#define NUM_CLOSE_TC_TO_USE 32
+
+#define MAX_MINING_TRY 3
+
+#define EXEC_TCS_SIZE 256
+
+#define MINING_LIMIT 10
+
+#define AFL_MAGIC_SHM_ENV_VAR1 "__AFL_MAGIC_SHM_ID1"
+
+#define AFL_MAGIC_SHM_ENV_VAR2 "__AFL_MAGIC_SHM_ID2"
+
+#define CMP_COV_RECORD  1024
+
+#define BYTES_RECORD_LEN 1024
 
 #endif                                                  /* ! _HAVE_CONFIG_H */
 

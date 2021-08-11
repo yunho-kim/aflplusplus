@@ -170,6 +170,7 @@ static char *afl_environment_variables[] = {
     "AFL_EXPAND_HAVOC_NOW",
     "AFL_USE_QASAN",
     "AFL_FUNC",
+    "AFL_BRANCH_COV",
     NULL
 
 };

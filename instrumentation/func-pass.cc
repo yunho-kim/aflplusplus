@@ -92,40 +92,36 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   LLVMContext &              C = M.getContext();
 
   Type *       VoidTy = Type::getVoidTy(C);
-  //IntegerType *Int8Ty = IntegerType::getInt8Ty(C);
-  //IntegerType *Int16Ty = IntegerType::getInt16Ty(C);
+  IntegerType *Int8Ty = IntegerType::getInt8Ty(C);
+  IntegerType *Int16Ty = IntegerType::getInt16Ty(C);
   IntegerType *Int32Ty = IntegerType::getInt32Ty(C);
-  //IntegerType *Int64Ty = IntegerType::getInt64Ty(C);
+  IntegerType *Int64Ty = IntegerType::getInt64Ty(C);
+  IntegerType *Int128Ty = IntegerType::getInt128Ty(C);
+  PointerType * Int8PtrTy = PointerType::get(Int8Ty, 0);
   
-#if LLVM_VERSION_MAJOR < 9
-  Constant *
-#else
-  FunctionCallee
-#endif
-      cmplogfunc = M.getOrInsertFunction("__func_log_hook", VoidTy, Int32Ty, Int32Ty
-#if LLVM_VERSION_MAJOR < 5
-                                 ,
-                                 NULL
-#endif
-      );
-#if LLVM_VERSION_MAJOR < 9
-  Function *cmplogHookIns = cast<Function>(cmplogfunc);
-#else
-  FunctionCallee cmplogHookIns = cmplogfunc;
-#endif
+  FunctionCallee cmplogHookIns = M.getOrInsertFunction("__cmp_log_hook", VoidTy, Int32Ty, Int32Ty, Int32Ty);
+  FunctionCallee cmplogHookIns2 = M.getOrInsertFunction("__cmp_log_hook2", VoidTy, Int32Ty, Int32Ty);
+
+  FunctionCallee magicbytesHook8 = M.getOrInsertFunction("__magic_bytes_record_8", VoidTy, Int8Ty);
+  FunctionCallee magicbytesHook16 = M.getOrInsertFunction("__magic_bytes_record_16", VoidTy, Int16Ty);
+  FunctionCallee magicbytesHook32 = M.getOrInsertFunction("__magic_bytes_record_32", VoidTy, Int32Ty);
+  FunctionCallee magicbytesHook64 = M.getOrInsertFunction("__magic_bytes_record_64", VoidTy, Int64Ty);
+  FunctionCallee magicbytesHook128 = M.getOrInsertFunction("__magic_bytes_record_128", VoidTy, Int128Ty);
+  FunctionCallee magicbytesHookptr = M.getOrInsertFunction("__magic_bytes_record_ptr", VoidTy, Int8PtrTy);
+  FunctionCallee magicbytesHooknptr = M.getOrInsertFunction("__magic_bytes_record_nptr", VoidTy, Int8PtrTy, Int32Ty);
+
 
   unsigned int func_id = 0;
   unsigned int cmp_id = 0;
   
   std::vector<unsigned int> func_cmp;
   std::vector<std::tuple<unsigned int, unsigned, uint64_t>> magic_bytes;
-  
+
+  DenseMap<Value *, std::string *> valueMap;
 
   for (auto &F : M) {
 
     if (!isInInstrumentList(&F)) continue;
-
-    std::vector<Instruction *> icomps;
 
     //func << func_id << "," << F.getName().data() << "\n";
 
@@ -134,66 +130,76 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
       for (auto &IN : BB) {
 
         CmpInst *selectcmpInst = nullptr;
+        CallInst *callInst = nullptr;
 
         if ((selectcmpInst = dyn_cast<CmpInst>(&IN))) {
 
-          icomps.push_back(selectcmpInst);
+          Instruction * InsertPoint = selectcmpInst->getNextNode();
+          if (!InsertPoint || isa<ConstantInt>(selectcmpInst)) {
+            errs() << "Warn: Can't get cmp insert\n";
+            continue;
+          }
+
+          //errs() << "cmp instr : " << *selectcmpInst << "\n";
+
+          IRBuilder<> IRB(InsertPoint);
+
+          //auto op0 = selectcmpInst->getOperand(0);
+          //auto op1 = selectcmpInst->getOperand(1);
+
+          Type::TypeID InstrTypeId = selectcmpInst->getType()->getTypeID();
+
+          //There are some vector cmp instructions...
+          //TODO : divide vector cmps to scalar ones.
+          if (InstrTypeId == Type::TypeID::FixedVectorTyID) {
+            continue;
+          } 
+
+          Value * operand1 = selectcmpInst->getOperand(0);
+          Value * operand2 = selectcmpInst->getOperand(1);
+
+          std::vector<Value *> args;
+          Value * arg1_cmpid = ConstantInt::get(Int32Ty, cmp_id);
+          Value * arg2_condition = IRB.CreateZExt(selectcmpInst, Int32Ty);
+          Value * arg3_value = operand1;
+
+          if ((dyn_cast<Constant> (operand1))) {
+            arg3_value = operand2;
+          }
+
+          if(arg3_value->getType()->getTypeID() != Type::TypeID::IntegerTyID) {
+            arg3_value = ConstantInt::get(Int32Ty, 0);
+          } else if (arg3_value->getType()->getScalarSizeInBits() > 32) {
+            arg3_value = IRB.CreateTrunc(arg3_value, Int32Ty);
+          } else if (arg3_value->getType()->getScalarSizeInBits() < 32) {
+            arg3_value = IRB.CreateZExt(arg3_value, Int32Ty);
+          }
+
+          args.push_back(arg1_cmpid);
+          args.push_back(arg2_condition);
+          args.push_back(arg3_value);
+
+          IRB.CreateCall(cmplogHookIns, args);
+
+          CmpInst * cmpinst = dyn_cast<CmpInst>(selectcmpInst);
+
+          //TODO : float
+          if ((cmpinst->getPredicate() == CmpInst::Predicate::ICMP_EQ) && cmpinst->getNumOperands() == 2) {
+            //Value * op1 = cmpinst->getOperand(0);
+            Value * op2 = cmpinst->getOperand(1);
+            ConstantInt * cop2;
+            if ((cop2 = dyn_cast<ConstantInt>(op2))) {
+              magic_bytes.push_back(std::make_tuple(cmp_id, cop2->getBitWidth() / 8, cop2->getZExtValue()));
+            }
+          }
+
+          cmp_id ++;
 
         }
-
+        
       }
 
     }
-
-    for (auto &selectcmpInst : icomps) {
-      Instruction * InsertPoint = selectcmpInst->getNextNode();
-      if (!InsertPoint || isa<ConstantInt>(selectcmpInst)) {
-        errs() << "Warn: Can't get cmp insert\n";
-        continue;
-      }
-
-      //errs() << "cmp instr : " << *selectcmpInst << "\n";
-
-      IRBuilder<> IRB(InsertPoint);
-
-      //auto op0 = selectcmpInst->getOperand(0);
-      //auto op1 = selectcmpInst->getOperand(1);
-
-      Type::TypeID InstrTypeId = selectcmpInst->getType()->getTypeID();
-
-      //There are some vector cmp instructions...
-      //TODO : divide vector cmps to scalar ones.
-      if (InstrTypeId == Type::TypeID::FixedVectorTyID) {
-        continue;
-      } 
-
-      std::vector<Value *> args;
-      auto arg1_cmpid = ConstantInt::get(Int32Ty, cmp_id);
-      auto arg2_condition = IRB.CreateZExt(selectcmpInst, Int32Ty);
-      //auto arg3_func_id = ConstantInt::get(Int32Ty, func_id);
-
-      args.push_back(arg1_cmpid);
-      args.push_back(arg2_condition);
-      //args.push_back(arg3_func_id);
-
-      IRB.CreateCall(cmplogHookIns, args);
-
-      CmpInst * cmpinst = dyn_cast<CmpInst>(selectcmpInst);
-
-      //TODO : float
-      if ((cmpinst->getPredicate() == CmpInst::Predicate::ICMP_EQ) && cmpinst->getNumOperands() == 2) {
-        //Value * op1 = cmpinst->getOperand(0);
-        Value * op2 = cmpinst->getOperand(1);
-        ConstantInt * cop2;
-        if ((cop2 = dyn_cast<ConstantInt>(op2))) {
-          magic_bytes.push_back(std::make_tuple(cmp_id, cop2->getBitWidth() / 8, cop2->getZExtValue()));
-        }
-      }
-
-      cmp_id ++;
-    }
-
-    if (icomps.size() == 0) continue;
 
     func_cmp.push_back(cmp_id);
 

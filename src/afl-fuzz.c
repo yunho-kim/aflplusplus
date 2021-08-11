@@ -2100,60 +2100,36 @@ int main(int argc, char **argv_orig, char **envp) {
           afl->cmp_queue_cur = afl->cmp_queue;
         }
 
-        while (afl->cmp_queue_cur
-          && unlikely(afl->cmp_queue_cur->exec_max_reached || (afl->cmp_queue_cur->condition == 3))) {
+        while (afl->cmp_queue_cur && (afl->cmp_queue_cur->num_value_changing_tcs == 0)) {
           afl->cmp_queue_cur = afl->cmp_queue_cur->next;
         }
 
         if (likely(afl->cmp_queue_cur)) {
           struct cmp_queue_entry * cq_cur = afl->cmp_queue_cur; 
-          if (cq_cur->is_magic_bytes && cq_cur->value_changing_tcs) {
-            u32 tc_idx = cq_cur->value_changing_tcs[cq_cur->value_changing_tc_idx++];
-            if (unlikely(cq_cur->value_changing_tc_idx >= cq_cur->num_value_changing_tcs)) {
-              cq_cur->value_changing_tc_idx = 0;
-            }
-            cq_cur->tc = afl->queue_buf[tc_idx];
-          } else {
-            //ITERATE through tcs
-            u32 num_tcs = cq_cur->num_executing_tcs;
+          //ITERATE through tcs
+          u32 num_tcs = cq_cur->num_value_changing_tcs;
 
-            if (unlikely(num_tcs == 0)) {
-              afl->cmp_queue_cur = cq_cur->next;
-              continue;
-            }
+          fprintf(afl->debug_file, "cmp_queue_cur : %u, num_tcs : %u\n", cq_cur->id, num_tcs);
 
-            if (unlikely(!cq_cur->num_fuzzed)) {
-              cq_cur->mutating_tc_idx = rand_below(afl, num_tcs);
-            }
-
-            u32 idx = 0;
-            u32 tc_idx;
-            do {
-              tc_idx = cq_cur->executing_tcs[cq_cur->mutating_tc_idx++];
-              if (unlikely(cq_cur->mutating_tc_idx >= num_tcs))
-                cq_cur->mutating_tc_idx = 0;
-              idx ++;
-            } while(((tc_idx >= afl->tc_graph_size) ||
-              (!afl->tc_graph[tc_idx]->initialized)) && (idx < TC_ITER_LIMIT)
-            );
-
-            if(idx == TC_ITER_LIMIT) { 
-              cq_cur->num_skipped++;
-              afl->cmp_queue_cur = cq_cur->next;
-              continue;
-            }
-
-            cq_cur->tc = afl->queue_buf[tc_idx];
-            //assert(afl->tc_graph[tc_idx].initialized);
+          if (unlikely(!cq_cur->num_fuzzed)) {
+            cq_cur->mutating_tc_idx = rand_below(afl, num_tcs);
           }
+
+          u32 tc_idx = cq_cur->value_changing_tcs[cq_cur->mutating_tc_idx++];
+          if (unlikely(cq_cur->mutating_tc_idx >= num_tcs))
+            cq_cur->mutating_tc_idx = 0;
+
+          u32 tmp = afl->current_entry;
+
+          afl->current_entry = tc_idx;
+          afl->queue_cur = afl->queue_buf[tc_idx];
           
           fuzz_one_func(afl);
 
           cq_cur->num_fuzzed++;
 
           while (afl->cmp_queue_cur->next != NULL) {
-            if ((afl->cmp_queue_cur->next->condition == 3) ||
-                afl->cmp_queue_cur->next->exec_max_reached) {
+            if (afl->cmp_queue_cur->next->condition == 3) {
               //remove target
               afl->cmp_queue_cur->next = afl->cmp_queue_cur->next->next;
               afl->cmp_queue_size--;
@@ -2162,12 +2138,21 @@ int main(int argc, char **argv_orig, char **envp) {
             }
           }
           afl->cmp_queue_cur = afl->cmp_queue_cur->next;
-          while (afl->cmp_queue_cur && rand_below(afl, 10) && !afl->cmp_queue_cur->value_changing_tcs) {
-            afl->cmp_queue_cur = afl->cmp_queue_cur->next;
-          }
+
+          afl->current_entry = tmp;
+          afl->queue_cur = afl->queue_buf[tmp];
         }
       }
     } while (skipped_fuzz && afl->queue_cur && !afl->stop_soon);
+
+    u32 idx = 0;
+    while (((afl->mining_done_idx + 1) < afl->queued_paths) && idx < MINING_LIMIT) {
+      if (afl->queue_buf[afl->mining_done_idx]->is_mined < MAX_MINING_TRY)
+        mining_wrapper(afl, afl->mining_done_idx);
+      afl->mining_done_idx++;
+      idx++;
+      if (afl->stop_soon) {break;}
+   }
 
     if (likely(!afl->stop_soon && afl->sync_id)) {
 
@@ -2203,26 +2188,6 @@ int main(int argc, char **argv_orig, char **envp) {
       }
 
     }
-
-    //mining
-    
-    afl->stage_name = "mining";
-    afl->stage_short = "mining";
-
-    u32 tmp_stage_cur = afl->fsrv.total_execs;
-    u32 tmp_hit = afl->queued_paths + afl->unique_crashes;
-    u32 idx = 0;
-    while (((afl->mining_done_idx + 1) < afl->queued_paths) && idx < MINING_LIMIT) {
-      afl->stage_cur = afl->mining_done_idx;
-      afl->stage_max = afl->queued_paths;
-      //mining_wrapper(afl);
-      show_stats(afl);
-      if (afl->stop_soon) {break;}
-      idx++;
-    }
-
-    afl->stage_finds[STAGE_MINING] += afl->queued_paths + afl->unique_crashes - tmp_hit;
-    afl->stage_cycles[STAGE_MINING] += afl->fsrv.total_execs - tmp_stage_cur;
 
   }
 

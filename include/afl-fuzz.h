@@ -155,8 +155,16 @@ struct tainted {
 struct queue_entry {
 
   u8 *fname;                            /* File name for the test case      */
+  u32 * children;
+  u32 num_children;
+  u32 children_size;
+  u32 mining_frag_len;
+  u32 num_mining_frag;
+
   u32 len;                              /* Input length                     */
   u32 id;                               /* entry number in queue_buf        */
+  u32 parent_id;
+  u32 is_mined;
 
   u8 colorized,                         /* Do not run redqueen stage again  */
       cal_failed;                       /* Calibration failed?              */
@@ -216,11 +224,11 @@ struct auto_extra_data {
 
 struct cmp_queue_entry {
   struct cmp_queue_entry * next;
-  struct queue_entry * tc;
-  u32 * executing_tcs;
+  struct cmp_queue_entry * prev;
+  //u32 * executing_tcs;
   u32 * value_changing_tcs;
-  u32 num_executing_tcs;
-  u32 executing_tcs_size;
+  //u32 num_executing_tcs;
+  //u32 executing_tcs_size;
   u32 num_value_changing_tcs;
   u32 value_changing_tcs_size;
   u32 mutating_tc_idx;
@@ -229,37 +237,21 @@ struct cmp_queue_entry {
   u32 num_skipped;
   u32 id;
   //2 bits, MSB : true, LSB : false,  true | false covered
-  u8 condition : 3;
-  u8 has_been_fuzzed : 1;
-  u8 exec_max_reached : 1;
-  u8 is_magic_bytes : 1;
+  u8 condition;
+  u8 has_been_fuzzed;
+  //u8 exec_max_reached : 1;
+  //u8 is_magic_bytes : 1;
 };
 
 struct byte_cmp_set {
-  u32 * changed_cmps;
+  //u32 * changed_cmps;
   u32 * changed_val_cmps;
-  u32 * abandoned_cmps;
-  u32 * new_cmps;
-  u32 num_changed_cmps;
+  //u32 * abandoned_cmps;
+  //u32 * new_cmps;
+  //u32 num_changed_cmps;
   u32 num_changed_val_cmps;
-  u32 num_abandoned_cmps;
-  u32 num_new_cmps;
-  u8  timeout;
-};
-
-struct tc_graph_entry {
-  //At most 2 parents (splicing)
-  u32 parents[2];
-  //change children allocation
-  u32 * children;
-  u32 num_children;
-  u32 children_size;
-  u32 mining_frag_len;
-  u32 mining_frag_offset;
-  u32 num_mining_set;
-
-  u8  num_parents;
-  u8  initialized : 2;
+  //u32 num_abandoned_cmps;
+  //u32 num_new_cmps;
 };
 
 struct func_cmp_info {
@@ -816,16 +808,11 @@ typedef struct afl_state {
   u8 * func_list;
 
   //cmp queue alloc location
-  struct cmp_queue_entry ** cmp_queue_entries_ptr;
+  struct cmp_queue_entry ** cmp_queue_buf;
 
   //cmp queue head, tail, cur entry
   struct cmp_queue_entry * cmp_queue, *cmp_queue_top, *cmp_queue_cur;
   u32 cmp_queue_size;
-
-  u32 func_cur_num_bytes;
-
-  u8 get_func_info : 1;
-  u8 is_spliced : 1;
 
   //cmpid (index) -> funcid
   u32 * cmp_func_map;
@@ -844,31 +831,24 @@ typedef struct afl_state {
   //Total number of covered branches respect to cmp instructions
   u32 covered_branch;
 
-  //# of new path with spliced input
-  u32 num_new_path_spliced;
-
-  struct tc_graph_entry ** tc_graph;
-  u32 tc_graph_size;
-
-  u32 * fuzz_one_func_byte_offsets;
-  u32 fuzz_one_func_byte_offsets_size;
-
   u64 tc_len_sum;
 
-  u32 mining_done_idx;
-
   char * func_infos_dir;
-  float * byte_scores;
-  u32 byte_score_size;
-
-  float score_threshold;
-  float magic_score_threshold;
-
-  u32 ** synced_tcs;
-
-  u32 * precondition_values;
-
   
+  u32 * pre_value;
+  u8 * is_changed;
+
+  float * frag_score;
+  float * num_frag_score_sum;
+  u32 frag_score_size;
+  u32 * frag_buf;
+
+  u32 * mutated_frag_idx;
+
+  u32 * close_tcs;
+
+  u32 num_mined;
+  u32 mining_done_idx;
 
 #ifdef INTROSPECTION
   char  mutation[8072];
@@ -879,7 +859,6 @@ typedef struct afl_state {
 
 //Debug
   FILE * debug_file;
-  u32 fr_idx;
 
 } afl_state_t;
 
@@ -1267,12 +1246,7 @@ void fuzz_one_func(afl_state_t *);
 void destroy_func(afl_state_t *);
 void init_trim_and_func(afl_state_t *);
 void update_tc_graph_and_branch_cov(afl_state_t *, u32, u32, u8 *, u32);
-void mining_bytes(afl_state_t *, u8 *, u32, u32);
-void mining_wrapper(afl_state_t *);
-void mining_serialize(afl_state_t *, struct byte_cmp_set **, u32, u32);
-struct byte_cmp_set ** mining_deserialize(afl_state_t *, u32);
-void mining_deserialize_free(struct byte_cmp_set **, u32);
-void func_common_fuzz_stuff(afl_state_t *, u8 *, u32, u32);
+void mining_wrapper(afl_state_t *, u32);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len);

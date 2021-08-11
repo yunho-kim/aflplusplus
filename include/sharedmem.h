@@ -55,7 +55,7 @@ typedef struct sharedmem {
   int             shmemfuzz_mode;
   struct cmp_map *cmp_map;
 
-  struct cmp_func_entry *func_map;
+  struct cmp_entry *branch_map;
 
 } sharedmem_t;
 

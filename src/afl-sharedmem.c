@@ -148,7 +148,7 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
   shm->map = NULL;
   shm->cmp_map = NULL;
-  shm->func_map = NULL;
+  shm->branch_map = NULL;
 
 #ifdef USEMMAP
 
@@ -263,7 +263,7 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
   if (num_cmp) {
     u32 func_shm_size;
     {
-      struct cmp_func_entry tmp[num_cmp];
+      struct cmp_entry tmp[num_cmp];
       func_shm_size = sizeof(tmp);
     }
 
@@ -342,8 +342,8 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
   }
 
   if (num_cmp) {
-    shm->func_map = shmat(shm->func_shm_id, NULL, 0);
-    if (shm->func_map == (void *) -1 || !shm->func_map) {
+    shm->branch_map = shmat(shm->func_shm_id, NULL, 0);
+    if (shm->branch_map == (void *) -1 || !shm->branch_map) {
       shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
       if (shm->cmplog_mode) {
         shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
