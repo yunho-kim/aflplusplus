@@ -1965,7 +1965,7 @@ havoc_stage:
 
   if (afl->stage_max < HAVOC_MIN) { afl->stage_max = HAVOC_MIN; }
 
-  afl->stage_max /= 2;
+  afl->stage_max /= 4;
 
   temp_len = len;
 

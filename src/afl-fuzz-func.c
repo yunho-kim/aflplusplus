@@ -199,7 +199,7 @@ void mining_wrapper(afl_state_t * afl, u32 tc_id) {
 
   if (q->disabled) {
     afl->current_entry = tmp;
-    afl->queue_cur = afl->queue_buf[tc_id];
+    afl->queue_cur = afl->queue_buf[tmp];
     return;
   }
 
@@ -544,7 +544,7 @@ static void mining_bytes(afl_state_t *afl, u8 * out_buf, u32 len) {
 
   diff_us = get_cur_time_us() - start_us;
 
-  u32 num_mining_exec = 1000000 / diff_us;
+  u32 num_mining_exec = 100000 / diff_us;
 
   if (num_mining_exec < 1) {
     WARNF("give up mining hits input");
@@ -588,13 +588,10 @@ do {                                      \
 
   memset(is_changed_cmp, 0, sizeof(u8) * afl->num_cmp);
 
-  afl->stage_max = len;
-
-  fprintf(afl->debug_file, "mining %u, frag_len : %u, len : %u, num_repeat : %u\n", afl->current_entry, frag_len, len, num_repeat);
+  afl->stage_max = len / frag_len;
+  afl->stage_cur = 0;
 
   for (cur_offset = 0; cur_offset < len; cur_offset += cur_len) {
-
-    afl->stage_cur = cur_offset;
 
     if (unlikely(cur_offset + cur_len > len)) {
       cur_len = len - cur_offset;
@@ -887,13 +884,9 @@ do {                                      \
         entries[idx3].condition = 0;
       }
 
-      fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
-
-      //mining_result[mining_idx] = (struct byte_cmp_set *) calloc(1, sizeof(struct byte_cmp_set));
-      
+      fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);      
 
       if (fault == FSRV_RUN_TMOUT) {
-        //penalty
         memcpy(out_buf2 + cur_offset, out_buf + cur_offset, cur_len);
         continue;
       }
@@ -929,7 +922,12 @@ do {                                      \
 
     cur_offset += cur_len;
     mining_idx++;
+    afl->stage_cur++;
+
+    if (afl->stop_soon) { break; }
   }
+
+  if (afl->stop_soon) { return; }
 
   for (idx1 = 0; idx1 < afl->num_cmp; idx1++) {
     if (is_changed_cmp[idx1]) {
@@ -1147,14 +1145,12 @@ void write_func_stats (afl_state_t * afl) {
 void fuzz_one_func (afl_state_t *afl) {
 
   u32 len, temp_len;
-  u32 idx1, idx2;
+  u32 idx1, idx2, idx3;
   u8 *out_buf, *orig_in;
   u64 havoc_queued = 0, orig_hit_cnt, new_hit_cnt;
   u32 perf_score = 100;
 
   struct cmp_queue_entry * cq = afl->cmp_queue_cur;
-
-  
 
   struct queue_entry * cur_tc = afl->queue_cur;
   u32 cur_tc_id = afl->current_entry;
@@ -1169,12 +1165,6 @@ void fuzz_one_func (afl_state_t *afl) {
   memcpy(out_buf, orig_in, len);
 
   perf_score = calculate_score(afl, cur_tc);
-
-  afl->stage_name = "havoc_func";
-  afl->stage_short = "havoc_func";
-  afl->stage_max = HAVOC_CYCLES * perf_score / afl->havoc_div / 100;
-
-  if (afl->stage_max < HAVOC_MIN) { afl->stage_max = HAVOC_MIN; }
 
   u32 target_cmp_id = cq->id;
 
@@ -1262,18 +1252,18 @@ void fuzz_one_func (afl_state_t *afl) {
       cur_num_frag = mined_entry->num_mining_frag;
     }
 
-    for (idx1 = 0; idx1 < cur_num_frag; idx1++) {
-      u32 num_cmp = mining_result[idx1]->num_changed_val_cmps;
-      for (idx2 = 0; idx2 < num_cmp; idx2++) {
-        u32 val_changed_cmp_id = mining_result[idx1]->changed_val_cmps[idx2];
+    for (idx2 = 0; idx2 < cur_num_frag; idx2++) {
+      u32 num_cmp = mining_result[idx2]->num_changed_val_cmps;
+      for (idx3 = 0; idx3 < num_cmp; idx3++) {
+        u32 val_changed_cmp_id = mining_result[idx2]->changed_val_cmps[idx3];
         u32 val_changed_cmp_func_id = cmp_func_map[val_changed_cmp_id];
         float common_exec_count = (float) target_func_exec_count[val_changed_cmp_func_id];
 
         float rel = common_exec_count * common_exec_count / target_func_exec
           / ((float) func_exec_count_table[val_changed_cmp_func_id][val_changed_cmp_func_id]);
         
-        frag_score[idx1] += rel;
-        num_frag_score_sum[idx1] += 1.0;
+        frag_score[idx2] += rel;
+        num_frag_score_sum[idx2] += 1.0;
       }
     }
 
@@ -1282,6 +1272,14 @@ void fuzz_one_func (afl_state_t *afl) {
 
   orig_hit_cnt = afl->queued_paths + afl->unique_crashes;
   havoc_queued = afl->queued_paths;
+
+  afl->stage_name = "havoc_func";
+  afl->stage_short = "havoc_func";
+  afl->stage_max = HAVOC_CYCLES * perf_score / afl->havoc_div / 100;
+
+  if (afl->stage_max < HAVOC_MIN) { afl->stage_max = HAVOC_MIN; }
+
+  afl->stage_max /= 2;
 
   float min_score = FLT_MAX;
   float max_score = FLT_MIN;
