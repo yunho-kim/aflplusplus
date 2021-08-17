@@ -1534,7 +1534,15 @@ int main(int argc, char **argv_orig, char **envp) {
 
         }
 
-        detect_file_args(argv + optind + 1, afl->fsrv.out_file,
+        afl->fsrv.argv_file = alloc_printf("%s/.argv", afl->tmp_dir);
+
+        // tmp
+        {
+          s32 fd = open(afl->fsrv.out_file, O_WRONLY | O_CREAT | O_EXCL, 0600);
+          ck_write(fd, "@@", 2, afl->fsrv.out_file);
+        }
+
+        detect_file_args(argv + optind + 1, afl->fsrv.argv_file,
                          &afl->fsrv.use_stdin);
         break;
 

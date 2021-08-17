@@ -117,7 +117,7 @@ struct cmp_map *__afl_cmp_map_backup;
 static struct cmp_entry * __afl_branch_map;
 static struct cmp_entry2 * __afl_branch_condition;
 static u32 __afl_branch_condition_recorded;
-static s8 * __afl_magic_strings;
+static u8 * __afl_magic_strings;
 static u32 __afl_magic_strings_idx;
 static u8 __afl_branch_condition_changed;
 
@@ -1274,9 +1274,7 @@ void __cmp_log_hook(uint32_t cmpid, uint32_t condition, uint32_t value) {
 
   __afl_branch_map[cmpid].value = condition;
   __afl_branch_map[cmpid].condition |= condition ? 2 : 1;
-}
 
-void __cmp_log_hook2(uint32_t cmpid, uint32_t condition) {
   if (!__afl_branch_condition) return;
   if (__afl_branch_condition_recorded >= CMP_COV_RECORD) return;
 
@@ -1296,7 +1294,7 @@ void __magic_bytes_record_16(uint16_t byte) {
   if (!__afl_branch_condition_changed) return;
   if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 3) return;
 
-  *((uint16_t *)__afl_magic_strings[__afl_magic_strings_idx]) = byte;
+  *((uint16_t *)(__afl_magic_strings + __afl_magic_strings_idx)) = byte;
   __afl_magic_strings_idx += 2;
   __afl_magic_strings[__afl_magic_strings_idx++] = 0;
 }
@@ -1305,7 +1303,7 @@ void __magic_bytes_record_32(uint32_t byte) {
   if (!__afl_branch_condition_changed) return;
   if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 5) return;
 
-  *((uint32_t *) __afl_magic_strings[__afl_magic_strings_idx]) = byte;
+  *((uint32_t *) (__afl_magic_strings + __afl_magic_strings_idx)) = byte;
   __afl_magic_strings_idx += 4;
   __afl_magic_strings[__afl_magic_strings_idx++] = 0;
 }
@@ -1314,7 +1312,7 @@ void __magic_bytes_record_64(uint64_t byte) {
   if (!__afl_branch_condition_changed) return;
   if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 9) return;
 
-  *((uint64_t *) __afl_magic_strings[__afl_magic_strings_idx]) = byte;
+  *((uint64_t *) (__afl_magic_strings + __afl_magic_strings_idx)) = byte;
   __afl_magic_strings_idx += 8;
   __afl_magic_strings[__afl_magic_strings_idx++] = 0;
 }
@@ -1323,7 +1321,7 @@ void __magic_bytes_record_128(uint128_t byte) {
   if (!__afl_branch_condition_changed) return;
   if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 17) return;
 
-  *((uint128_t *) __afl_magic_strings[__afl_magic_strings_idx]) = byte;
+  *((uint128_t *) (__afl_magic_strings + __afl_magic_strings_idx)) = byte;
   __afl_magic_strings_idx += 16;
   __afl_magic_strings[__afl_magic_strings_idx++] = 0;
 }
@@ -1334,7 +1332,7 @@ void __magic_bytes_record_ptr(s8 * bytes) {
   size_t len = strlen(bytes);
   if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - len - 1) return;
 
-  strncpy(__afl_magic_strings_idx + __afl_magic_strings_idx, bytes, len);
+  strncpy(__afl_magic_strings + __afl_magic_strings_idx, bytes, len);
   __afl_magic_strings_idx += len;
   __afl_magic_strings[__afl_magic_strings_idx++] = 0;
 }
@@ -1344,7 +1342,7 @@ void __magic_bytes_record_nptr(s8 * bytes, uint32_t len) {
   if (bytes == NULL) return;
   if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - len - 1) return;
 
-  strncpy(__afl_magic_strings_idx + __afl_magic_strings_idx, bytes, len);
+  strncpy(__afl_magic_strings + __afl_magic_strings_idx, bytes, len);
   __afl_magic_strings_idx += len;
   __afl_magic_strings[__afl_magic_strings_idx++] = 0;
 }
@@ -1921,3 +1919,52 @@ void __afl_coverage_interesting(u8 val, u32 id) {
 
 }
 
+void __afl_parse_argv(int* argc, char ***argv) {
+  if (*argc < 2) {
+    perror("Argc & Argv canno be less than 2.");
+    return;
+  }
+
+  FILE *raw = fopen((*argv)[1], "rb");
+  if (raw == NULL) {
+    perror("Cannot open file argv[1]");
+    return;
+  }
+
+  const int MAXB = 2048;
+  s8 * buffer = (s8 *) malloc(sizeof(s8) * MAXB); //not going to be freed...
+  u32 i = 0;
+  
+  size_t read_bytes = fread(buffer, sizeof(s8), 2048, raw);
+  fclose(raw);
+
+  int new_argc = 1;
+
+  for (i = 0; i < read_bytes; i++) {
+    if (buffer[i] == '\0') {
+      new_argc++;
+    }
+  }
+
+  char ** new_argv = (char **) malloc(sizeof(char *) * (new_argc));
+  new_argv[0] = (*argv)[0];
+  u8 is_argv_idx = 1;
+  u32 argv_idx = 1;
+
+  for (i = 0; i < read_bytes; i++) {
+    if (is_argv_idx) {
+      new_argv[argv_idx++] = buffer + i;
+      is_argv_idx = 0;
+    } else if (buffer[i] == '\0') {
+      is_argv_idx = 1;
+    }
+  }
+
+  printf("Your argc: %d\n", new_argc);
+  for (int i = 0; i < new_argc; i++) {
+    printf("Your argv %d: #%s#\n", i, new_argv[i]);
+  }
+  *argc = new_argc;
+  *argv = new_argv;
+  return;
+}
