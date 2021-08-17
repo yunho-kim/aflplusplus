@@ -1921,13 +1921,13 @@ void __afl_coverage_interesting(u8 val, u32 id) {
 
 void __afl_parse_argv(int* argc, char ***argv) {
   if (*argc < 2) {
-    perror("Argc & Argv canno be less than 2.");
+    fprintf(stderr, "Argc & Argv canno be less than 2.");
     return;
   }
 
   FILE *raw = fopen((*argv)[1], "rb");
   if (raw == NULL) {
-    perror("Cannot open file argv[1]");
+    fprintf(stderr, "Cannot open file argv[1]");
     return;
   }
 
@@ -1960,9 +1960,9 @@ void __afl_parse_argv(int* argc, char ***argv) {
     }
   }
 
-  printf("Your argc: %d\n", new_argc);
+  fprintf(stderr, "Your argc: %d\n", new_argc);
   for (int i = 0; i < new_argc; i++) {
-    printf("Your argv %d: #%s#\n", i, new_argv[i]);
+    fprintf(stderr, "Your argv %d: #%s#\n", i, new_argv[i]);
   }
   *argc = new_argc;
   *argv = new_argv;

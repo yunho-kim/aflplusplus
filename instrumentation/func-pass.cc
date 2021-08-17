@@ -131,21 +131,27 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
     if (F.getName().equals(StringRef("main"))) {
       BasicBlock & entryblock = F.getEntryBlock();
-      auto instruction_iter = entryblock.begin();
-      //instruction_iter --;
-      IRBuilder<> IRB(&(*instruction_iter));
+      IRBuilder<> IRB(&(*entryblock.begin()));
       Value * argc = F.getArg(0);
       Value * argv = F.getArg(1);
       AllocaInst * argc_ptr = IRB.CreateAlloca(Int32Ty);
       AllocaInst * argv_ptr = IRB.CreateAlloca(Int8PtrPtrTy);
-      IRB.CreateStore(argc, argc_ptr);
-      IRB.CreateStore(argv, argv_ptr);
 
       std::vector<Value *> args;
       args.push_back(argc_ptr);
       args.push_back(argv_ptr);
 
-      IRB.CreateCall(argvHook, args);
+      CallInst * argv_call = IRB.CreateCall(argvHook, args);
+      Value * new_argc = IRB.CreateLoad(argc_ptr);
+      Value * new_argv = IRB.CreateLoad(argv_ptr);
+
+      argc->replaceAllUsesWith(new_argc);
+      argv->replaceAllUsesWith(new_argv);
+
+      IRB.SetInsertPoint(argv_call);
+
+      IRB.CreateStore(argc, argc_ptr);
+      IRB.CreateStore(argv, argv_ptr);
     }
 
     for (auto &BB : F) {
