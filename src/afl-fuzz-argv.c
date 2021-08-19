@@ -8,6 +8,7 @@ void init_argv(afl_state_t * afl) {
   FILE * f;
   u32 idx1;
 
+  afl->argvs_hash = (struct argv_word_entry ***) calloc(1024 , sizeof(struct argv_word_entry **));
   afl->argvs_buf = (struct argv_word_entry ***) calloc(1024 , sizeof(struct argv_word_entry **));
   afl->argvs_buf_size = 1024;
 
@@ -54,6 +55,7 @@ void init_argv(afl_state_t * afl) {
     }
 
     afl->argv_words_bufs[0][afl->num_argv_word_buf_words[0]++] = tmp_entry;
+    afl->num_argv_words ++;
 
     if (unlikely(afl->num_argv_word_buf_words[0] >= afl->argv_words_buf_size[0])) {
       afl->argv_words_buf_size[0] *= 2;
@@ -85,10 +87,11 @@ void destroy_argv(afl_state_t * afl) {
 
   free(afl->tmp_words);
   free(afl->argv_words);
+  free(afl->argvs_hash);
 }
 
 void argv_random_fuzz(afl_state_t * afl) {
-  PFATAL("TODO ");
+  PFATAL("TODO %p", afl);
 }
 
 void fuzz_one_argv(afl_state_t * afl) {
@@ -96,14 +99,12 @@ void fuzz_one_argv(afl_state_t * afl) {
   u32 idx1, idx2;
   u8 *orig_in;
   u64 orig_hit_cnt, new_hit_cnt;
-  u32 perf_score = 100;
 
   struct queue_entry * cur_tc = afl->queue_cur;
 
   len = (u32) cur_tc->len;
 
   orig_in = queue_testcase_get(afl, cur_tc);
-  perf_score = calculate_score(afl, cur_tc);
 
   *afl->shm.record_branch_map = 1;
 
@@ -130,27 +131,35 @@ void fuzz_one_argv(afl_state_t * afl) {
 
   afl->stage_name = "argv";
   afl->stage_short = "argv";
-  afl->stage_max = HAVOC_CYCLES * perf_score / afl->havoc_div / 100;
-
-  if (afl->stage_max < HAVOC_MIN) { afl->stage_max = HAVOC_MIN; }
-  afl->stage_max /= 4;
+  afl->stage_max /= 2;
 
   u32 num_args = 0;
 
   struct argv_word_entry * prev = NULL;
   struct argv_word_entry * head = orig_args[0];
-
   struct argv_word_entry ** tmps = afl->tmp_words;
   
   while (orig_args[num_args]) {
-    orig_args[num_args]->tmp_next = prev;
+    orig_args[num_args]->tmp_prev = prev;
     if (prev != NULL) {
       prev->tmp_next = orig_args[num_args];
     }
+    prev = orig_args[num_args];
     num_args++;
   }
 
   afl->num_tmp_words = 0;
+
+  struct argv_word_entry * ptr = head;
+  u32 tmp_idx = 0;
+  while (ptr) {
+    tmp_idx ++;
+    if (ptr->tmp_next) {
+      assert(ptr->tmp_next->tmp_prev == ptr);
+    }
+    ptr = ptr->tmp_next;
+  }
+  assert(num_args == tmp_idx);
 
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     
@@ -161,8 +170,10 @@ void fuzz_one_argv(afl_state_t * afl) {
     struct argv_word_entry * ptr;
     u32 rand_idx;
 
+    u32 method = 0;
+
     for (idx1 = 0; idx1 < use_stacking1; idx1++) {
-      switch (rand_below(afl, 10)) {
+      switch (method = rand_below(afl, 10)) {
         case 0-2 :  //Add <-word>
           if (unlikely(afl->num_argv_word_buf_words[0] == 0)) break;
 
@@ -201,14 +212,18 @@ void fuzz_one_argv(afl_state_t * afl) {
               ptr = ptr->tmp_next;
             }
             ptr->tmp_prev->tmp_next = rand_word;
-            ptr->tmp_next->tmp_prev = rand_word;
             rand_word->tmp_prev = ptr->tmp_prev;
             rand_word->tmp_next = ptr->tmp_next;
+            if (ptr->tmp_next) {
+              ptr->tmp_next->tmp_prev = rand_word;
+            }
             ptr->tmp_prev = NULL;
             ptr->tmp_next = NULL;
           } else {
             rand_word->tmp_next = head->tmp_next;
-            rand_word->tmp_next->tmp_prev = rand_word;
+            if (rand_word->tmp_next) {
+              rand_word->tmp_next->tmp_prev = rand_word;
+            }
             head->tmp_next = NULL;
             head = rand_word;
           }
@@ -254,14 +269,18 @@ void fuzz_one_argv(afl_state_t * afl) {
               ptr = ptr->tmp_next;
             }
             ptr->tmp_prev->tmp_next = rand_word;
-            ptr->tmp_next->tmp_prev = rand_word;
             rand_word->tmp_prev = ptr->tmp_prev;
             rand_word->tmp_next = ptr->tmp_next;
+            if (ptr->tmp_next) {
+              ptr->tmp_next->tmp_prev = rand_word;
+            }
             ptr->tmp_prev = NULL;
             ptr->tmp_next = NULL;
           } else {
             rand_word->tmp_next = head->tmp_next;
-            rand_word->tmp_next->tmp_prev = rand_word;
+            if (rand_word->tmp_next) {
+              rand_word->tmp_next->tmp_prev = rand_word;
+            }
             head->tmp_next = NULL;
             head = rand_word;
           }
@@ -278,11 +297,11 @@ void fuzz_one_argv(afl_state_t * afl) {
           u32 word0_len = strlen(rand_word0->word);
           u32 word1_len = strlen(rand_word1->word);
 
-          struct argv_word_entry * new_tmp_word = calloc(1, sizeof(struct argv_word_entry *));
-          new_tmp_word->word = malloc(sizeof(word0_len + word1_len + 2));
+          struct argv_word_entry * new_tmp_word = calloc(1, sizeof(struct argv_word_entry));
+          new_tmp_word->word = malloc(sizeof(s8) * (word0_len + word1_len + 2));
           memcpy(new_tmp_word->word, rand_word0->word, word0_len);
           new_tmp_word->word[word0_len] = '=';
-          memcpy(new_tmp_word + word0_len + 1, rand_word1->word, word1_len);
+          memcpy(new_tmp_word->word + word0_len + 1, rand_word1->word, word1_len);
           new_tmp_word->word[word0_len + word1_len + 1] = 0;
           new_tmp_word->is_tmp = 1;
 
@@ -320,11 +339,11 @@ void fuzz_one_argv(afl_state_t * afl) {
           word0_len = strlen(rand_word0->word);
           word1_len = strlen(rand_word1->word);
 
-          new_tmp_word = calloc(1, sizeof(struct argv_word_entry *));
-          new_tmp_word->word = malloc(sizeof(word0_len + word1_len + 2));
+          new_tmp_word = calloc(1, sizeof(struct argv_word_entry));
+          new_tmp_word->word = malloc(sizeof (s8) * (word0_len + word1_len + 2));
           memcpy(new_tmp_word->word, rand_word0->word, word0_len);
           new_tmp_word->word[word0_len] = '=';
-          memcpy(new_tmp_word + word0_len + 1, rand_word1->word, word1_len);
+          memcpy(new_tmp_word->word + word0_len + 1, rand_word1->word, word1_len);
           new_tmp_word->word[word0_len + word1_len + 1] = 0;
           new_tmp_word->is_tmp = 1;
 
@@ -338,14 +357,18 @@ void fuzz_one_argv(afl_state_t * afl) {
               ptr = ptr->tmp_next;
             }
             ptr->tmp_prev->tmp_next = new_tmp_word;
-            ptr->tmp_next->tmp_prev = new_tmp_word;
             new_tmp_word->tmp_prev = ptr->tmp_prev;
             new_tmp_word->tmp_next = ptr->tmp_next;
+            if (ptr->tmp_next) {
+              ptr->tmp_next->tmp_prev = new_tmp_word;
+            }
             ptr->tmp_prev = NULL;
             ptr->tmp_next = NULL;
           } else {
             new_tmp_word->tmp_next = head->tmp_next;
-            new_tmp_word->tmp_next->tmp_prev = new_tmp_word;
+            if (new_tmp_word->tmp_next) {
+              new_tmp_word->tmp_next->tmp_prev = new_tmp_word;
+            }
             head->tmp_next = NULL;
             head = new_tmp_word;
           }
@@ -353,7 +376,7 @@ void fuzz_one_argv(afl_state_t * afl) {
           break;
 
         case 9 :  //Delete any one word
-          if(unlikely(num_args <= 0)) break;
+          if(unlikely(num_args <= 1)) break;
 
           rand_idx = rand_below(afl, num_args); 
           
@@ -378,6 +401,17 @@ void fuzz_one_argv(afl_state_t * afl) {
           num_args --;
           break;
       }
+
+      ptr = head;
+      u32 tmp_idx = 0;
+      while (ptr) {
+        tmp_idx ++;
+        if (ptr->tmp_next) {
+          assert(ptr->tmp_next->tmp_prev == ptr);
+        }
+        ptr = ptr->tmp_next;
+      }
+      assert(num_args == tmp_idx);
     } // end of for (idx1 = 0; idx1 < use_stacking1; idx1++) {
 
     //execute
@@ -431,7 +465,7 @@ void fuzz_one_argv(afl_state_t * afl) {
       // would there be <-word>=<word> case?
 
       bool exists = false;
-      struct argv_word_entry * hash_ptr = afl->argv_words_bufs[word_buf_idx][hash];
+      struct argv_word_entry * hash_ptr = afl->argv_words[hash];
       if (hash_ptr) {
         ptr = hash_ptr;
         while(ptr) {
@@ -454,10 +488,10 @@ void fuzz_one_argv(afl_state_t * afl) {
           }
           ptr->next = new_entry;
         } else {
-          afl->argv_words_bufs[word_buf_idx][hash] = new_entry;
+          afl->argv_words[hash] = new_entry;
         }
 
-        afl->num_argv_word_buf_words[word_buf_idx] ++;
+        afl->argv_words_bufs[word_buf_idx][afl->num_argv_word_buf_words[word_buf_idx] ++] = new_entry;
         afl->num_argv_words++;
 
         if (unlikely(afl->num_argv_word_buf_words[word_buf_idx] >= afl->argv_words_buf_size[word_buf_idx])) {
@@ -478,6 +512,15 @@ void fuzz_one_argv(afl_state_t * afl) {
   }
 
   *afl->shm.check_branch_map = 0;
+
+  ptr = head;
+  while(ptr) {
+    ptr->tmp_prev = NULL;
+    ptr = ptr->tmp_next;
+    if (ptr) {
+      ptr->tmp_prev->tmp_next = NULL;
+    }
+  }
 
   new_hit_cnt = afl->queued_paths + afl->unique_crashes - orig_hit_cnt;
 

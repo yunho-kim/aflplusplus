@@ -857,8 +857,8 @@ void show_stats(afl_state_t *afl) {
   sprintf(tmp, "%u/%u (%.1f%%)", afl->covered_branch, 
     afl->num_cmp * 2,  (double) afl->covered_branch * 100.0 / afl->num_cmp / 2.0);
 
-  SAYF(bV bSTOP "      num mined : " cRST "%-16u " bSTG  bV, afl->num_mined);
-  SAYF(bSTOP "  cmp queue size : " cRST "%-20d " bSTG  bV "\n", afl->cmp_queue_size);
+  SAYF(bV bSTOP "     num mined : " cRST "%-18u " bSTG  bV, afl->num_mined);
+  SAYF(bSTOP " cmp queue size : " cRST "%-22d " bSTG  bV "\n", afl->cmp_queue_size);
   
   if (afl->cmp_queue_cur != NULL) 
     SAYF(bV bSTOP " cur target cmp : " cRST "%-17u" bSTG  bV,
@@ -869,9 +869,11 @@ void show_stats(afl_state_t *afl) {
 
   sprintf(tmp, "%s/%u (%s)",  u_stringify_int(IB(0), afl->tc_len_sum), afl->queued_paths,
       u_stringify_float(IB(1), (float) afl->tc_len_sum / afl->queued_paths));
-
   SAYF(bV bSTOP "   Avg. tc len :  " cRST "%-18s" bSTG bV, tmp);  
-  SAYF(bSTOP "                                       " bSTG bV "\n");
+
+  sprintf(tmp, "%u/%u", afl->num_argv_words, afl->num_argvs);
+  SAYF(bSTOP " # of argv words/argvs : " cRST "%-18s " bSTG bV "\n", tmp);
+  //SAYF(bSTOP "                                       " bSTG bV "\n");
 
   /* Aaaalmost there... hold on! */
 

@@ -1631,28 +1631,37 @@ int main(int argc, char **argv_orig, char **envp) {
       word_hash = word_hash % 1024;
 
       struct argv_word_entry * cur_argv_word_entry = malloc(sizeof(struct argv_word_entry));
-      if (afl->argv_words_bufs[word_buf_idx][word_hash]) {
-        struct argv_word_entry * ptr = afl->argv_words_bufs[word_buf_idx][word_hash];
+      if (afl->argv_words[word_hash]) {
+        struct argv_word_entry * ptr = afl->argv_words[word_hash];
         while(ptr->next) {
           ptr = ptr->next;
         }
         ptr->next = cur_argv_word_entry;
       } else {
-        afl->argv_words_bufs[word_buf_idx][word_hash] = cur_argv_word_entry;
+        afl->argv_words[word_hash] = cur_argv_word_entry;
       }
       cur_argv_word_entry->next = NULL;
       cur_argv_word_entry->tmp_next = NULL;
       cur_argv_word_entry->tmp_prev = NULL;
       cur_argv_word_entry->is_tmp = 0;
-      afl->num_argv_word_buf_words[0]++;
+
+      afl->argv_words_bufs[word_buf_idx][afl->num_argv_word_buf_words[word_buf_idx]++] = cur_argv_word_entry;
+      afl->num_argv_words ++;
 
       cur_argv_word_entry->word = (s8 *) malloc(sizeof(s8) * (len + 1));
       memcpy(cur_argv_word_entry->word, use_argv[idx1], len);
       cur_argv_word_entry->word[len] = '\0';
 
       cur_argv_entry[idx1] = cur_argv_word_entry;
+
+      if (strstr(use_argv[idx1], "cur_input")) {
+        afl->input_file_arg = cur_argv_word_entry;
+      }
+
       idx1++;
     }
+
+    cur_argv_entry[idx1] = NULL;
 
     afl->argvs_buf[0] = cur_argv_entry;
 

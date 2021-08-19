@@ -866,6 +866,7 @@ typedef struct afl_state {
   u32   bitsmap_size;
 #endif
 
+  struct argv_word_entry *** argvs_hash;
   struct argv_word_entry *** argvs_buf;
   u32 num_argvs;
   u32 argvs_buf_size;
@@ -879,6 +880,8 @@ typedef struct afl_state {
 
   struct argv_word_entry ** tmp_words;
   u32 num_tmp_words;
+
+  struct argv_word_entry * input_file_arg;
 
 //Debug
   FILE * debug_file;

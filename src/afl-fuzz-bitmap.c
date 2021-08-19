@@ -507,11 +507,12 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
         //initial seed, will be handled in main.
         argv_idx = 0;
       } else {
+        
         //new argv from fuzz_one_argv
         argv_idx = afl->num_argvs;
         afl->num_argvs++;
 
-        if (unlikely(afl->argvs_buf_size >= afl->num_argvs)) {
+        if (unlikely(afl->argvs_buf_size <= afl->num_argvs)) {
           afl->argvs_buf_size *= 2;
           afl->argvs_buf = realloc(afl->argvs_buf, sizeof(struct argv_entry *) * afl->argvs_buf_size);
         }
@@ -539,7 +540,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
             hash = hash % 1024;
 
             bool exists = false;
-            struct argv_word_entry * hash_ptr = afl->argv_words_bufs[2][hash];
+            struct argv_word_entry * hash_ptr = afl->argv_words[hash];
             struct argv_word_entry * ptr2;
             if (hash_ptr) {
               ptr2 = hash_ptr;
@@ -560,10 +561,10 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
                 }
                 ptr2->next = ptr;
               } else {
-                afl->argv_words_bufs[2][hash] = ptr;
+                afl->argv_words[hash] = ptr;
               }
 
-              afl->num_argv_word_buf_words[2] ++;
+              afl->argv_words_bufs[2][afl->num_argv_word_buf_words[2] ++] = ptr;
               afl->num_argv_words++;
 
               if (unlikely(afl->num_argv_word_buf_words[2] >= afl->argv_words_buf_size[2])) {
@@ -582,6 +583,8 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
 
           ptr = ptr->next;
         }
+
+        new_argv_entry[num_argv_words] = NULL;
 
         afl->argvs_buf[argv_idx] = new_argv_entry;
       }
