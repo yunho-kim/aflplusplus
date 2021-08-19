@@ -120,6 +120,8 @@ static u32 __afl_branch_condition_recorded;
 static u8 * __afl_magic_strings;
 static u32 __afl_magic_strings_idx;
 static u8 __afl_branch_condition_changed;
+static u8 * __afl_record_branch;
+static u8 * __afl_check_branch;
 
 /* Child pid? */
 
@@ -576,6 +578,34 @@ static void __afl_map_shm(void) {
     __afl_magic_strings = shmat(shm_id, NULL, 0);
 
     if (__afl_magic_strings == (void *)-1) _exit(1);
+  }
+
+  id_str = getenv(AFL_RECORD_BRANCH);
+
+  if (getenv("AFL_DEBUG")) {
+    fprintf(stderr, "DEBUG: magid id_str2 %s\n",
+            id_str == NULL ? "<null>" : id_str);
+  }
+
+  if(id_str) {
+    u32 shm_id = atoi(id_str);
+    __afl_record_branch = shmat(shm_id, NULL, 0);
+
+    if (__afl_record_branch == (void *)-1) _exit(1);
+  }
+
+  id_str = getenv(AFL_CHECK_BRANCH);
+
+  if (getenv("AFL_DEBUG")) {
+    fprintf(stderr, "DEBUG: magid id_str2 %s\n",
+            id_str == NULL ? "<null>" : id_str);
+  }
+
+  if(id_str) {
+    u32 shm_id = atoi(id_str);
+    __afl_check_branch = shmat(shm_id, NULL, 0);
+
+    if (__afl_check_branch == (void *)-1) _exit(1);
   }
 
   __afl_branch_condition_changed = false;
@@ -1266,6 +1296,21 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
 
 }
 
+void __cmp_cond_record_hook(uint32_t cmpid, uint32_t condition) {
+  if (!*__afl_record_branch || !__afl_branch_condition) {
+    return;
+  }
+
+  __afl_branch_condition[__afl_branch_condition_recorded].cmp_id = cmpid;
+  __afl_branch_condition[__afl_branch_condition_recorded].condition = condition ? 2 : 1; 
+
+  __afl_branch_condition_recorded++;
+
+  if (__afl_branch_condition_recorded >= CMP_COV_RECORD) {
+    exit(0);
+  }
+}
+
 void __cmp_log_hook(uint32_t cmpid, uint32_t condition, uint32_t value) {
   if (unlikely(!__afl_branch_map)) {
     fprintf(stderr, "cmpid : %u, condition : %u\n", cmpid, condition);
@@ -1273,26 +1318,33 @@ void __cmp_log_hook(uint32_t cmpid, uint32_t condition, uint32_t value) {
   }
 
   __afl_branch_map[cmpid].value = condition;
-  __afl_branch_map[cmpid].condition |= condition ? 2 : 1;
+  u8 cond = condition ? 2 : 1;
+  __afl_branch_map[cmpid].condition |= cond;
 
-  if (!__afl_branch_condition) return;
-  if (__afl_branch_condition_recorded >= CMP_COV_RECORD) return;
+  if (!*__afl_check_branch || __afl_branch_condition_changed ||
+    !__afl_branch_condition ||
+    (__afl_branch_condition_recorded >= CMP_COV_RECORD)) return;
 
-  __afl_branch_condition[__afl_branch_condition_recorded].cmp_id = cmpid;
-  __afl_branch_condition[__afl_branch_condition_recorded++].condition = condition ? 2 : 1;
+  if (__afl_branch_condition[__afl_branch_condition_recorded].cmp_id != cmpid ||
+    __afl_branch_condition[__afl_branch_condition_recorded].condition != cond
+  ) {
+    __afl_branch_condition_changed = true;
+  }
+
+  __afl_branch_condition_recorded++;
 }
 
 void __magic_bytes_record_8(uint8_t byte) {
-  if (!__afl_branch_condition_changed) return;
-  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 2) return;
+  if (__afl_branch_condition_changed || !__afl_magic_strings ||
+    (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 2)) return;
 
   __afl_magic_strings[__afl_magic_strings_idx++] = byte;
   __afl_magic_strings[__afl_magic_strings_idx++] = 0;
 }
 
 void __magic_bytes_record_16(uint16_t byte) {
-  if (!__afl_branch_condition_changed) return;
-  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 3) return;
+  if (__afl_branch_condition_changed || !__afl_magic_strings ||
+    (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 3)) return;
 
   *((uint16_t *)(__afl_magic_strings + __afl_magic_strings_idx)) = byte;
   __afl_magic_strings_idx += 2;
@@ -1300,8 +1352,8 @@ void __magic_bytes_record_16(uint16_t byte) {
 }
 
 void __magic_bytes_record_32(uint32_t byte) {
-  if (!__afl_branch_condition_changed) return;
-  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 5) return;
+  if (__afl_branch_condition_changed || !__afl_magic_strings ||
+     (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 5)) return;
 
   *((uint32_t *) (__afl_magic_strings + __afl_magic_strings_idx)) = byte;
   __afl_magic_strings_idx += 4;
@@ -1309,8 +1361,8 @@ void __magic_bytes_record_32(uint32_t byte) {
 }
 
 void __magic_bytes_record_64(uint64_t byte) {
-  if (!__afl_branch_condition_changed) return;
-  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 9) return;
+  if (__afl_branch_condition_changed || !__afl_magic_strings ||
+    (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 9)) return;
 
   *((uint64_t *) (__afl_magic_strings + __afl_magic_strings_idx)) = byte;
   __afl_magic_strings_idx += 8;
@@ -1318,8 +1370,8 @@ void __magic_bytes_record_64(uint64_t byte) {
 }
 
 void __magic_bytes_record_128(uint128_t byte) {
-  if (!__afl_branch_condition_changed) return;
-  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 17) return;
+  if (__afl_branch_condition_changed || !__afl_magic_strings ||
+    (__afl_magic_strings_idx >= BYTES_RECORD_LEN - 17)) return;
 
   *((uint128_t *) (__afl_magic_strings + __afl_magic_strings_idx)) = byte;
   __afl_magic_strings_idx += 16;
@@ -1327,8 +1379,9 @@ void __magic_bytes_record_128(uint128_t byte) {
 }
 
 void __magic_bytes_record_ptr(s8 * bytes) {
-  if (!__afl_branch_condition_changed) return;
-  if (bytes == NULL) return;
+  if (__afl_branch_condition_changed || !__afl_magic_strings ||
+    (bytes == NULL)) return;
+
   size_t len = strlen(bytes);
   if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - len - 1) return;
 
@@ -1338,9 +1391,8 @@ void __magic_bytes_record_ptr(s8 * bytes) {
 }
 
 void __magic_bytes_record_nptr(s8 * bytes, uint32_t len) {
-  if (!__afl_branch_condition_changed) return;
-  if (bytes == NULL) return;
-  if (__afl_magic_strings_idx >= BYTES_RECORD_LEN - len - 1) return;
+  if (__afl_branch_condition_changed || !__afl_magic_strings ||
+    (bytes == NULL) || (__afl_magic_strings_idx >= BYTES_RECORD_LEN - len - 1)) return;
 
   strncpy(__afl_magic_strings + __afl_magic_strings_idx, bytes, len);
   __afl_magic_strings_idx += len;
@@ -1920,14 +1972,17 @@ void __afl_coverage_interesting(u8 val, u32 id) {
 }
 
 void __afl_parse_argv(int* argc, char ***argv) {
+
+  fprintf(stderr, "__afl_record_branch : %u, __afl_check_branch : %u\n", *__afl_record_branch, *__afl_check_branch);
+
   if (*argc < 2) {
-    fprintf(stderr, "Argc & Argv canno be less than 2.");
+    fprintf(stderr, "Argc & Argv canno be less than 2.\n");
     return;
   }
 
   FILE *raw = fopen((*argv)[1], "rb");
   if (raw == NULL) {
-    fprintf(stderr, "Cannot open file argv[1]");
+    fprintf(stderr, "Can not open file argv[1]\n");
     return;
   }
 
@@ -1938,7 +1993,7 @@ void __afl_parse_argv(int* argc, char ***argv) {
   size_t read_bytes = fread(buffer, sizeof(s8), 2048, raw);
   fclose(raw);
 
-  int new_argc = 1;
+  int new_argc = 0;
 
   for (i = 0; i < read_bytes; i++) {
     if (buffer[i] == '\0') {
@@ -1946,10 +2001,9 @@ void __afl_parse_argv(int* argc, char ***argv) {
     }
   }
 
-  char ** new_argv = (char **) malloc(sizeof(char *) * (new_argc));
-  new_argv[0] = (*argv)[0];
+  char ** new_argv = (char **) malloc(sizeof(char *) * (new_argc + 1));
   u8 is_argv_idx = 1;
-  u32 argv_idx = 1;
+  u32 argv_idx = 0;
 
   for (i = 0; i < read_bytes; i++) {
     if (is_argv_idx) {
@@ -1960,6 +2014,8 @@ void __afl_parse_argv(int* argc, char ***argv) {
     }
   }
 
+  new_argv[new_argc] = 0;
+
   fprintf(stderr, "Your argc: %d\n", new_argc);
   for (int i = 0; i < new_argc; i++) {
     fprintf(stderr, "Your argv %d: #%s#\n", i, new_argv[i]);
@@ -1967,4 +2023,25 @@ void __afl_parse_argv(int* argc, char ***argv) {
   *argc = new_argc;
   *argv = new_argv;
   return;
+}
+
+FILE * __afl_fopen_wrapper(const char * pathname, const char * mode) {
+  if (strchr(mode, 'w') || strchr(mode, 'a')) {
+    return fopen("/dev/null", mode);
+  }
+  return fopen(pathname, mode);
+}
+
+FILE * __afl_freopen_wrapper(const char * pathname, const char * mode, FILE * stream) {
+  if (strchr(mode, 'w') || strchr(mode, 'a')) {
+    return freopen("/dev/null", mode, stream);
+  }
+  return freopen(pathname, mode, stream);
+}
+
+int __afl_open_wrapper(const char *pathname, int flags, mode_t mode) {
+  if (flags & (O_WRONLY|O_RDWR)) {
+    return open("/dev/null", flags, mode);
+  }
+  return open(pathname, flags, mode);
 }

@@ -101,6 +101,19 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   PointerType * Int8PtrPtrTy = PointerType::get(Int8PtrTy, 0);
   PointerType * Int8PtrPtrPtrTy = PointerType::get(Int8PtrPtrTy, 0);
   PointerType * Int32PtrTy = PointerType::get(Int32Ty, 0);
+
+  Type * FileTy = NULL;
+  for (auto &GT : M.getGlobalList()) {
+    if (GT.getName().str() == "stderr") {
+      FileTy = GT.getType()->getPointerElementType();
+    }
+  }
+
+  if (FileTy == nullptr) {
+    errs() << "Can't find IO_FILE type! Abort.\n";
+    return false;
+  }
+
   
   FunctionCallee cmplogHookIns = M.getOrInsertFunction("__cmp_log_hook", VoidTy, Int32Ty, Int32Ty, Int32Ty);
 
@@ -111,7 +124,14 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   //FunctionCallee magicbytesHook128 = M.getOrInsertFunction("__magic_bytes_record_128", VoidTy, Int128Ty);
   FunctionCallee magicbytesHookptr = M.getOrInsertFunction("__magic_bytes_record_ptr", VoidTy, Int8PtrTy);
   FunctionCallee magicbytesHooknptr = M.getOrInsertFunction("__magic_bytes_record_nptr", VoidTy, Int8PtrTy, Int32Ty);
+  
   FunctionCallee argvHook = M.getOrInsertFunction("__afl_parse_argv", VoidTy, Int32PtrTy, Int8PtrPtrPtrTy);
+  
+  FunctionCallee condRecordHook = M.getOrInsertFunction("__cmp_cond_record_hook", VoidTy, Int32Ty, Int32Ty);
+
+  FunctionCallee fopen_wrapperHook = M.getOrInsertFunction("__afl_fopen_wrapper", FileTy, Int8PtrTy, Int8PtrTy);
+  FunctionCallee freopen_wrapperHook = M.getOrInsertFunction("__afl_freopen_wrapper", FileTy, Int8PtrTy, Int8PtrTy, FileTy);
+  FunctionCallee open_wrapperHook = M.getOrInsertFunction("__afl_fopen_wrapper", Int32Ty, Int8PtrTy, Int32Ty, Int32Ty);
 
   unsigned int func_id = 0;
   unsigned int cmp_id = 0;
@@ -119,6 +139,10 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   std::vector<unsigned int> func_cmp;
 
   DenseMap<Value *, std::string *> valueMap;
+
+  char argv_mut = 0;
+
+  if (getenv("AFL_ARGV") != NULL) argv_mut = 1;
 
   std::ofstream func2;
   func2.open("FRIEND_getopt_info" , std::ofstream::out | std::ofstream::trunc);
@@ -129,7 +153,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
     //func << func_id << "," << F.getName().data() << "\n";
 
-    if (F.getName().equals(StringRef("main"))) {
+    if (argv_mut && F.getName().equals(StringRef("main"))) {
       BasicBlock & entryblock = F.getEntryBlock();
       IRBuilder<> IRB(&(*entryblock.begin()));
       Value * argc = F.getArg(0);
@@ -206,12 +230,15 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
           args.push_back(arg1_cmpid);
           args.push_back(arg2_condition);
+
+          IRB.CreateCall(condRecordHook, args);
+          
           args.push_back(arg3_value);
 
           IRB.CreateCall(cmplogHookIns, args);
 
           //TODO : float
-          if ((cmpInst->getPredicate() == CmpInst::Predicate::ICMP_EQ) && cmpInst->getNumOperands() == 2) {
+          if (argv_mut && (cmpInst->getPredicate() == CmpInst::Predicate::ICMP_EQ) && cmpInst->getNumOperands() == 2) {
             Value * op1 = cmpInst->getOperand(0);
             Value * op2 = cmpInst->getOperand(1);
             ConstantInt * cop = dyn_cast<ConstantInt>(op1);
@@ -244,13 +271,13 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
                 default:
                   errs() << "Warn : unkonwn length constant\n";
                   break;
-              }              
+              }
             }
           }
 
           cmp_id ++;
 
-        } else if ((callInst = dyn_cast<CallInst>(&IN))) {
+        } else if (argv_mut && (callInst = dyn_cast<CallInst>(&IN))) {
           bool isStrcmp = true;
           bool isMemcmp = true;
           bool isStrncmp = true;
@@ -259,6 +286,9 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
           bool isIntMemcpy = true;
           bool isGetOpt = true;
           bool isGetOptLong = true;
+          bool isfopen = true;
+          bool isfreopen = true;
+          bool isopen = true;
 
           Function *Callee = callInst->getCalledFunction();
           if (!Callee) continue;
@@ -271,11 +301,14 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
           isStrcasecmp &= !FuncName.compare(StringRef("strcasecmp"));
           isStrncasecmp &= !FuncName.compare(StringRef("strncasecmp"));
           isIntMemcpy &= !FuncName.compare("llvm.memcpy.p0i8.p0i8.i64");
-          isGetOpt &= !FuncName.compare("getopt");
-          isGetOptLong &= !FuncName.compare("getopt_long");
+          isGetOpt &= !FuncName.compare(StringRef("getopt"));
+          isGetOptLong &= !FuncName.compare(StringRef("getopt_long"));
+          isfopen &= !FuncName.compare(StringRef("fopen"));
+          isfreopen &= !FuncName.compare(StringRef("freopen"));
+          isopen &= !FuncName.compare(StringRef("open"));
 
           if (!isStrcmp && !isMemcmp && !isStrncmp && !isStrcasecmp &&
-              !isStrncasecmp && !isIntMemcpy && !isGetOpt && !isGetOptLong)
+              !isStrncasecmp && !isIntMemcpy && !isGetOpt && !isGetOptLong && !isfopen && !isfreopen && !isopen)
             continue;
 
           /* Verify the strcmp/memcmp/strncmp/strcasecmp/strncasecmp function
@@ -320,9 +353,24 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
                           FT->getParamType(2)->isPointerTy() &&
                           FT->getParamType(3)->isPointerTy() &&
                           FT->getParamType(4)->isPointerTy();
+          isfopen &= FT->getNumParams() == 2 &&
+                     FT->getReturnType()->isPointerTy() &&
+                     FT->getParamType(0)->isPointerTy() &&
+                     FT->getParamType(1)->isPointerTy();
+          
+          isfreopen &= FT->getNumParams() == 3 &&
+                       FT->getReturnType()->isPointerTy() &&
+                       FT->getParamType(0)->isPointerTy() &&
+                       FT->getParamType(1)->isPointerTy() &&
+                       FT->getParamType(2)->isPointerTy();
+          isopen &= FT->getNumParams() == 3 &&
+                    FT->getReturnType()->isIntegerTy(32) &&
+                    FT->getParamType(0)->isPointerTy() &&
+                    FT->getParamType(1)->isIntegerTy(32) &&
+                    FT->getParamType(2)->isIntegerTy(32);
 
           if (!isStrcmp && !isMemcmp && !isStrncmp && !isStrcasecmp &&
-              !isStrncasecmp && !isIntMemcpy && !isGetOptLong)
+              !isStrncasecmp && !isIntMemcpy && !isGetOptLong && !isfopen && !isfreopen && !isopen)
             continue;
 
           
@@ -342,7 +390,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
                 case '+':
                   continue;
                 default:
-                  func2 << *iter << "\n";
+                  func2 << "-" << *iter << "\n";
               }
             }
 
@@ -362,6 +410,17 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
               }
             }
 
+            continue;
+          }
+
+          if (isfopen) {
+            callInst->setCalledFunction(fopen_wrapperHook);
+            continue;
+          } else if (isfreopen) {
+            callInst->setCalledFunction(freopen_wrapperHook);
+            continue;
+          } else if (isopen) {
+            callInst->setCalledFunction(open_wrapperHook);
             continue;
           }
 
@@ -631,6 +690,8 @@ bool FuncLogInstructions::runOnModule(Module &M) {
         << "Running func-log-pass\n";
   else
     be_quiet = 1;
+
+  
   hookInstrs(M);
   verifyModule(M);
 

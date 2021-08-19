@@ -592,11 +592,11 @@ void read_foreign_testcases(afl_state_t *afl, int first) {
 
         }
 
-        write_to_testcase(afl, mem, st.st_size);
+        write_to_testcase(afl, mem, st.st_size, (u32) -1);
         fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
         afl->syncing_party = foreign_name;
         afl->queued_imported +=
-            save_if_interesting(afl, mem, st.st_size, fault, (u32) -1, (u32) -1);
+            save_if_interesting(afl, mem, st.st_size, fault, (u32) -1, (u32) -1, NULL, (u32) -1);
         afl->syncing_party = 0;
         munmap(mem, st.st_size);
         close(fd);
@@ -740,7 +740,7 @@ void read_testcases(afl_state_t *afl, u8 *directory) {
     if (!access(dfn, F_OK)) { passed_det = 1; }
 
     add_to_queue(afl, fn2, st.st_size >= MAX_FILE ? MAX_FILE : st.st_size,
-                 passed_det);
+                 passed_det, 0);
 
     if (unlikely(afl->shm.cmplog_mode)) {
 
@@ -1056,7 +1056,7 @@ void perform_dry_run(afl_state_t *afl) {
 
       case FSRV_RUN_ERROR:
 
-        FATAL("Unable to execute target application ('%s')", afl->argv[0]);
+        FATAL("Unable to execute target application ('%s')", afl->init_argv[0]);
 
       case FSRV_RUN_NOINST:
         FATAL("No instrumentation detected");
@@ -1817,7 +1817,12 @@ static void handle_existing_out_dir(afl_state_t *afl) {
   fn = alloc_printf("%s/FRIEND/scores.csv", afl->out_dir);
   if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
   ck_free(fn);
+  
   fn = alloc_printf("%s/FRIEND/cmp_exec_table.csv", afl->out_dir);
+  if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
+  fn = alloc_printf("%s/FRIEND/argvs", afl->out_dir);
   if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
   ck_free(fn);
 
@@ -1832,6 +1837,7 @@ static void handle_existing_out_dir(afl_state_t *afl) {
   fn = alloc_printf("%s/tc_graph", afl->out_dir);
   if (delete_files(fn, CASE_PREFIX)) {  goto dir_cleanup_failed; }
   ck_free(fn);
+  
 
   OKF("Output dir cleanup successful.");
 

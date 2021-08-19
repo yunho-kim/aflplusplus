@@ -1000,33 +1000,12 @@ void show_stats(afl_state_t *afl) {
 
   SAYF(bV bSTOP " havoc_func  : " cRST "%-36s " bSTG bV "\n", tmp);
 
-  if (afl->shm.cmplog_mode) {
+  sprintf(tmp, "%s/%s",
+            u_stringify_int(IB(0), afl->stage_finds[STAGE_ARGV]),
+            u_stringify_int(IB(1), afl->stage_cycles[STAGE_ARGV]));
 
-    sprintf(tmp, "%s/%s, %s/%s, %s/%s, %s/%s",
-            u_stringify_int(IB(0), afl->stage_finds[STAGE_PYTHON]),
-            u_stringify_int(IB(1), afl->stage_cycles[STAGE_PYTHON]),
-            u_stringify_int(IB(2), afl->stage_finds[STAGE_CUSTOM_MUTATOR]),
-            u_stringify_int(IB(3), afl->stage_cycles[STAGE_CUSTOM_MUTATOR]),
-            u_stringify_int(IB(4), afl->stage_finds[STAGE_COLORIZATION]),
-            u_stringify_int(IB(5), afl->stage_cycles[STAGE_COLORIZATION]),
-            u_stringify_int(IB(6), afl->stage_finds[STAGE_ITS]),
-            u_stringify_int(IB(7), afl->stage_cycles[STAGE_ITS]));
-
-    SAYF(bV bSTOP "   custom/rq : " cRST "%-36s " bSTG bVR bH20 bH2 bH bRB "\n",
+    SAYF(bV bSTOP "        argv : " cRST "%-36s " bSTG bVR bH20 bH2 bH bRB "\n",
          tmp);
-
-  } else {
-
-    sprintf(tmp, "%s/%s, %s/%s",
-            u_stringify_int(IB(0), afl->stage_finds[STAGE_PYTHON]),
-            u_stringify_int(IB(1), afl->stage_cycles[STAGE_PYTHON]),
-            u_stringify_int(IB(2), afl->stage_finds[STAGE_CUSTOM_MUTATOR]),
-            u_stringify_int(IB(3), afl->stage_cycles[STAGE_CUSTOM_MUTATOR]));
-
-    SAYF(bV bSTOP "   py/custom : " cRST "%-36s " bSTG bVR bH20 bH2 bH bRB "\n",
-         tmp);
-
-  }
 
   if (!afl->bytes_trim_out) {
 

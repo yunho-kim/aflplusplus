@@ -171,6 +171,7 @@ static char *afl_environment_variables[] = {
     "AFL_USE_QASAN",
     "AFL_FUNC",
     "AFL_BRANCH_COV",
+    "AFL_ARGV",
     NULL
 
 };

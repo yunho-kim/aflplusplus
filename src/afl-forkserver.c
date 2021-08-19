@@ -355,7 +355,7 @@ static void report_error_and_exit(int error) {
    cloning a stopped child. So, we just execute once, and then send commands
    through a pipe. The other part of this logic is in afl-as.h / llvm_mode */
 
-void afl_fsrv_start(afl_forkserver_t *fsrv, char **argv,
+void afl_fsrv_start(afl_forkserver_t *fsrv, s8 **argv,
                     volatile u8 *stop_soon_p, u8 debug_child_output) {
 
   int   st_pipe[2], ctl_pipe[2];
@@ -538,7 +538,7 @@ void afl_fsrv_start(afl_forkserver_t *fsrv, char **argv,
            "handle_sigill=0",
            0);
 
-    fsrv->init_child_func(fsrv, argv);
+    fsrv->init_child_func(fsrv, (char **) argv);
 
     /* Use a distinctive bitmap signature to tell the parent about execv()
        falling through. */
@@ -987,7 +987,7 @@ void afl_fsrv_kill(afl_forkserver_t *fsrv) {
 
 /* Get the map size from the target forkserver */
 
-u32 afl_fsrv_get_mapsize(afl_forkserver_t *fsrv, char **argv,
+u32 afl_fsrv_get_mapsize(afl_forkserver_t *fsrv, s8 **argv,
                          volatile u8 *stop_soon_p, u8 debug_child_output) {
 
   afl_fsrv_start(fsrv, argv, stop_soon_p, debug_child_output);

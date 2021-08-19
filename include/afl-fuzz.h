@@ -204,6 +204,7 @@ struct queue_entry {
 
   struct queue_entry *mother;           /* queue entry this based on        */
 
+  u32 argv_idx;
 };
 
 struct extra_data {
@@ -259,6 +260,14 @@ struct func_cmp_info {
   u32 cmp_id_end;    //not included
 };
 
+struct argv_word_entry {
+  s8 * word;
+  struct argv_word_entry * next;
+  struct argv_word_entry * tmp_next;
+  struct argv_word_entry * tmp_prev;
+  u8 is_tmp;
+};
+
 /* Fuzzing stages */
 
 enum {
@@ -286,6 +295,7 @@ enum {
   /* 20 */ STAGE_ITS,
   /* 21 */ STAGE_HAVOC_FUNC,
   /* 22 */ STAGE_MINING,
+  /* 23 */ STAGE_ARGV,
 
   STAGE_NUM_MAX
 
@@ -467,7 +477,7 @@ typedef struct afl_state {
   sharedmem_t *    shm_fuzz;
   afl_env_vars_t   afl_env;
 
-  char **argv;                                            /* argv if needed */
+  s8 **init_argv;                                      /* argv if needed */
 
   /* MOpt:
     Lots of globals, but mostly for the status UI and other things where it
@@ -819,9 +829,6 @@ typedef struct afl_state {
 
   struct func_cmp_info ** func_cmp_map;
 
-  //function cmp information text file name
-  u8 * func_info_txt;
-
   //Total number of function
   u32 num_func;
 
@@ -850,12 +857,28 @@ typedef struct afl_state {
   u32 num_mined;
   u32 mining_done_idx;
 
+  u8 argv_mut;
+
 #ifdef INTROSPECTION
   char  mutation[8072];
   char  m_tmp[4096];
   FILE *introspection_file;
   u32   bitsmap_size;
 #endif
+
+  struct argv_word_entry *** argvs_buf;
+  u32 num_argvs;
+  u32 argvs_buf_size;
+
+  struct argv_word_entry ** argv_words;
+  // <-word>, <word> <-word>=<word>
+  struct argv_word_entry ** argv_words_bufs[3];
+  u32 num_argv_word_buf_words[3];
+  u32 argv_words_buf_size[3];
+  u32 num_argv_words;
+
+  struct argv_word_entry ** tmp_words;
+  u32 num_tmp_words;
 
 //Debug
   FILE * debug_file;
@@ -1132,7 +1155,7 @@ void        deinit_py(void *);
 void mark_as_det_done(afl_state_t *, struct queue_entry *);
 void mark_as_variable(afl_state_t *, struct queue_entry *);
 void mark_as_redundant(afl_state_t *, struct queue_entry *, u8);
-void add_to_queue(afl_state_t *, u8 *, u32, u8);
+void add_to_queue(afl_state_t *, u8 *, u32, u8, u32);
 void destroy_queue(afl_state_t *);
 void update_bitmap_score(afl_state_t *, struct queue_entry *);
 void cull_queue(afl_state_t *);
@@ -1154,9 +1177,9 @@ void discover_word(u8 *ret, u32 *current, u32 *virgin);
 void init_count_class16(void);
 void minimize_bits(afl_state_t *, u8 *, u8 *);
 #ifndef SIMPLE_FILES
-u8 *describe_op(afl_state_t *, u8, size_t, u32, u32);
+u8 *describe_op(afl_state_t *, u8, size_t, u32, u32, u32);
 #endif
-u8 save_if_interesting(afl_state_t *, void *, u32, u8, u32, u32);
+u8 save_if_interesting(afl_state_t *, void *, u32, u8, u32, u32, struct argv_word_entry *, u32);
 u8 has_new_bits(afl_state_t *, u8 *);
 u8 has_new_bits_unclassified(afl_state_t *, u8 *);
 
@@ -1190,11 +1213,11 @@ int  statsd_format_metric(afl_state_t *afl, char *buff, size_t bufflen);
 /* Run */
 
 fsrv_run_result_t fuzz_run_target(afl_state_t *, afl_forkserver_t *fsrv, u32);
-void              write_to_testcase(afl_state_t *, void *, u32);
+void              write_to_testcase(afl_state_t *, void *, u32, u32);
 u8   calibrate_case(afl_state_t *, struct queue_entry *, u8 *, u32, u8);
 void sync_fuzzers(afl_state_t *);
 u8   trim_case(afl_state_t *, struct queue_entry *, u8 *);
-u8   common_fuzz_stuff(afl_state_t *, u8 *, u32);
+u8   common_fuzz_stuff(afl_state_t *, u8 *, u32, u32);
 
 /* Fuzz one */
 
@@ -1241,12 +1264,16 @@ u8 common_fuzz_cmplog_stuff(afl_state_t *afl, u8 *out_buf, u32 len);
 
 /* Func */
 void init_func(afl_state_t *);
-void write_func_stats(afl_state_t *);
+void write_friend_stats(afl_state_t *);
 void fuzz_one_func(afl_state_t *);
 void destroy_func(afl_state_t *);
 void init_trim_and_func(afl_state_t *);
 void update_tc_graph_and_branch_cov(afl_state_t *, u32, u32, u8 *, u32);
 void mining_wrapper(afl_state_t *, u32);
+
+void fuzz_one_argv(afl_state_t * afl);
+void init_argv(afl_state_t * afl);
+void destroy_argv(afl_state_t * afl);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len);

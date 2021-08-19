@@ -524,9 +524,17 @@
 
 #define AFL_MAGIC_SHM_ENV_VAR2 "__AFL_MAGIC_SHM_ID2"
 
+#define AFL_RECORD_BRANCH "__AFL_RECORD_BRANCH"
+
+#define AFL_CHECK_BRANCH "__AFL_CHECK_BRANCH"
+
 #define CMP_COV_RECORD  1024
 
 #define BYTES_RECORD_LEN 1024
+
+#define KEYWORD_MAX 128
+
+#define TMP_WORD_SIZE 32
 
 #endif                                                  /* ! _HAVE_CONFIG_H */
 

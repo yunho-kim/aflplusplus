@@ -415,6 +415,12 @@ bool ModuleSanitizerCoverage::instrumentModule(
   Int16Ty = IRB.getInt16Ty();
   Int8Ty = IRB.getInt8Ty();
   Int1Ty = IRB.getInt1Ty();
+  PointerType * Int8PtrPtrTy = PointerType::get(Int8PtrTy, 0);
+  PointerType * Int8PtrPtrPtrTy = PointerType::get(Int8PtrPtrTy, 0);
+  FunctionCallee argvHook = M.getOrInsertFunction("__afl_parse_argv", VoidTy, Int32PtrTy, Int8PtrPtrPtrTy);
+
+  char argv_mut = 0;
+  if (getenv("AFL_ARGV") != NULL) argv_mut = 1;
 
   /* afl++ START */
   char *       ptr;
@@ -943,6 +949,35 @@ bool ModuleSanitizerCoverage::instrumentModule(
   }
 
   SanCovTracePC = M.getOrInsertFunction(SanCovTracePCName, VoidTy);
+
+  if (argv_mut) {
+    for (auto &F : M) {
+      if (F.getName().equals(StringRef("main"))) {
+        BasicBlock & entryblock = F.getEntryBlock();
+        IRBuilder<> IRB(&(*entryblock.begin()));
+        Value * argc = F.getArg(0);
+        Value * argv = F.getArg(1);
+        AllocaInst * argc_ptr = IRB.CreateAlloca(Int32Ty);
+        AllocaInst * argv_ptr = IRB.CreateAlloca(Int8PtrPtrTy);
+
+        std::vector<Value *> args;
+        args.push_back(argc_ptr);
+        args.push_back(argv_ptr);
+
+        CallInst * argv_call = IRB.CreateCall(argvHook, args);
+        Value * new_argc = IRB.CreateLoad(argc_ptr);
+        Value * new_argv = IRB.CreateLoad(argv_ptr);
+
+        argc->replaceAllUsesWith(new_argc);
+        argv->replaceAllUsesWith(new_argv);
+
+        IRB.SetInsertPoint(argv_call);
+
+        IRB.CreateStore(argc, argc_ptr);
+        IRB.CreateStore(argv, argv_ptr);
+      }
+    }
+  }
 
   // SanCovTracePCGuard =
   //    M.getOrInsertFunction(SanCovTracePCGuardName, VoidTy, Int32PtrTy);

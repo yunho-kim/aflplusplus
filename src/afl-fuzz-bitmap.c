@@ -306,7 +306,7 @@ void minimize_bits(afl_state_t *afl, u8 *dst, u8 *src) {
 /* Construct a file name for a new test case, capturing the operation
    that led to its discovery. Returns a ptr to afl->describe_op_buf_256. */
 
-u8 *describe_op(afl_state_t *afl, u8 new_bits, size_t max_description_len, u32 parent_id1, u32 parent_id2) {
+u8 *describe_op(afl_state_t *afl, u8 new_bits, size_t max_description_len, u32 parent_id1, u32 parent_id2, u32 argv_idx) {
 
   size_t real_max_len =
       MIN(max_description_len, sizeof(afl->describe_op_buf_256));
@@ -324,6 +324,10 @@ u8 *describe_op(afl_state_t *afl, u8 new_bits, size_t max_description_len, u32 p
 
       sprintf(ret + strlen(ret), "+%06d", parent_id2);
 
+    }
+
+    if (afl->argv_mut) {
+      sprintf(ret + strlen(ret), ",argv:%u", argv_idx);
     }
 
     sprintf(ret + strlen(ret), ",time:%llu",
@@ -456,7 +460,7 @@ static void write_crash_readme(afl_state_t *afl) {
    entry is saved, 0 otherwise. */
 
 u8 __attribute__((hot))
-save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_id1, u32 parent_id2) {
+save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_id1, u32 parent_id2, struct argv_word_entry * args, u32 argv_idx) {
 
   if (unlikely(len == 0)) { return 0; }
 
@@ -498,11 +502,96 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
 
     classified = new_bits;
 
+    if (argv_idx == (u32) -1) {
+      if (args == NULL) {
+        //initial seed, will be handled in main.
+        argv_idx = 0;
+      } else {
+        //new argv from fuzz_one_argv
+        argv_idx = afl->num_argvs;
+        afl->num_argvs++;
+
+        if (unlikely(afl->argvs_buf_size >= afl->num_argvs)) {
+          afl->argvs_buf_size *= 2;
+          afl->argvs_buf = realloc(afl->argvs_buf, sizeof(struct argv_entry *) * afl->argvs_buf_size);
+        }
+
+        u32 num_argv_words = 0;
+        struct argv_word_entry * ptr = args;
+        while (ptr) {
+          num_argv_words++;
+          ptr = ptr->next;
+        }
+
+        struct argv_word_entry ** new_argv_entry = malloc(sizeof(struct argv_word_entry *) * (num_argv_words + 1));
+        u32 idx1, idx2;
+        ptr = args;
+        for (idx1 = 0; idx1 < num_argv_words; idx1++) {
+          new_argv_entry[idx1] = ptr;
+
+          if (ptr->is_tmp) {
+            // add tmp entry
+            u32 len = strlen(ptr->word);
+            u32 hash = 0;
+            for (idx2 = 0; idx2 < len; idx2++) {
+              hash += ptr->word[idx2] << idx2;
+            }
+            hash = hash % 1024;
+
+            bool exists = false;
+            struct argv_word_entry * hash_ptr = afl->argv_words_bufs[2][hash];
+            struct argv_word_entry * ptr2;
+            if (hash_ptr) {
+              ptr2 = hash_ptr;
+              while(ptr2) {
+                if(!strcmp(ptr->word, ptr2->word)) {
+                  exists = true;
+                  break;
+                }
+                ptr2 = ptr2->next;
+              }
+            }
+
+            if (!exists) {
+              if (hash_ptr) {
+                ptr2 = hash_ptr;
+                while (ptr2->next) {
+                  ptr2 = ptr2->next;
+                }
+                ptr2->next = ptr;
+              } else {
+                afl->argv_words_bufs[2][hash] = ptr;
+              }
+
+              afl->num_argv_word_buf_words[2] ++;
+              afl->num_argv_words++;
+
+              if (unlikely(afl->num_argv_word_buf_words[2] >= afl->argv_words_buf_size[2])) {
+                afl->argv_words_buf_size[2] *= 2;
+                afl->argv_words_bufs[2] = realloc (afl->argv_words_bufs[2], sizeof(struct argv_word_entry *) * afl->argv_words_buf_size[2]);
+              }
+            }
+
+            //remove from tmps to avoid double free
+            for (idx2 = 0; idx2 < afl->num_tmp_words; idx2++) {
+              if (afl->tmp_words[idx2] == ptr) {
+                afl->tmp_words[idx2] = NULL;
+              }
+            }
+          }
+
+          ptr = ptr->next;
+        }
+
+        afl->argvs_buf[argv_idx] = new_argv_entry;
+      }
+    }
+
 #ifndef SIMPLE_FILES
 
     queue_fn = alloc_printf(
         "%s/queue/id:%06u,%s", afl->out_dir, afl->queued_paths,
-        describe_op(afl, new_bits, NAME_MAX - strlen("id:000000,"), parent_id1, parent_id2));
+        describe_op(afl, new_bits, NAME_MAX - strlen("id:000000,"), parent_id1, parent_id2, argv_idx));
 
 #else
 
@@ -514,7 +603,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
     if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", queue_fn); }
     ck_write(fd, mem, len, queue_fn);
     close(fd);
-    add_to_queue(afl, queue_fn, len, 0);
+    add_to_queue(afl, queue_fn, len, 0, argv_idx);
 
 #ifdef INTROSPECTION
     if (afl->custom_mutators_count && afl->current_custom_fuzz) {
@@ -658,7 +747,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
       if (afl->fsrv.exec_tmout < afl->hang_tmout) {
 
         u8 new_fault;
-        write_to_testcase(afl, mem, len);
+        write_to_testcase(afl, mem, len, argv_idx);
         new_fault = fuzz_run_target(afl, &afl->fsrv, afl->hang_tmout);
         classify_counts(&afl->fsrv);
 
@@ -680,7 +769,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
 
       snprintf(fn, PATH_MAX, "%s/hangs/id:%06llu,%s", afl->out_dir,
                afl->unique_hangs,
-               describe_op(afl, 0, NAME_MAX - strlen("id:000000,"), parent_id1, parent_id2));
+               describe_op(afl, 0, NAME_MAX - strlen("id:000000,"), parent_id1, parent_id2, argv_idx));
 
 #else
 
@@ -723,7 +812,7 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
 
       snprintf(fn, PATH_MAX, "%s/crashes/id:%06llu,sig:%02u,%s", afl->out_dir,
                afl->unique_crashes, afl->fsrv.last_kill_signal,
-               describe_op(afl, 0, NAME_MAX - strlen("id:000000,sig:00,"), parent_id1, parent_id2));
+               describe_op(afl, 0, NAME_MAX - strlen("id:000000,sig:00,"), parent_id1, parent_id2, argv_idx));
 
 #else
 

@@ -1203,7 +1203,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
     fsrv->map_size = 4194304;  // dummy temporary value
     u32 new_map_size =
-        afl_fsrv_get_mapsize(fsrv, use_argv, &stop_soon,
+        afl_fsrv_get_mapsize(fsrv, (s8 **) use_argv, &stop_soon,
                              (get_afl_env("AFL_DEBUG_CHILD") ||
                               get_afl_env("AFL_DEBUG_CHILD_OUTPUT"))
                                  ? 1
@@ -1221,7 +1221,7 @@ int main(int argc, char **argv_orig, char **envp) {
         afl_fsrv_kill(fsrv);
         fsrv->map_size = new_map_size;
         fsrv->trace_bits = afl_shm_init(&shm, new_map_size, 0, 0);
-        afl_fsrv_start(fsrv, use_argv, &stop_soon,
+        afl_fsrv_start(fsrv, (s8 **) use_argv, &stop_soon,
                        (get_afl_env("AFL_DEBUG_CHILD") ||
                         get_afl_env("AFL_DEBUG_CHILD_OUTPUT"))
                            ? 1
@@ -1237,7 +1237,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   } else {
 
-    afl_fsrv_start(fsrv, use_argv, &stop_soon,
+    afl_fsrv_start(fsrv, (s8 **) use_argv, &stop_soon,
                    (get_afl_env("AFL_DEBUG_CHILD") ||
                     get_afl_env("AFL_DEBUG_CHILD_OUTPUT"))
                        ? 1

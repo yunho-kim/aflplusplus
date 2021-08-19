@@ -363,9 +363,13 @@ int main(int argc, char **argv_orig, char **envp) {
 
   while ((opt = getopt(
               argc, argv,
-              "+b:B:c:CdD:e:E:hi:I:f:F:l:L:m:M:nNo:p:RQs:S:t:T:UV:Wx:Z")) > 0) {
+              "+ab:B:c:CdD:e:E:hi:I:f:F:l:L:m:M:nNo:p:RQs:S:t:T:UV:Wx:Z")) > 0) {
 
     switch (opt) {
+
+      case 'a':
+        afl->argv_mut = 1;
+        break;
 
       case 'Z':
         afl->old_seed_selection = 1;
@@ -1024,9 +1028,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
   if (!afl->func_infos_dir) FATAL("No directed info");
 
-  afl->func_info_txt = (char *) calloc (PATH_MAX, sizeof(u8));
   afl->func_binary = (char *) calloc (PATH_MAX, sizeof(u8));
-  if (!afl->func_info_txt || !afl->func_binary) FATAL("Can't allocate string for path?");
+  if (!afl->func_binary) FATAL("Can't allocate string for path?");
   {
     u8 * buf = (u8 *) calloc (PATH_MAX, sizeof(u8));
     char * trim = strrchr(argv[optind], '/');
@@ -1448,6 +1451,7 @@ int main(int argc, char **argv_orig, char **envp) {
   #endif
 
   init_func(afl);
+  init_argv(afl);
 
   setup_custom_mutators(afl);
 
@@ -1536,13 +1540,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
         afl->fsrv.argv_file = alloc_printf("%s/.argv", afl->tmp_dir);
 
-        // tmp
-        {
-          s32 fd = open(afl->fsrv.out_file, O_WRONLY | O_CREAT | O_EXCL, 0600);
-          ck_write(fd, "@@", 2, afl->fsrv.out_file);
-        }
-
-        detect_file_args(argv + optind + 1, afl->fsrv.argv_file,
+        detect_file_args(argv + optind + 1, afl->fsrv.out_file,
                          &afl->fsrv.use_stdin);
         break;
 
@@ -1601,7 +1599,74 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  afl->argv = use_argv;
+  if (afl->argv_mut) {
+    afl->init_argv = (s8 **) malloc (3 * sizeof(s8*));
+    afl->init_argv[0] = use_argv[0];
+    afl->init_argv[1] = afl->fsrv.argv_file;
+    afl->init_argv[2] = NULL;
+
+
+    u32 new_argc = 0;
+    u32 idx1, idx2;
+
+    while (use_argv[new_argc]) {
+      new_argc++;
+    }
+
+    struct argv_word_entry ** cur_argv_entry = malloc (sizeof(struct argv_word_entry *) * (new_argc + 1));
+
+    cur_argv_entry[new_argc] = NULL;
+
+    idx1 = 0;
+    while (use_argv[idx1]) {
+      //add keywords
+      u32 len = strlen(use_argv[idx1]);
+      
+      //TODO : <-word>=<word>?
+      u32 word_buf_idx = use_argv[idx1][0] != '-';
+      u32 word_hash = 0;
+      for (idx2 = 0; idx2 < len; idx2++) {
+        word_hash += use_argv[idx1][idx2] << idx2;
+      }
+      word_hash = word_hash % 1024;
+
+      struct argv_word_entry * cur_argv_word_entry = malloc(sizeof(struct argv_word_entry));
+      if (afl->argv_words_bufs[word_buf_idx][word_hash]) {
+        struct argv_word_entry * ptr = afl->argv_words_bufs[word_buf_idx][word_hash];
+        while(ptr->next) {
+          ptr = ptr->next;
+        }
+        ptr->next = cur_argv_word_entry;
+      } else {
+        afl->argv_words_bufs[word_buf_idx][word_hash] = cur_argv_word_entry;
+      }
+      cur_argv_word_entry->next = NULL;
+      cur_argv_word_entry->tmp_next = NULL;
+      cur_argv_word_entry->tmp_prev = NULL;
+      cur_argv_word_entry->is_tmp = 0;
+      afl->num_argv_word_buf_words[0]++;
+
+      cur_argv_word_entry->word = (s8 *) malloc(sizeof(s8) * (len + 1));
+      memcpy(cur_argv_word_entry->word, use_argv[idx1], len);
+      cur_argv_word_entry->word[len] = '\0';
+
+      cur_argv_entry[idx1] = cur_argv_word_entry;
+      idx1++;
+    }
+
+    afl->argvs_buf[0] = cur_argv_entry;
+
+    afl->num_argvs++;
+
+    for (idx1 = 0; idx1 < afl->queued_paths; idx1++) {
+      struct queue_entry * q = afl->queue_buf[idx1];
+      q->argv_idx = 0;
+    }
+
+  } else {
+    afl->init_argv = (s8 **) use_argv;
+  }
+  
   afl->fsrv.trace_bits =
       afl_shm_init(&afl->shm, afl->fsrv.map_size, afl->non_instrumented_mode, afl->num_cmp);
 
@@ -1612,7 +1677,7 @@ int main(int argc, char **argv_orig, char **envp) {
     setenv("AFL_MAP_SIZE", "4194304", 1);
 
     u32 new_map_size = afl_fsrv_get_mapsize(
-        &afl->fsrv, afl->argv, &afl->stop_soon, afl->afl_env.afl_debug_child);
+        &afl->fsrv, afl->init_argv, &afl->stop_soon, afl->afl_env.afl_debug_child);
 
     if (new_map_size && new_map_size != 4194304) {
 
@@ -1640,7 +1705,7 @@ int main(int argc, char **argv_orig, char **envp) {
         afl->fsrv.trace_bits =
             afl_shm_init(&afl->shm, new_map_size, afl->non_instrumented_mode, afl->num_cmp);
         setenv("AFL_NO_AUTODICT", "1", 1);  // loaded already
-        afl_fsrv_start(&afl->fsrv, afl->argv, &afl->stop_soon,
+        afl_fsrv_start(&afl->fsrv, afl->init_argv, &afl->stop_soon,
                        afl->afl_env.afl_debug_child);
 
       }
@@ -1666,7 +1731,7 @@ int main(int argc, char **argv_orig, char **envp) {
     afl->cmplog_fsrv.map_size = 4194304;
 
     u32 new_map_size =
-        afl_fsrv_get_mapsize(&afl->cmplog_fsrv, afl->argv, &afl->stop_soon,
+        afl_fsrv_get_mapsize(&afl->cmplog_fsrv, afl->init_argv, &afl->stop_soon,
                              afl->afl_env.afl_debug_child);
 
     if (new_map_size && new_map_size != 4194304) {
@@ -1696,10 +1761,10 @@ int main(int argc, char **argv_orig, char **envp) {
         afl->fsrv.trace_bits =
             afl_shm_init(&afl->shm, new_map_size, afl->non_instrumented_mode, afl->num_cmp);
         setenv("AFL_NO_AUTODICT", "1", 1);  // loaded already
-        afl_fsrv_start(&afl->fsrv, afl->argv, &afl->stop_soon,
+        afl_fsrv_start(&afl->fsrv, afl->init_argv, &afl->stop_soon,
                        afl->afl_env.afl_debug_child);
 
-        afl_fsrv_start(&afl->cmplog_fsrv, afl->argv, &afl->stop_soon,
+        afl_fsrv_start(&afl->cmplog_fsrv, afl->init_argv, &afl->stop_soon,
                        afl->afl_env.afl_debug_child);
 
         map_size = new_map_size;
@@ -1726,7 +1791,7 @@ int main(int argc, char **argv_orig, char **envp) {
     afl->func_fsrv.map_size = 4194304;
 
     u32 new_map_size =
-        afl_fsrv_get_mapsize(&afl->func_fsrv, afl->argv, &afl->stop_soon,
+        afl_fsrv_get_mapsize(&afl->func_fsrv, afl->init_argv, &afl->stop_soon,
                              afl->afl_env.afl_debug_child);
 
     if (new_map_size && new_map_size != 4194304) {
@@ -1759,15 +1824,15 @@ int main(int argc, char **argv_orig, char **envp) {
         afl->fsrv.trace_bits =
             afl_shm_init(&afl->shm, new_map_size, afl->non_instrumented_mode, afl->num_cmp);
         setenv("AFL_NO_AUTODICT", "1", 1);  // loaded already
-        afl_fsrv_start(&afl->fsrv, afl->argv, &afl->stop_soon,
+        afl_fsrv_start(&afl->fsrv, afl->init_argv, &afl->stop_soon,
                        afl->afl_env.afl_debug_child);
 
         if (afl->cmplog_binary) {
-          afl_fsrv_start(&afl->cmplog_fsrv, afl->argv, &afl->stop_soon,
+          afl_fsrv_start(&afl->cmplog_fsrv, afl->init_argv, &afl->stop_soon,
                          afl->afl_env.afl_debug_child);
         }
 
-        afl_fsrv_start(&afl->func_fsrv, afl->argv, &afl->stop_soon,
+        afl_fsrv_start(&afl->func_fsrv, afl->init_argv, &afl->stop_soon,
                     afl->afl_env.afl_debug_child);       
 
         map_size = new_map_size;
@@ -2084,7 +2149,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
       }
 
-      skipped_fuzz = fuzz_one(afl);
+      //skipped_fuzz = fuzz_one(afl);
+      skipped_fuzz = 0;
 
       if (unlikely(!afl->stop_soon && exit_1)) { afl->stop_soon = 2; }
 
@@ -2101,57 +2167,62 @@ int main(int argc, char **argv_orig, char **envp) {
           afl->queue_cur = afl->queue_buf[afl->current_entry];
 
       }
-
-      //havoc_func
-      if (!skipped_fuzz && likely(afl->cmp_queue)) {
-        if (unlikely(afl->cmp_queue_cur == NULL)) {
-          afl->cmp_queue_cur = afl->cmp_queue;
-        }
-
-        while (afl->cmp_queue_cur && (afl->cmp_queue_cur->num_value_changing_tcs == 0)) {
-          afl->cmp_queue_cur = afl->cmp_queue_cur->next;
-        }
-
-        if (likely(afl->cmp_queue_cur)) {
-          struct cmp_queue_entry * cq_cur = afl->cmp_queue_cur; 
-          //ITERATE through tcs
-          u32 num_tcs = cq_cur->num_value_changing_tcs;
-
-          fprintf(afl->debug_file, "cmp_queue_cur : %u, num_tcs : %u\n", cq_cur->id, num_tcs);
-
-          if (unlikely(!cq_cur->num_fuzzed)) {
-            cq_cur->mutating_tc_idx = rand_below(afl, num_tcs);
-          }
-
-          u32 tc_idx = cq_cur->value_changing_tcs[cq_cur->mutating_tc_idx++];
-          if (unlikely(cq_cur->mutating_tc_idx >= num_tcs))
-            cq_cur->mutating_tc_idx = 0;
-
-          u32 tmp = afl->current_entry;
-
-          afl->current_entry = tc_idx;
-          afl->queue_cur = afl->queue_buf[tc_idx];
-          
-          fuzz_one_func(afl);
-
-          cq_cur->num_fuzzed++;
-
-          while (afl->cmp_queue_cur->next != NULL) {
-            if (afl->cmp_queue_cur->next->condition == 3) {
-              //remove target
-              afl->cmp_queue_cur->next = afl->cmp_queue_cur->next->next;
-              afl->cmp_queue_size--;
-            } else {
-              break;
-            }
-          }
-          afl->cmp_queue_cur = afl->cmp_queue_cur->next;
-
-          afl->current_entry = tmp;
-          afl->queue_cur = afl->queue_buf[tmp];
-        }
-      }
     } while (skipped_fuzz && afl->queue_cur && !afl->stop_soon);
+
+    //argv fuzzing?
+    if (afl->argv_mut) {
+      fuzz_one_argv(afl);
+    }
+
+    //havoc_func
+    if (likely(afl->cmp_queue)) {
+      if (unlikely(afl->cmp_queue_cur == NULL)) {
+        afl->cmp_queue_cur = afl->cmp_queue;
+      }
+
+      while (afl->cmp_queue_cur && (afl->cmp_queue_cur->num_value_changing_tcs == 0)) {
+        afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+      }
+
+      if (likely(afl->cmp_queue_cur)) {
+        struct cmp_queue_entry * cq_cur = afl->cmp_queue_cur; 
+        //ITERATE through tcs
+        u32 num_tcs = cq_cur->num_value_changing_tcs;
+
+        fprintf(afl->debug_file, "cmp_queue_cur : %u, num_tcs : %u\n", cq_cur->id, num_tcs);
+
+        if (unlikely(!cq_cur->num_fuzzed)) {
+          cq_cur->mutating_tc_idx = rand_below(afl, num_tcs);
+        }
+
+        u32 tc_idx = cq_cur->value_changing_tcs[cq_cur->mutating_tc_idx++];
+        if (unlikely(cq_cur->mutating_tc_idx >= num_tcs))
+          cq_cur->mutating_tc_idx = 0;
+
+        u32 tmp = afl->current_entry;
+
+        afl->current_entry = tc_idx;
+        afl->queue_cur = afl->queue_buf[tc_idx];
+        
+        fuzz_one_func(afl);
+
+        cq_cur->num_fuzzed++;
+
+        while (afl->cmp_queue_cur->next != NULL) {
+          if (afl->cmp_queue_cur->next->condition == 3) {
+            //remove target
+            afl->cmp_queue_cur->next = afl->cmp_queue_cur->next->next;
+            afl->cmp_queue_size--;
+          } else {
+            break;
+          }
+        }
+        afl->cmp_queue_cur = afl->cmp_queue_cur->next;
+
+        afl->current_entry = tmp;
+        afl->queue_cur = afl->queue_buf[tmp];
+      }
+    }
 
     u32 idx = 0;
     while (((afl->mining_done_idx + 1) < afl->queued_paths) && idx < MINING_LIMIT) {
@@ -2160,7 +2231,7 @@ int main(int argc, char **argv_orig, char **envp) {
       afl->mining_done_idx++;
       idx++;
       if (afl->stop_soon) {break;}
-   }
+    }
 
     if (likely(!afl->stop_soon && afl->sync_id)) {
 
@@ -2252,9 +2323,10 @@ stop_fuzzing:
   }
 
   fclose(afl->fsrv.plot_file);
-  write_func_stats(afl);
+  write_friend_stats(afl);
   destroy_func(afl);
   destroy_queue(afl);
+  destroy_argv(afl);
   destroy_extras(afl);
   destroy_custom_mutators(afl);
   unsetenv(SHM_ENV_VAR);

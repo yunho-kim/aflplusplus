@@ -384,7 +384,7 @@ u8 trim_case_custom(afl_state_t *afl, struct queue_entry *q, u8 *in_buf,
 
     if (likely(retlen)) {
 
-      write_to_testcase(afl, retbuf, retlen);
+      write_to_testcase(afl, retbuf, retlen, (u32) -1);
 
       fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
       ++afl->trim_execs;

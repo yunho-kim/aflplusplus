@@ -136,7 +136,7 @@ static void dump_file(char *path, char *name, u32 counter, u8 *buf, u32 len) {
 
 static u8 get_exec_checksum(afl_state_t *afl, u8 *buf, u32 len, u64 *cksum) {
 
-  if (unlikely(common_fuzz_stuff(afl, buf, len))) { return 1; }
+  if (unlikely(common_fuzz_stuff(afl, buf, len, (u32) -1))) { return 1; }
 
   *cksum = hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
 
@@ -501,7 +501,7 @@ static u8 its_fuzz(afl_state_t *afl, u8 *buf, u32 len, u8 *status) {
   dump("DATA", buf, len);
 #endif
 
-  if (unlikely(common_fuzz_stuff(afl, buf, len))) { return 1; }
+  if (unlikely(common_fuzz_stuff(afl, buf, len, (u32) -1))) { return 1; }
 
   new_hit_cnt = afl->queued_paths + afl->unique_crashes;
 

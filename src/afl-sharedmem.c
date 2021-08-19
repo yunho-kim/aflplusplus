@@ -133,6 +133,9 @@ void afl_shm_deinit(sharedmem_t *shm) {
   if (shm->cmplog_mode) { shmctl(shm->cmplog_shm_id, IPC_RMID, NULL); }
 #endif
   shmctl(shm->func_shm_id, IPC_RMID, NULL);
+  shmctl(shm->func_branch_cond_shm_id, IPC_RMID, NULL);
+  shmctl(shm->func_magic_shm_id, IPC_RMID, NULL);
+
   shm->map = NULL;
 
 }
@@ -149,6 +152,8 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
   shm->map = NULL;
   shm->cmp_map = NULL;
   shm->branch_map = NULL;
+  shm->branch_cond_map = NULL;
+  shm->magic_bytes_map = NULL;
 
 #ifdef USEMMAP
 
@@ -276,6 +281,62 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
       }
       PFATAL("shmget() failed func");
     }
+
+    u32 branch_shm_size;
+    {
+      struct cmp_entry2 tmp[CMP_COV_RECORD];
+      branch_shm_size = sizeof(tmp);
+    }
+
+    shm->func_branch_cond_shm_id = shmget(IPC_PRIVATE, branch_shm_size, IPC_CREAT | IPC_EXCL | 0600);
+
+    if (shm->func_branch_cond_shm_id < 0) {
+      shmctl(shm->shm_id, IPC_RMID, NULL);
+      if (shm->cmplog_mode) {
+        shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);
+      }
+      shmctl(shm->func_shm_id, IPC_RMID, NULL);
+      PFATAL("shmget() failed func");
+    }
+
+    shm->func_magic_shm_id = shmget(IPC_PRIVATE, BYTES_RECORD_LEN * sizeof(u8), IPC_CREAT | IPC_EXCL | 0600);
+
+    if (shm->func_magic_shm_id < 0) {
+      shmctl(shm->shm_id, IPC_RMID, NULL);
+      if (shm->cmplog_mode) {
+        shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);
+      }
+      shmctl(shm->func_shm_id, IPC_RMID, NULL);
+      shmctl(shm->func_branch_cond_shm_id, IPC_RMID, NULL);
+      PFATAL("shmget() failed func");
+    }
+
+    shm->record_branch_id = shmget(IPC_PRIVATE, sizeof(u8), IPC_CREAT | IPC_EXCL | 0600);
+
+    if (shm->record_branch_id < 0) {
+      shmctl(shm->shm_id, IPC_RMID, NULL);
+      if (shm->cmplog_mode) {
+        shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);
+      }
+      shmctl(shm->func_shm_id, IPC_RMID, NULL);
+      shmctl(shm->func_branch_cond_shm_id, IPC_RMID, NULL);
+      shmctl(shm->func_magic_shm_id, IPC_RMID, NULL);
+      PFATAL("shmget() failed func");
+    }
+
+    shm->check_branch_id = shmget(IPC_PRIVATE, sizeof(u8), IPC_CREAT | IPC_EXCL | 0600);
+
+    if (shm->check_branch_id < 0) {
+      shmctl(shm->shm_id, IPC_RMID, NULL);
+      if (shm->cmplog_mode) {
+        shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);
+      }
+      shmctl(shm->func_shm_id, IPC_RMID, NULL);
+      shmctl(shm->func_branch_cond_shm_id, IPC_RMID, NULL);
+      shmctl(shm->func_magic_shm_id, IPC_RMID, NULL);
+      shmctl(shm->record_branch_id, IPC_RMID, NULL);
+      PFATAL("shmget() failed func");
+    }
   }
 
   if (!non_instrumented_mode) {
@@ -306,6 +367,18 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
   if (num_cmp && !non_instrumented_mode) {
     shm_str = alloc_printf("%d", shm->func_shm_id);
     setenv(AFL_FUNC_SHM_ENV_VAR, shm_str, 1);
+    ck_free(shm_str);
+    shm_str = alloc_printf("%d", shm->func_branch_cond_shm_id);
+    setenv(AFL_MAGIC_SHM_ENV_VAR1, shm_str, 1);
+    ck_free(shm_str);
+    shm_str = alloc_printf("%d", shm->func_magic_shm_id);
+    setenv(AFL_MAGIC_SHM_ENV_VAR2, shm_str, 1);
+    ck_free(shm_str);
+    shm_str = alloc_printf("%d", shm->record_branch_id);
+    setenv(AFL_RECORD_BRANCH, shm_str, 1);
+    ck_free(shm_str);
+    shm_str = alloc_printf("%d", shm->check_branch_id);
+    setenv(AFL_CHECK_BRANCH, shm_str, 1);
     ck_free(shm_str);
   }
 
@@ -343,13 +416,30 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
 
   if (num_cmp) {
     shm->branch_map = shmat(shm->func_shm_id, NULL, 0);
-    if (shm->branch_map == (void *) -1 || !shm->branch_map) {
+    shm->branch_cond_map = shmat(shm->func_branch_cond_shm_id, NULL, 0);
+    shm->magic_bytes_map = shmat(shm->func_magic_shm_id, NULL, 0);
+    shm->record_branch_map = shmat(shm->record_branch_id, NULL, 0);
+    shm->check_branch_map = shmat(shm->check_branch_id, NULL, 0);
+
+    if (shm->branch_map == (void *) -1 || !shm->branch_map ||
+      shm->branch_cond_map == (void *) -1 || !shm->branch_cond_map ||
+      shm->magic_bytes_map == (void *) -1 || !shm->magic_bytes_map ||
+      shm->record_branch_map == (void *) -1 || !shm->record_branch_map ||
+      shm->check_branch_map == (void *) -1  || !shm->check_branch_map
+    ) {
       shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
       if (shm->cmplog_mode) {
         shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
       }
       shmctl(shm->func_shm_id, IPC_RMID, NULL);
+      shmctl(shm->func_branch_cond_shm_id, IPC_RMID, NULL);
+      shmctl(shm->func_magic_shm_id, IPC_RMID, NULL);
+      shmctl(shm->record_branch_id, IPC_RMID, NULL);
+      shmctl(shm->check_branch_id, IPC_RMID, NULL);
     }
+
+    *shm->record_branch_map = 0;
+    *shm->check_branch_map = 0;
   }
 
 #endif

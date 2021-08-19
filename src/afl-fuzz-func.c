@@ -18,8 +18,8 @@ void init_func(afl_state_t* afl) {
   u8    fn[PATH_MAX];
   FILE * f;
   
-  snprintf(afl->func_info_txt, PATH_MAX, "%s/FRIEND_func_cmp_id_info", afl->func_infos_dir);
-  f = fopen(afl->func_info_txt, "r");
+  snprintf(fn, PATH_MAX, "%s/FRIEND_func_cmp_id_info", afl->func_infos_dir);
+  f = fopen(fn, "r");
   if (f == NULL) PFATAL("Can't open func txt file");
 
   int res;
@@ -47,8 +47,6 @@ void init_func(afl_state_t* afl) {
   }
   fclose(f);
   
-  ck_free(afl->func_info_txt);
-
   afl->func_exec_count_table =
     (u32 **) calloc (sizeof(u32*), afl->num_func);
   if (!afl->func_exec_count_table) PFATAL("Can't alloc func_exec_count_table");
@@ -309,7 +307,7 @@ void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_id
     entries[cmp_id].condition = 0;
   }
 
-  write_to_testcase(afl, buf, len);
+  write_to_testcase(afl, buf, len, q->argv_idx);
   u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
 
   if (fault == FSRV_RUN_TMOUT) {
@@ -527,9 +525,9 @@ static void mining_bytes(afl_state_t *afl, u8 * out_buf, u32 len) {
     entries[idx1].value = 0;
   }
 
-  write_to_testcase(afl, out_buf, len);
+  write_to_testcase(afl, out_buf, len, cur_q->argv_idx);
 
-  u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout * 10);
+  u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout * 5);
 
   if (fault == FSRV_RUN_TMOUT) {
     //what?
@@ -877,7 +875,7 @@ do {                                      \
 
       //get byte cmps set
 
-      common_fuzz_stuff(afl, out_buf2, len);
+      common_fuzz_stuff(afl, out_buf2, len, cur_q->argv_idx);
 
       //execute
       for (idx3 = 0; idx3 < afl->num_cmp; idx3++) {
@@ -1028,7 +1026,7 @@ static void get_close_tcs(afl_state_t * afl, u32 target_id, u32 * close_tcs, u32
   return;
 }
 
-void write_func_stats (afl_state_t * afl) {
+void write_friend_stats (afl_state_t * afl) {
   u8    fn[PATH_MAX];
   FILE *f;
   u32 idx1, idx2, idx3;
@@ -1136,6 +1134,23 @@ void write_func_stats (afl_state_t * afl) {
         u_stringify_int(IB(2), afl->stage_cycles[STAGE_HAVOC_FUNC]),
         u_stringify_int(IB(3), afl->stage_finds[STAGE_MINING]),
         u_stringify_int(IB(4), afl->stage_cycles[STAGE_MINING]));
+
+  fclose(f);
+
+  snprintf(fn, PATH_MAX, "%s/FRIEND/argvs", afl->out_dir);
+  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  f = fdopen(fd, "w");
+  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+    fprintf(f, "%u : ", idx1);
+    struct argv_word_entry ** argv = afl->argvs_buf[idx1];
+    idx2 = 0;
+    while(argv[idx2]) {
+      fprintf(f, "%s ", argv[idx2]->word);
+      idx2++;
+    }
+    fprintf(f, "\n");
+  }
 
   fclose(f);
 
@@ -1531,7 +1546,7 @@ void fuzz_one_func (afl_state_t *afl) {
       }
     } // end of for (idx1 = 0; idx1 < use_stacking1; idx1++)
 
-    common_fuzz_stuff(afl, out_buf, len);
+    common_fuzz_stuff(afl, out_buf, len, cur_tc->argv_idx);
 
     /* out_buf might have been mangled a bit, so let's restore it to its
        original size and shape. */

@@ -74,7 +74,7 @@ fuzz_run_target(afl_state_t *afl, afl_forkserver_t *fsrv, u32 timeout) {
    rewound and truncated. */
 
 void __attribute__((hot))
-write_to_testcase(afl_state_t *afl, void *mem, u32 len) {
+write_to_testcase(afl_state_t *afl, void *mem, u32 len, u32 argv_idx) {
 
 #ifdef _AFL_DOCUMENT_MUTATIONS
   s32  doc_fd;
@@ -135,6 +135,22 @@ write_to_testcase(afl_state_t *afl, void *mem, u32 len) {
 
   }
 
+
+  if (afl->argv_mut) {
+    unlink(afl->fsrv.argv_file);
+    s32 fd = open(afl->fsrv.argv_file, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", afl->fsrv.argv_file); }
+
+    struct argv_word_entry ** args = afl->argvs_buf[argv_idx];
+
+    u32 i = 0;
+    while(args[i]) {
+      ck_write(fd, args[i]->word, strlen(args[i]->word) + 1 , afl->fsrv.argv_file);
+      i++;
+    }
+
+    close(fd);
+  }
 }
 
 /* The same, but with an adjustable gap. Used for trimming. */
@@ -333,7 +349,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
     }
 
-    afl_fsrv_start(&afl->fsrv, afl->argv, &afl->stop_soon,
+    afl_fsrv_start(&afl->fsrv, afl->init_argv, &afl->stop_soon,
                    afl->afl_env.afl_debug_child);
 
     if (afl->fsrv.support_shmem_fuzz && !afl->fsrv.use_shmem_fuzz) {
@@ -363,7 +379,7 @@ u8 calibrate_case(afl_state_t *afl, struct queue_entry *q, u8 *use_mem,
 
     u64 cksum;
 
-    write_to_testcase(afl, use_mem, q->len);
+    write_to_testcase(afl, use_mem, q->len, q->argv_idx);
 
     fault = fuzz_run_target(afl, &afl->fsrv, use_tmout);
 
@@ -657,7 +673,7 @@ void sync_fuzzers(afl_state_t *afl) {
         /* See what happens. We rely on save_if_interesting() to catch major
            errors and save the test case. */
 
-        write_to_testcase(afl, mem, st.st_size);
+        write_to_testcase(afl, mem, st.st_size, (u32) -1);
 
         fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
 
@@ -665,7 +681,7 @@ void sync_fuzzers(afl_state_t *afl) {
 
         afl->syncing_party = sd_ent->d_name;
         afl->queued_imported +=
-            save_if_interesting(afl, mem, st.st_size, fault, afl->syncing_case, (u32) -1);
+            save_if_interesting(afl, mem, st.st_size, fault, afl->syncing_case, (u32) -1, NULL, (u32) -1);
         afl->syncing_party = NULL;
 
         munmap(mem, st.st_size);
@@ -895,11 +911,13 @@ abort_trimming:
    a helper function for fuzz_one(). */
 
 u8 __attribute__((hot))
-common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
+common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len, u32 argv_idx) {
+
+  assert(argv_idx != (u32) -1);
 
   u8 fault;
 
-  write_to_testcase(afl, out_buf, len);
+  write_to_testcase(afl, out_buf, len, argv_idx);
 
   fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
 
@@ -935,7 +953,7 @@ common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len) {
 
   u32 parent_idx2 = (afl->splicing_with >= 0) ? (u32) afl->splicing_with : (u32) -1;
 
-  afl->queued_discovered += save_if_interesting(afl, out_buf, len, fault, afl->current_entry, parent_idx2);
+  afl->queued_discovered += save_if_interesting(afl, out_buf, len, fault, afl->current_entry, parent_idx2, NULL, argv_idx);
 
   if (!(afl->stage_cur % afl->stats_update_freq) ||
       afl->stage_cur + 1 == afl->stage_max) {
