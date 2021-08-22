@@ -30,6 +30,7 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/FileSystem.h"
@@ -80,7 +81,7 @@ class FuncLogInstructions : public ModulePass {
 
  private:
   bool hookInstrs(Module &M);
-  void Insert_magicbyte_hook(Instruction * IN, Instruction * insertPoint, unsigned int rec);
+  void Insert_magicbyte_hook(Instruction * IN, Instruction * insertPoint);
   FunctionCallee magicbytesHookptr;
 };
 
@@ -88,14 +89,14 @@ class FuncLogInstructions : public ModulePass {
 
 char FuncLogInstructions::ID = 0;
 
-void FuncLogInstructions::Insert_magicbyte_hook(Instruction * IN, Instruction * insertPoint, unsigned int rec) {
+void FuncLogInstructions::Insert_magicbyte_hook(Instruction * IN, Instruction * insertPoint) {
   
   GetElementPtrInst * gepIN = NULL;
-
-  if (rec == 0) return;
+  PHINode * phiIN = NULL;
 
   //blacklist
   CallInst * callIN = NULL;
+
   if ((callIN = dyn_cast<CallInst>(IN))) {
     Function *Callee = callIN->getCalledFunction();
     if (!Callee) return;
@@ -120,23 +121,30 @@ void FuncLogInstructions::Insert_magicbyte_hook(Instruction * IN, Instruction * 
         IRB.CreateCall(magicbytesHookptr, args);
       }
     }
-    return;
-  }
+  } else if ((phiIN = dyn_cast<PHINode>(IN))) {
+    Type * pointerTy = phiIN->getType();
+    if (pointerTy->isPointerTy() && pointerTy->getPointerElementType()->isIntegerTy(8)) {
+      IRBuilder<> IRB(insertPoint);
+      std::vector<Value *> args;
+      args.push_back(IN);
+      IRB.CreateCall(magicbytesHookptr, args);
+    }
+  } else {
+    for (auto iter = IN->op_begin(); iter != IN->op_end(); iter++) {
+      Value * parm = iter->get();
 
-  for (auto iter = IN->op_begin(); iter != IN->op_end(); iter++) {
-    Value * parm = iter->get();
-
-    GEPOperator * parmop = NULL;
-    if ((parmop = dyn_cast<GEPOperator>(parm)) && (parmop->getNumOperands() > 2)) {
-      Type * pointerTy = parmop->getType();
-      if (pointerTy->getPointerElementType()->isIntegerTy(8)) {
-        Value * idx = parmop->getOperand(2);
-        ConstantInt * cidx;
-        if ((cidx = dyn_cast<ConstantInt>(idx)) && (cidx->getZExtValue() == 0)) {
-          IRBuilder<> IRB(insertPoint);
-          std::vector<Value *> args;
-          args.push_back(parm);
-          IRB.CreateCall(magicbytesHookptr, args);
+      GEPOperator * parmop = NULL;
+      if ((parmop = dyn_cast<GEPOperator>(parm)) && (parmop->getNumOperands() > 2)) {
+        Type * pointerTy = parmop->getType();
+        if (pointerTy->getPointerElementType()->isIntegerTy(8)) {
+          Value * idx = parmop->getOperand(2);
+          ConstantInt * cidx;
+          if ((cidx = dyn_cast<ConstantInt>(idx)) && (cidx->getZExtValue() == 0)) {
+            IRBuilder<> IRB(insertPoint);
+            std::vector<Value *> args;
+            args.push_back(parm);
+            IRB.CreateCall(magicbytesHookptr, args);
+          }
         }
       }
     }
@@ -249,7 +257,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
             InsertPoint = InsertPoint->getNextNode();
           }
           if (InsertPoint) {
-            Insert_magicbyte_hook(&IN, InsertPoint, 3);
+            Insert_magicbyte_hook(&IN, InsertPoint);
           }
         }
         
