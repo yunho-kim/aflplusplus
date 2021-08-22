@@ -253,7 +253,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
         //Just check parameters...
         if (argv_mut) {
           Instruction * InsertPoint = IN.getNextNode();
-          while (InsertPoint && dyn_cast<PHINode>(InsertPoint)) {
+          while (InsertPoint && (dyn_cast<PHINode>(InsertPoint) || dyn_cast<LandingPadInst>(InsertPoint))) {
             InsertPoint = InsertPoint->getNextNode();
           }
           if (InsertPoint) {
