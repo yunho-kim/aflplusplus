@@ -1826,6 +1826,10 @@ static void handle_existing_out_dir(afl_state_t *afl) {
   if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
   ck_free(fn);
 
+  fn = alloc_printf("%s/FRIEND/argv_words", afl->out_dir);
+  if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
   fn = alloc_printf("%s/FRIEND/mining", afl->out_dir);
   if (delete_files(fn, CASE_PREFIX)) { goto dir_cleanup_failed; }
   ck_free(fn);

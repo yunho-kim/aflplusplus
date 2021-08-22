@@ -1143,7 +1143,7 @@ void write_friend_stats (afl_state_t * afl) {
   f = fdopen(fd, "w");
   for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
     fprintf(f, "%u : ", idx1);
-    struct argv_word_entry ** argv = afl->argvs_buf[idx1];
+    struct argv_word_entry ** argv = afl->argvs_buf[idx1]->args;
     idx2 = 0;
     while(argv[idx2]) {
       fprintf(f, "%s ", argv[idx2]->word);
@@ -1152,6 +1152,18 @@ void write_friend_stats (afl_state_t * afl) {
     fprintf(f, "\n");
   }
 
+  fclose(f);
+
+  snprintf(fn, PATH_MAX, "%s/FRIEND/argv_words", afl->out_dir);
+  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  f = fdopen(fd, "w");
+  for (idx1 = 0; idx1 < 3; idx1++) {
+    for (idx2 = 0; idx2 < afl->num_argv_word_buf_words[idx1]; idx2++) {
+      struct argv_word_entry * arg = afl->argv_words_bufs[idx1][idx2];
+      fprintf(f, "%s\n",arg->word);
+    }
+  }
   fclose(f);
 
   return;
@@ -1344,6 +1356,8 @@ void fuzz_one_func (afl_state_t *afl) {
   temp_len = len;
 
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
+
+    if (afl->stop_soon) break;
 
     u32 use_stacking1 = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2_FUNC));
     u32 rand_value;

@@ -143,7 +143,7 @@ write_to_testcase(afl_state_t *afl, void *mem, u32 len, u32 argv_idx) {
     s32 fd = open(afl->fsrv.argv_file, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", afl->fsrv.argv_file); }
 
-    struct argv_word_entry ** args = afl->argvs_buf[argv_idx];
+    struct argv_word_entry ** args = afl->argvs_buf[argv_idx]->args;
 
     u32 i = 0;
     while(args[i]) {

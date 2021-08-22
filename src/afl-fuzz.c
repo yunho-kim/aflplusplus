@@ -1613,9 +1613,10 @@ int main(int argc, char **argv_orig, char **envp) {
       new_argc++;
     }
 
-    struct argv_word_entry ** cur_argv_entry = malloc (sizeof(struct argv_word_entry *) * (new_argc + 1));
+    struct argv_entry * cur_argv_entry = malloc(sizeof(struct argv_entry));
 
-    cur_argv_entry[new_argc] = NULL;
+    struct argv_word_entry ** cur_args = malloc (sizeof(struct argv_word_entry *) * (new_argc + 1));
+    cur_argv_entry->args = cur_args;
 
     idx1 = 0;
     while (use_argv[idx1]) {
@@ -1652,16 +1653,21 @@ int main(int argc, char **argv_orig, char **envp) {
       memcpy(cur_argv_word_entry->word, use_argv[idx1], len);
       cur_argv_word_entry->word[len] = '\0';
 
-      cur_argv_entry[idx1] = cur_argv_word_entry;
+      cur_args[idx1] = cur_argv_word_entry;
 
-      if (strstr(use_argv[idx1], "cur_input")) {
+      if (idx1 == 0) {
+        afl->prog_arg = cur_argv_word_entry;
+      } else if (strstr(use_argv[idx1], "cur_input")) {
         afl->input_file_arg = cur_argv_word_entry;
       }
 
       idx1++;
     }
 
-    cur_argv_entry[idx1] = NULL;
+    fprintf(afl->debug_file, "prog arg : %s\n", afl->prog_arg->word);
+    fprintf(afl->debug_file, "input_file arg : %s\n", afl->input_file_arg->word);
+
+    cur_args[idx1] = NULL;
 
     afl->argvs_buf[0] = cur_argv_entry;
 
@@ -2158,9 +2164,8 @@ int main(int argc, char **argv_orig, char **envp) {
 
       }
 
-      //skipped_fuzz = fuzz_one(afl);
-      skipped_fuzz = 0;
-
+      skipped_fuzz = fuzz_one(afl);
+      
       if (unlikely(!afl->stop_soon && exit_1)) { afl->stop_soon = 2; }
 
       if (unlikely(afl->old_seed_selection)) {
@@ -2197,8 +2202,6 @@ int main(int argc, char **argv_orig, char **envp) {
         struct cmp_queue_entry * cq_cur = afl->cmp_queue_cur; 
         //ITERATE through tcs
         u32 num_tcs = cq_cur->num_value_changing_tcs;
-
-        fprintf(afl->debug_file, "cmp_queue_cur : %u, num_tcs : %u\n", cq_cur->id, num_tcs);
 
         if (unlikely(!cq_cur->num_fuzzed)) {
           cq_cur->mutating_tc_idx = rand_below(afl, num_tcs);

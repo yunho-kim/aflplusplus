@@ -507,86 +507,141 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
         //initial seed, will be handled in main.
         argv_idx = 0;
       } else {
-        
-        //new argv from fuzz_one_argv
-        argv_idx = afl->num_argvs;
-        afl->num_argvs++;
-
-        if (unlikely(afl->argvs_buf_size <= afl->num_argvs)) {
-          afl->argvs_buf_size *= 2;
-          afl->argvs_buf = realloc(afl->argvs_buf, sizeof(struct argv_entry *) * afl->argvs_buf_size);
-        }
-
+        //examine whether it exists
+        u32 argv_hash = 0;
+        u32 idx1;
         u32 num_argv_words = 0;
         struct argv_word_entry * ptr = args;
+
         while (ptr) {
+          for (idx1 = 0; idx1 < strlen(ptr->word); idx1++) {
+            argv_hash += ptr->word[idx1] << (idx1 + num_argv_words);
+          }
           num_argv_words++;
-          ptr = ptr->next;
+          ptr = ptr->tmp_next;
         }
 
-        struct argv_word_entry ** new_argv_entry = malloc(sizeof(struct argv_word_entry *) * (num_argv_words + 1));
-        u32 idx1, idx2;
-        ptr = args;
-        for (idx1 = 0; idx1 < num_argv_words; idx1++) {
-          new_argv_entry[idx1] = ptr;
+        argv_hash = argv_hash % 1024;
 
-          if (ptr->is_tmp) {
-            // add tmp entry
-            u32 len = strlen(ptr->word);
-            u32 hash = 0;
-            for (idx2 = 0; idx2 < len; idx2++) {
-              hash += ptr->word[idx2] << idx2;
+        bool exists = false;
+        struct argv_entry * tmp_ptr = afl->argvs_hash[argv_hash];
+        struct argv_word_entry * ptr2;
+        while(tmp_ptr) {
+          ptr = args;
+          idx1 = 0;
+          ptr2 = tmp_ptr->args[idx1++];
+          bool same = true;
+          while(ptr && ptr2) {
+            if (strcmp(ptr->word, ptr2->word)) {
+              same = false;
+              break;
             }
-            hash = hash % 1024;
-
-            bool exists = false;
-            struct argv_word_entry * hash_ptr = afl->argv_words[hash];
-            struct argv_word_entry * ptr2;
-            if (hash_ptr) {
-              ptr2 = hash_ptr;
-              while(ptr2) {
-                if(!strcmp(ptr->word, ptr2->word)) {
-                  exists = true;
-                  break;
-                }
-                ptr2 = ptr2->next;
-              }
-            }
-
-            if (!exists) {
-              if (hash_ptr) {
-                ptr2 = hash_ptr;
-                while (ptr2->next) {
-                  ptr2 = ptr2->next;
-                }
-                ptr2->next = ptr;
-              } else {
-                afl->argv_words[hash] = ptr;
-              }
-
-              afl->argv_words_bufs[2][afl->num_argv_word_buf_words[2] ++] = ptr;
-              afl->num_argv_words++;
-
-              if (unlikely(afl->num_argv_word_buf_words[2] >= afl->argv_words_buf_size[2])) {
-                afl->argv_words_buf_size[2] *= 2;
-                afl->argv_words_bufs[2] = realloc (afl->argv_words_bufs[2], sizeof(struct argv_word_entry *) * afl->argv_words_buf_size[2]);
-              }
-            }
-
-            //remove from tmps to avoid double free
-            for (idx2 = 0; idx2 < afl->num_tmp_words; idx2++) {
-              if (afl->tmp_words[idx2] == ptr) {
-                afl->tmp_words[idx2] = NULL;
-              }
-            }
+            ptr = ptr->tmp_next;
+            ptr2 = tmp_ptr->args[idx1++];
           }
 
-          ptr = ptr->next;
+          if (same) {
+            exists = true;
+            for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+              if (afl->argvs_buf[idx1] == tmp_ptr) {
+                argv_idx = idx1;
+                break;
+              }
+            }
+            break;
+          }
+          tmp_ptr = tmp_ptr->next;
         }
 
-        new_argv_entry[num_argv_words] = NULL;
+        if (!exists) {
+          //new argv from fuzz_one_argv
+          argv_idx = afl->num_argvs;
+          afl->num_argvs++;
 
-        afl->argvs_buf[argv_idx] = new_argv_entry;
+          if (unlikely(afl->argvs_buf_size <= afl->num_argvs)) {
+            afl->argvs_buf_size *= 2;
+            afl->argvs_buf = realloc(afl->argvs_buf, sizeof(struct argv_entry *) * afl->argvs_buf_size);
+          }
+
+          struct argv_entry * new_argv_entry = malloc(sizeof(struct argv_entry));
+          struct argv_word_entry ** new_args = malloc(sizeof(struct argv_word_entry *) * (num_argv_words + 1));
+          new_argv_entry->args = new_args;
+          new_argv_entry->next = NULL;
+
+          u32 idx1, idx2;
+          ptr = args;
+
+          for (idx1 = 0; idx1 < num_argv_words; idx1++) {
+            new_args[idx1] = ptr;
+
+            if (ptr->is_tmp) {
+              // add tmp entry
+              u32 len = strlen(ptr->word);
+              u32 hash = 0;
+              for (idx2 = 0; idx2 < len; idx2++) {
+                hash += ptr->word[idx2] << idx2;
+              }
+              hash = hash % 1024;
+
+              bool exists = false;
+              struct argv_word_entry * hash_ptr = afl->argv_words[hash];
+              struct argv_word_entry * ptr2;
+              if (hash_ptr) {
+                ptr2 = hash_ptr;
+                while(ptr2) {
+                  if(!strcmp(ptr->word, ptr2->word)) {
+                    exists = true;
+                    break;
+                  }
+                  ptr2 = ptr2->next;
+                }
+              }
+
+              if (!exists) {
+                if (hash_ptr) {
+                  ptr2 = hash_ptr;
+                  while (ptr2->next) {
+                    ptr2 = ptr2->next;
+                  }
+                  ptr2->next = ptr;
+                } else {
+                  afl->argv_words[hash] = ptr;
+                }
+
+                afl->argv_words_bufs[ptr->is_tmp][afl->num_argv_word_buf_words[ptr->is_tmp] ++] = ptr;
+                afl->num_argv_words++;
+
+                if (unlikely(afl->num_argv_word_buf_words[ptr->is_tmp] >= afl->argv_words_buf_size[ptr->is_tmp])) {
+                  afl->argv_words_buf_size[ptr->is_tmp] *= 2;
+                  afl->argv_words_bufs[ptr->is_tmp] = realloc (afl->argv_words_bufs[ptr->is_tmp], sizeof(struct argv_word_entry *) * afl->argv_words_buf_size[ptr->is_tmp]);
+                }
+              }
+
+              //remove from tmps to avoid double free
+              for (idx2 = 0; idx2 < afl->num_tmp_words; idx2++) {
+                if (afl->tmp_words[idx2] == ptr) {
+                  afl->tmp_words[idx2] = NULL;
+                }
+              }
+            }
+
+            ptr = ptr->tmp_next;
+          }
+
+          new_args[num_argv_words] = NULL;
+
+          afl->argvs_buf[argv_idx] = new_argv_entry;
+          
+          if (afl->argvs_hash[argv_hash]) {
+            tmp_ptr = afl->argvs_hash[argv_hash];
+            while (tmp_ptr->next) {
+              tmp_ptr = tmp_ptr->next;
+            }
+            tmp_ptr->next = new_argv_entry;
+          } else {
+            afl->argvs_hash[argv_hash] = new_argv_entry;
+          }
+        }
       }
     }
 

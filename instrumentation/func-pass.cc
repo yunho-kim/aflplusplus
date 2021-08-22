@@ -80,12 +80,68 @@ class FuncLogInstructions : public ModulePass {
 
  private:
   bool hookInstrs(Module &M);
-
+  void Insert_magicbyte_hook(Instruction * IN, Instruction * insertPoint, unsigned int rec);
+  FunctionCallee magicbytesHookptr;
 };
 
 }  // namespace
 
 char FuncLogInstructions::ID = 0;
+
+void FuncLogInstructions::Insert_magicbyte_hook(Instruction * IN, Instruction * insertPoint, unsigned int rec) {
+  
+  GetElementPtrInst * gepIN = NULL;
+
+  if (rec == 0) return;
+
+  //blacklist
+  CallInst * callIN = NULL;
+  if ((callIN = dyn_cast<CallInst>(IN))) {
+    Function *Callee = callIN->getCalledFunction();
+    if (!Callee) return;
+    if (callIN->getCallingConv() != llvm::CallingConv::C) return;
+    if (!Callee->getName().str().compare(0,5, "__afl")) return;
+    if (!Callee->getName().str().compare(0,7, "__magic")) return;
+    if (!Callee->getName().str().compare(0,5, "__cmp")) return;
+    if (!Callee->getName().str().compare(0,4, "llvm")) return;
+    if (!isInInstrumentList(Callee)) return;
+    if (!Callee->getName().str().compare("malloc")) return;
+  }
+
+  if ((gepIN = dyn_cast<GetElementPtrInst>(IN)) && (gepIN->getNumOperands() > 2)) {
+    Type * pointerTy = gepIN->getType();
+    if (pointerTy->getPointerElementType()->isIntegerTy(8)) {
+      Value * idx = gepIN->getOperand(2);
+      ConstantInt * cidx;
+      if ((cidx = dyn_cast<ConstantInt>(idx)) && (cidx->getZExtValue() == 0)) {
+        IRBuilder<> IRB(insertPoint);
+        std::vector<Value *> args;
+        args.push_back(IN);
+        IRB.CreateCall(magicbytesHookptr, args);
+      }
+    }
+    return;
+  }
+
+  for (auto iter = IN->op_begin(); iter != IN->op_end(); iter++) {
+    Value * parm = iter->get();
+
+    GEPOperator * parmop = NULL;
+    if ((parmop = dyn_cast<GEPOperator>(parm)) && (parmop->getNumOperands() > 2)) {
+      Type * pointerTy = parmop->getType();
+      if (pointerTy->getPointerElementType()->isIntegerTy(8)) {
+        Value * idx = parmop->getOperand(2);
+        ConstantInt * cidx;
+        if ((cidx = dyn_cast<ConstantInt>(idx)) && (cidx->getZExtValue() == 0)) {
+          IRBuilder<> IRB(insertPoint);
+          std::vector<Value *> args;
+          args.push_back(parm);
+          IRB.CreateCall(magicbytesHookptr, args);
+        }
+      }
+    }
+  }
+}
 
 bool FuncLogInstructions::hookInstrs(Module &M) {
 
@@ -122,13 +178,10 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   FunctionCallee magicbytesHook32 = M.getOrInsertFunction("__magic_bytes_record_32", VoidTy, Int32Ty);
   FunctionCallee magicbytesHook64 = M.getOrInsertFunction("__magic_bytes_record_64", VoidTy, Int64Ty);
   //FunctionCallee magicbytesHook128 = M.getOrInsertFunction("__magic_bytes_record_128", VoidTy, Int128Ty);
-  FunctionCallee magicbytesHookptr = M.getOrInsertFunction("__magic_bytes_record_ptr", VoidTy, Int8PtrTy);
+  magicbytesHookptr = M.getOrInsertFunction("__magic_bytes_record_ptr", VoidTy, Int8PtrTy);
   FunctionCallee magicbytesHooknptr = M.getOrInsertFunction("__magic_bytes_record_nptr", VoidTy, Int8PtrTy, Int32Ty);
   
   FunctionCallee argvHook = M.getOrInsertFunction("__afl_parse_argv", VoidTy, Int32PtrTy, Int8PtrPtrPtrTy);
-  
-  FunctionCallee condRecordHook = M.getOrInsertFunction("__cmp_cond_record_hook", VoidTy, Int32Ty, Int32Ty);
-
   FunctionCallee fopen_wrapperHook = M.getOrInsertFunction("__afl_fopen_wrapper", FileTy, Int8PtrTy, Int8PtrTy);
   FunctionCallee freopen_wrapperHook = M.getOrInsertFunction("__afl_freopen_wrapper", FileTy, Int8PtrTy, Int8PtrTy, FileTy);
   FunctionCallee open_wrapperHook = M.getOrInsertFunction("__afl_fopen_wrapper", Int32Ty, Int8PtrTy, Int32Ty, Int32Ty);
@@ -150,6 +203,10 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   for (auto &F : M) {
 
     if (!isInInstrumentList(&F)) continue;
+
+    if (!F.getName().str().compare(0,5, "__afl")) continue;
+    if (!F.getName().str().compare(0,7, "__magic")) continue;
+    if (!F.getName().str().compare(0,5, "__cmp")) continue;
 
     //func << func_id << "," << F.getName().data() << "\n";
 
@@ -185,6 +242,17 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
         CmpInst *cmpInst = nullptr;
         CallInst *callInst = nullptr;
 
+        //Just check parameters...
+        if (argv_mut) {
+          Instruction * InsertPoint = IN.getNextNode();
+          while (InsertPoint && dyn_cast<PHINode>(InsertPoint)) {
+            InsertPoint = InsertPoint->getNextNode();
+          }
+          if (InsertPoint) {
+            Insert_magicbyte_hook(&IN, InsertPoint, 3);
+          }
+        }
+        
         if ((cmpInst = dyn_cast<CmpInst>(&IN))) {
 
           Instruction * InsertPoint = cmpInst->getNextNode();
@@ -229,16 +297,14 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
           }
 
           args.push_back(arg1_cmpid);
-          args.push_back(arg2_condition);
-
-          IRB.CreateCall(condRecordHook, args);
-          
+          args.push_back(arg2_condition);          
           args.push_back(arg3_value);
 
           IRB.CreateCall(cmplogHookIns, args);
 
           //TODO : float
-          if (argv_mut && (cmpInst->getPredicate() == CmpInst::Predicate::ICMP_EQ) && cmpInst->getNumOperands() == 2) {
+          CmpInst::Predicate pred = cmpInst->getPredicate();
+          if (argv_mut && (pred == CmpInst::Predicate::ICMP_EQ || pred == CmpInst::Predicate::ICMP_NE) && cmpInst->getNumOperands() == 2) {
             Value * op1 = cmpInst->getOperand(0);
             Value * op2 = cmpInst->getOperand(1);
             ConstantInt * cop = dyn_cast<ConstantInt>(op1);
@@ -293,6 +359,11 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
           Function *Callee = callInst->getCalledFunction();
           if (!Callee) continue;
           if (callInst->getCallingConv() != llvm::CallingConv::C) continue;
+
+          if (!Callee->getName().str().compare(0,5, "__afl")) continue;
+          if (!Callee->getName().str().compare(0,7, "__magic")) continue;
+          if (!Callee->getName().str().compare(0,5, "__cmp")) continue;
+
           StringRef FuncName = Callee->getName();
           isStrcmp &= !FuncName.compare(StringRef("strcmp"));
           isMemcmp &= (!FuncName.compare(StringRef("memcmp")) ||
@@ -308,8 +379,9 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
           isopen &= !FuncName.compare(StringRef("open"));
 
           if (!isStrcmp && !isMemcmp && !isStrncmp && !isStrcasecmp &&
-              !isStrncasecmp && !isIntMemcpy && !isGetOpt && !isGetOptLong && !isfopen && !isfreopen && !isopen)
+              !isStrncasecmp && !isIntMemcpy && !isGetOpt && !isGetOptLong && !isfopen && !isfreopen && !isopen) {
             continue;
+          }
 
           /* Verify the strcmp/memcmp/strncmp/strcasecmp/strncasecmp function
            * prototype */
@@ -370,8 +442,9 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
                     FT->getParamType(2)->isIntegerTy(32);
 
           if (!isStrcmp && !isMemcmp && !isStrncmp && !isStrcasecmp &&
-              !isStrncasecmp && !isIntMemcpy && !isGetOptLong && !isfopen && !isfreopen && !isopen)
-            continue;
+              !isStrncasecmp && !isIntMemcpy && !isGetOptLong && !isfopen && !isfreopen && !isopen) {
+            //just check arguments
+          }
 
           
           if (isGetOpt || isGetOptLong) {
@@ -397,6 +470,8 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
             if (isGetOptLong) {
               Value * optionstruct = callInst->getArgOperand(3);
               ConstantExpr * ce_optionstruct = dyn_cast<ConstantExpr>(optionstruct);
+
+              //TODO!
 
               if (ce_optionstruct && ce_optionstruct->isGEPWithNoNotionalOverIndexing()) {
                 ce_optionstruct->printAsOperand(errs());
@@ -621,6 +696,14 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
     func_id = 0;
     cmp_id = 0;
+
+    result_ir << "Global table \n";
+
+    for (auto &GT : M.getGlobalList()) {
+      result_ir << GT << "\n";
+    }
+
+    result_ir << "IR : \n";
 
     for (auto &F : M) {
       if (!isInInstrumentList(&F)) { 
