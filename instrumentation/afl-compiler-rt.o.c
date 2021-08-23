@@ -2079,9 +2079,13 @@ FILE * __afl_freopen_wrapper(const char * pathname, const char * mode, FILE * st
   return freopen(pathname, mode, stream);
 }
 
-int __afl_open_wrapper(const char *pathname, int flags, mode_t mode) {
+int __afl_open_wrapper(const char *pathname, int flags, ...) {
   if (flags & (O_WRONLY|O_RDWR)) {
-    return open("/dev/null", flags, mode);
+    return open("/dev/null", flags);
   }
-  return open(pathname, flags, mode);
+  return open(pathname, flags);
+}
+
+int __afl_creat_wrapper (const char * filename, mode_t mode) {
+  return creat("/dev/null", mode);
 }

@@ -190,9 +190,14 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   FunctionCallee magicbytesHooknptr = M.getOrInsertFunction("__magic_bytes_record_nptr", VoidTy, Int8PtrTy, Int32Ty);
   
   FunctionCallee argvHook = M.getOrInsertFunction("__afl_parse_argv", VoidTy, Int32PtrTy, Int8PtrPtrPtrTy);
-  FunctionCallee fopen_wrapperHook = M.getOrInsertFunction("__afl_fopen_wrapper", FileTy, Int8PtrTy, Int8PtrTy);
-  FunctionCallee freopen_wrapperHook = M.getOrInsertFunction("__afl_freopen_wrapper", FileTy, Int8PtrTy, Int8PtrTy, FileTy);
-  FunctionCallee open_wrapperHook = M.getOrInsertFunction("__afl_fopen_wrapper", Int32Ty, Int8PtrTy, Int32Ty, Int32Ty);
+  Value * fopen_wrapperHook = M.getOrInsertFunction("__afl_fopen_wrapper", FileTy, Int8PtrTy, Int8PtrTy).getCallee();
+  Value * freopen_wrapperHook = M.getOrInsertFunction("__afl_freopen_wrapper", FileTy, Int8PtrTy, Int8PtrTy, FileTy).getCallee();
+  std::vector<Type *> parm_types;
+  parm_types.push_back(Int8PtrTy);
+  parm_types.push_back(Int32Ty);
+  FunctionType * open_ft = FunctionType::get(Int32Ty, parm_types, true);
+  Value * open_wrapperHook = M.getOrInsertFunction("__afl_open_wrapper", open_ft).getCallee();
+  Value * creat_wrapperHook = M.getOrInsertFunction("__afl_creat_wrapper", Int32Ty, Int8PtrTy, Int32Ty).getCallee();
 
   unsigned int func_id = 0;
   unsigned int cmp_id = 0;
@@ -209,6 +214,49 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   func2.open("FRIEND_getopt_info" , std::ofstream::out | std::ofstream::trunc);
 
   for (auto &F : M) {
+
+    if (F.getName().equals(StringRef("open"))) {
+      errs() << "found open\n";
+      FunctionType * ft = F.getFunctionType();
+      errs() << "num parames : " << ft->getNumParams() << "\n";
+      if (ft->getNumParams() >= 2 &&
+          ft->getReturnType()->isIntegerTy(32) &&
+          ft->getParamType(0)->isPointerTy() &&
+          ft->getParamType(1)->isIntegerTy(32)) {
+        fprintf(stderr, "replacing open\n");
+        F.replaceAllUsesWith(open_wrapperHook);
+        continue;
+      }
+    } else if (F.getName().equals(StringRef("fopen"))) {
+      FunctionType * ft = F.getFunctionType();
+      if (ft->getNumParams() == 2 &&
+          ft->getReturnType()->isPointerTy() &&
+          ft->getParamType(0)->isPointerTy() &&
+          ft->getParamType(1)->isPointerTy()) {
+        fprintf(stderr, "replacing fopen\n");
+        F.replaceAllUsesWith(fopen_wrapperHook);
+        continue;
+      }
+    } else if (F.getName().equals(StringRef("freopen"))) {
+      FunctionType * ft = F.getFunctionType();
+      if (ft->getNumParams() == 3 &&
+        ft->getReturnType()->isPointerTy() &&
+        ft->getParamType(0)->isPointerTy() &&
+        ft->getParamType(1)->isPointerTy() &&
+        ft->getParamType(2)->isPointerTy()) {
+        F.replaceAllUsesWith(freopen_wrapperHook);
+        continue;
+      }
+    } else if (F.getName().equals(StringRef("creat"))) {
+      FunctionType * ft = F.getFunctionType();
+      if (ft->getNumParams() == 2 &&
+      ft->getReturnType()->isIntegerTy(32) &&
+      ft->getParamType(0)->isPointerTy() &&
+      ft->getParamType(1)->isIntegerTy(32)) {
+        F.replaceAllUsesWith(creat_wrapperHook);
+        continue;
+      }
+    }
 
     if (!isInInstrumentList(&F)) continue;
 
@@ -360,9 +408,6 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
           bool isIntMemcpy = true;
           bool isGetOpt = true;
           bool isGetOptLong = true;
-          bool isfopen = true;
-          bool isfreopen = true;
-          bool isopen = true;
 
           Function *Callee = callInst->getCalledFunction();
           if (!Callee) continue;
@@ -382,12 +427,9 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
           isIntMemcpy &= !FuncName.compare("llvm.memcpy.p0i8.p0i8.i64");
           isGetOpt &= !FuncName.compare(StringRef("getopt"));
           isGetOptLong &= !FuncName.compare(StringRef("getopt_long"));
-          isfopen &= !FuncName.compare(StringRef("fopen"));
-          isfreopen &= !FuncName.compare(StringRef("freopen"));
-          isopen &= !FuncName.compare(StringRef("open"));
 
           if (!isStrcmp && !isMemcmp && !isStrncmp && !isStrcasecmp &&
-              !isStrncasecmp && !isIntMemcpy && !isGetOpt && !isGetOptLong && !isfopen && !isfreopen && !isopen) {
+              !isStrncasecmp && !isIntMemcpy && !isGetOpt && !isGetOptLong) {
             continue;
           }
 
@@ -433,25 +475,10 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
                           FT->getParamType(2)->isPointerTy() &&
                           FT->getParamType(3)->isPointerTy() &&
                           FT->getParamType(4)->isPointerTy();
-          isfopen &= FT->getNumParams() == 2 &&
-                     FT->getReturnType()->isPointerTy() &&
-                     FT->getParamType(0)->isPointerTy() &&
-                     FT->getParamType(1)->isPointerTy();
-          
-          isfreopen &= FT->getNumParams() == 3 &&
-                       FT->getReturnType()->isPointerTy() &&
-                       FT->getParamType(0)->isPointerTy() &&
-                       FT->getParamType(1)->isPointerTy() &&
-                       FT->getParamType(2)->isPointerTy();
-          isopen &= FT->getNumParams() == 3 &&
-                    FT->getReturnType()->isIntegerTy(32) &&
-                    FT->getParamType(0)->isPointerTy() &&
-                    FT->getParamType(1)->isIntegerTy(32) &&
-                    FT->getParamType(2)->isIntegerTy(32);
 
           if (!isStrcmp && !isMemcmp && !isStrncmp && !isStrcasecmp &&
-              !isStrncasecmp && !isIntMemcpy && !isGetOptLong && !isfopen && !isfreopen && !isopen) {
-            //just check arguments
+              !isStrncasecmp && !isIntMemcpy && !isGetOptLong) {
+            continue;
           }
 
           
@@ -493,17 +520,6 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
               }
             }
 
-            continue;
-          }
-
-          if (isfopen) {
-            callInst->setCalledFunction(fopen_wrapperHook);
-            continue;
-          } else if (isfreopen) {
-            callInst->setCalledFunction(freopen_wrapperHook);
-            continue;
-          } else if (isopen) {
-            callInst->setCalledFunction(open_wrapperHook);
             continue;
           }
 

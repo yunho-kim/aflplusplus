@@ -869,7 +869,7 @@ void show_stats(afl_state_t *afl) {
 
   sprintf(tmp, "%s/%u (%s)",  u_stringify_int(IB(0), afl->tc_len_sum), afl->queued_paths,
       u_stringify_float(IB(1), (float) afl->tc_len_sum / afl->queued_paths));
-  SAYF(bV bSTOP "   Avg. tc len :  " cRST "%-18s" bSTG bV, tmp);  
+  SAYF(bV bSTOP "   Avg. tc len :  " cRST "%-18s" bSTG bV, tmp);
 
   sprintf(tmp, "%u/%u", afl->num_argv_words, afl->num_argvs);
   SAYF(bSTOP " # of argv words/argvs : " cRST "%-18s " bSTG bV "\n", tmp);
