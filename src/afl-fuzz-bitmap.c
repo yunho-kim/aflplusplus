@@ -526,8 +526,8 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
         bool exists = false;
         struct argv_entry * tmp_ptr = afl->argvs_hash[argv_hash];
         struct argv_word_entry * ptr2;
-        while(tmp_ptr) {
-          ptr = args;
+        while(tmp_ptr) { 
+          ptr = args;         
           idx1 = 0;
           ptr2 = tmp_ptr->args[idx1++];
           bool same = true;
@@ -538,6 +538,10 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
             }
             ptr = ptr->tmp_next;
             ptr2 = tmp_ptr->args[idx1++];
+            if ((ptr && !ptr2) || (!ptr && ptr2)) {
+              same = false;
+              break;
+            }
           }
 
           if (same) {
@@ -608,20 +612,18 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
                   afl->argv_words[hash] = ptr;
                 }
 
-                afl->argv_words_bufs[ptr->is_tmp][afl->num_argv_word_buf_words[ptr->is_tmp] ++] = ptr;
+                afl->argv_words_bufs[2][afl->num_argv_word_buf_words[2] ++] = ptr;
                 afl->num_argv_words++;
 
-                if (unlikely(afl->num_argv_word_buf_words[ptr->is_tmp] >= afl->argv_words_buf_size[ptr->is_tmp])) {
-                  afl->argv_words_buf_size[ptr->is_tmp] *= 2;
-                  afl->argv_words_bufs[ptr->is_tmp] = realloc (afl->argv_words_bufs[ptr->is_tmp], sizeof(struct argv_word_entry *) * afl->argv_words_buf_size[ptr->is_tmp]);
+                if (unlikely(afl->num_argv_word_buf_words[2] >= afl->argv_words_buf_size[2])) {
+                  afl->argv_words_buf_size[2] *= 2;
+                  afl->argv_words_bufs[2] = realloc (afl->argv_words_bufs[2], sizeof(struct argv_word_entry *) * afl->argv_words_buf_size[2]);
                 }
-              }
-
-              //remove from tmps to avoid double free
-              for (idx2 = 0; idx2 < afl->num_tmp_words; idx2++) {
-                if (afl->tmp_words[idx2] == ptr) {
-                  afl->tmp_words[idx2] = NULL;
-                }
+                //remove from tmps to avoid double free
+                ptr->is_tmp = 2;
+              } else {
+                //use existing one.
+                new_args[idx1] = ptr2;
               }
             }
 

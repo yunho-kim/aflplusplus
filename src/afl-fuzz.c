@@ -1037,7 +1037,11 @@ int main(int argc, char **argv_orig, char **envp) {
       FATAL("check argv");
     }
     trim ++;
-    u32 trim_len = strrchr(trim, '.') - trim;
+    char * comma_trim = strrchr(trim, '.');
+    if (comma_trim == NULL) {
+      FATAL ("check argv");
+    }
+    u32 trim_len = comma_trim - trim;
     memcpy(buf, trim, trim_len);
     snprintf(afl->func_binary, PATH_MAX, "%s/%s.func", afl->func_infos_dir, buf);
     free(buf);
@@ -2184,8 +2188,13 @@ int main(int argc, char **argv_orig, char **envp) {
     } while (skipped_fuzz && afl->queue_cur && !afl->stop_soon);
 
     //argv fuzzing?
-    if (afl->argv_mut) {
+    if (afl->argv_mut ){ //&& !afl->timed_out) {
       fuzz_one_argv(afl);
+
+      /*if ((get_cur_time() - afl->start_time) > 3600000) {
+        afl->timed_out = 1;
+      }
+      */
     }
 
     //havoc_func
@@ -2357,10 +2366,12 @@ stop_fuzzing:
   if (afl->orig_cmdline) { ck_free(afl->orig_cmdline); }
   ck_free(afl->fsrv.target_path);
   ck_free(afl->fsrv.out_file);
+  ck_free(afl->fsrv.argv_file);
   ck_free(afl->sync_id);
   if (afl->n_fuzz) ck_free(afl->n_fuzz);
   if (afl->q_testcase_cache) { ck_free(afl->q_testcase_cache); }
   afl_state_deinit(afl);
+  free(afl->init_argv);
   free(afl);                                                 /* not tracked */
 
   argv_cpy_free(argv);

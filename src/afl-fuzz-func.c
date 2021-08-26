@@ -925,7 +925,20 @@ do {                                      \
     if (afl->stop_soon) { break; }
   }
 
-  if (afl->stop_soon) { return; }
+  if (afl->stop_soon) {
+    for (idx1 = 0; idx1 < mining_idx; idx1++) {
+      struct byte_cmp_set * tmp = mining_result[idx1];
+
+      if (tmp->num_changed_val_cmps != 0) {
+        free(tmp->changed_val_cmps);
+      }
+      free(tmp);
+
+    }
+
+    free(mining_result);
+    return;
+  }
 
   for (idx1 = 0; idx1 < afl->num_cmp; idx1++) {
     if (is_changed_cmp[idx1]) {
@@ -1033,6 +1046,7 @@ void write_friend_stats (afl_state_t * afl) {
   s32 fd;
 
   if (afl->func_exec_count_table) {
+    /*
     snprintf(fn, PATH_MAX, "%s/FRIEND/func_exec_table.csv", afl->out_dir);
     fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd < 0) PFATAL("Unable to create '%s'", fn);
@@ -1057,6 +1071,7 @@ void write_friend_stats (afl_state_t * afl) {
       fprintf(f, "\n");
     }
     fclose(f);
+    */
   }
 
   snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_exec_table.csv", afl->out_dir);
@@ -1152,13 +1167,27 @@ void write_friend_stats (afl_state_t * afl) {
     fprintf(f, "\n");
   }
 
+  fprintf(f, "idx, # of input, Avg. exec time (us)\n");
+  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+    u32 num_input = 0;
+    u64 exec_us_sum = 0;
+    for (idx2 = 0; idx2 < afl->queued_paths; idx2++) {
+      if (afl->queue_buf[idx2]->argv_idx == idx1) {
+        num_input ++;
+        exec_us_sum += afl->queue_buf[idx2]->exec_us;
+      }
+    }
+    fprintf(f, "%u,%u,%.2fus\n", idx1, num_input, ((float) exec_us_sum) / ((float) num_input));
+  }
+
   fclose(f);
 
   snprintf(fn, PATH_MAX, "%s/FRIEND/argv_words", afl->out_dir);
   fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) PFATAL("Unable to create '%s'", fn);
   f = fdopen(fd, "w");
-  for (idx1 = 0; idx1 < 3; idx1++) {
+  for (idx1 = 0; idx1 < 4; idx1++) {
+    fprintf(f, "argv keywords class : %u\n", idx1);
     for (idx2 = 0; idx2 < afl->num_argv_word_buf_words[idx1]; idx2++) {
       struct argv_word_entry * arg = afl->argv_words_bufs[idx1][idx2];
       fprintf(f, "%s\n",arg->word);

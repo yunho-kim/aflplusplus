@@ -303,7 +303,7 @@
 
 /* Output directory reuse grace period (minutes): */
 
-#define OUTPUT_GRACE 25
+#define OUTPUT_GRACE 60
 
 /* Uncomment to use simple file names (id_NNNNNN): */
 
@@ -519,14 +519,6 @@
 #define EXEC_TCS_SIZE 256
 
 #define MINING_LIMIT 10
-
-#define AFL_MAGIC_SHM_ENV_VAR1 "__AFL_MAGIC_SHM_ID1"
-
-#define AFL_MAGIC_SHM_ENV_VAR2 "__AFL_MAGIC_SHM_ID2"
-
-#define AFL_RECORD_BRANCH "__AFL_RECORD_BRANCH"
-
-#define AFL_CHECK_BRANCH "__AFL_CHECK_BRANCH"
 
 #define CMP_COV_RECORD  1024
 

@@ -878,10 +878,10 @@ typedef struct afl_state {
   u32 argvs_buf_size;
 
   struct argv_word_entry ** argv_words;
-  // <-word>, <word> <-word>=<word>
-  struct argv_word_entry ** argv_words_bufs[3];
-  u32 num_argv_word_buf_words[3];
-  u32 argv_words_buf_size[3];
+  // <-word>, <word>, <-word>=<word>, <-word=>
+  struct argv_word_entry ** argv_words_bufs[4];
+  u32 num_argv_word_buf_words[4];
+  u32 argv_words_buf_size[4];
   u32 num_argv_words;
 
   struct argv_word_entry ** tmp_words;
@@ -889,6 +889,8 @@ typedef struct afl_state {
 
   struct argv_word_entry * prog_arg;
   struct argv_word_entry * input_file_arg;
+
+  bool timed_out;
 
 //Debug
   FILE * debug_file;

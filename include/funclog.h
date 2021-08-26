@@ -39,14 +39,6 @@ struct cmp_entry {
   u8 condition;
 };
 
-//cmp entries used for tracking branch coverage
-struct cmp_entry2 {
-  //last execution condition value
-  u32 cmp_id;
-  //condition recored at the execution, MSB : true, LSB : false,  true | false covered  
-  u8 condition;
-};
-
 void func_exec_child(afl_forkserver_t *fsrv, char ** argv);
 
 #endif
