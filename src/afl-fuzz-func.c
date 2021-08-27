@@ -221,8 +221,7 @@ void mining_wrapper(afl_state_t * afl, u32 tc_id) {
 
 }
 
-
-u32 func_choose_block_len(afl_state_t *afl, u32 limit, u32 len) {
+static u32 func_choose_block_len(afl_state_t *afl, u32 limit, u32 len) {
 
   u32 min_value, max_value;
   u32 rlim = MIN(afl->queue_cycle, (u32)3);
@@ -1150,35 +1149,9 @@ void write_friend_stats (afl_state_t * afl) {
         u_stringify_int(IB(3), afl->stage_finds[STAGE_MINING]),
         u_stringify_int(IB(4), afl->stage_cycles[STAGE_MINING]));
 
-  fclose(f);
-
-  snprintf(fn, PATH_MAX, "%s/FRIEND/argvs", afl->out_dir);
-  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-  if (fd < 0) PFATAL("Unable to create '%s'", fn);
-  f = fdopen(fd, "w");
-  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
-    fprintf(f, "%u : ", idx1);
-    struct argv_word_entry ** argv = afl->argvs_buf[idx1]->args;
-    idx2 = 0;
-    while(argv[idx2]) {
-      fprintf(f, "%s ", argv[idx2]->word);
-      idx2++;
-    }
-    fprintf(f, "\n");
-  }
-
-  fprintf(f, "idx, # of input, Avg. exec time (us)\n");
-  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
-    u32 num_input = 0;
-    u64 exec_us_sum = 0;
-    for (idx2 = 0; idx2 < afl->queued_paths; idx2++) {
-      if (afl->queue_buf[idx2]->argv_idx == idx1) {
-        num_input ++;
-        exec_us_sum += afl->queue_buf[idx2]->exec_us;
-      }
-    }
-    fprintf(f, "%u,%u,%.2fus\n", idx1, num_input, ((float) exec_us_sum) / ((float) num_input));
-  }
+  fprintf(f, "argv : %s/%s\n",
+    u_stringify_int(IB(0), afl->stage_finds[STAGE_ARGV]),
+    u_stringify_int(IB(1), afl->stage_cycles[STAGE_ARGV]));
 
   fclose(f);
 

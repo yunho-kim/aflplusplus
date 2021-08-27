@@ -135,10 +135,7 @@ write_to_testcase(afl_state_t *afl, void *mem, u32 len, u32 argv_idx) {
 
   }
 
-
-  if (afl->argv_mut) {
-    assert (afl->num_argvs > argv_idx);
-
+  if (afl->argv_mut && (argv_idx != (u32) -1)) {
     unlink(afl->fsrv.argv_file);
     s32 fd = open(afl->fsrv.argv_file, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", afl->fsrv.argv_file); }

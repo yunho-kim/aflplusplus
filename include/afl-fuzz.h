@@ -1269,6 +1269,7 @@ void   check_if_tty(afl_state_t *);
 void   setup_signal_handlers(void);
 void   save_cmdline(afl_state_t *, u32, char **);
 void   read_foreign_testcases(afl_state_t *, int);
+u32 choose_block_len(afl_state_t *afl, u32 limit);
 
 /* CmpLog */
 
@@ -1286,6 +1287,7 @@ void mining_wrapper(afl_state_t *, u32);
 void fuzz_one_argv(afl_state_t * afl);
 void init_argv(afl_state_t * afl);
 void destroy_argv(afl_state_t * afl);
+void argv_select(afl_state_t * afl);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len);

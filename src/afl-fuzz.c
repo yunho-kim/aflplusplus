@@ -2188,17 +2188,19 @@ int main(int argc, char **argv_orig, char **envp) {
     } while (skipped_fuzz && afl->queue_cur && !afl->stop_soon);
 
     //argv fuzzing?
-    if (afl->argv_mut ){ //&& !afl->timed_out) {
+    if (afl->argv_mut && !afl->timed_out) {
       fuzz_one_argv(afl);
 
-      /*if ((get_cur_time() - afl->start_time) > 3600000) {
+      if ((get_cur_time() - afl->start_time) > 3600000) {
         afl->timed_out = 1;
+        argv_select(afl);
+        afl->stop_soon = 1;
       }
-      */
+      
     }
 
     //havoc_func
-    if (likely(afl->cmp_queue)) {
+    if (likely(afl->cmp_queue) && likely(!afl->stop_soon)) {
       if (unlikely(afl->cmp_queue_cur == NULL)) {
         afl->cmp_queue_cur = afl->cmp_queue;
       }
@@ -2246,7 +2248,7 @@ int main(int argc, char **argv_orig, char **envp) {
     }
 
     u32 idx = 0;
-    while (((afl->mining_done_idx + 1) < afl->queued_paths) && idx < MINING_LIMIT) {
+    while (((afl->mining_done_idx + 1) < afl->queued_paths) && idx < MINING_LIMIT && !afl->stop_soon) {
       if (afl->queue_buf[afl->mining_done_idx]->is_mined < MAX_MINING_TRY)
         mining_wrapper(afl, afl->mining_done_idx);
       afl->mining_done_idx++;
