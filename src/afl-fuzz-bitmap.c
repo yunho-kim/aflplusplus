@@ -314,11 +314,19 @@ u8 *describe_op(afl_state_t *afl, u8 new_bits, size_t max_description_len, u32 p
 
   if (unlikely(afl->syncing_party)) {
 
-    sprintf(ret, "sync:%s,src:%06u", afl->syncing_party, parent_id1);
+    if (unlikely(parent_id1 == (u32) -1)) {
+      sprintf(ret, "sync:%s", afl->syncing_party);
+    } else {
+      sprintf(ret, "sync:%s,src:%06u", afl->syncing_party, parent_id1);
+    }
 
   } else {
 
-    sprintf(ret, "src:%06u", parent_id1);
+    if (likely(parent_id1 != (u32) -1)) {
+      sprintf(ret, "src:%06u", parent_id1);
+    } else {
+      sprintf(ret, "src:-");
+    }
 
     if (parent_id2 != (u32) -1) {
 
@@ -327,7 +335,7 @@ u8 *describe_op(afl_state_t *afl, u8 new_bits, size_t max_description_len, u32 p
     }
 
     if (afl->argv_mut) {
-      sprintf(ret + strlen(ret), ",argv:%u", argv_idx);
+      sprintf(ret + strlen(ret), ",argv:%06u", argv_idx);
     }
 
     sprintf(ret + strlen(ret), ",time:%llu",
@@ -537,8 +545,12 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
               break;
             }
             ptr = ptr->tmp_next;
+            if (!ptr) {
+              same = false;
+              break;
+            }
             ptr2 = tmp_ptr->args[idx1++];
-            if ((ptr && !ptr2) || (!ptr && ptr2)) {
+            if (!ptr2) {
               same = false;
               break;
             }
@@ -649,9 +661,15 @@ save_if_interesting(afl_state_t *afl, void *mem, u32 len, u8 fault, u32 parent_i
 
 #ifndef SIMPLE_FILES
 
-    queue_fn = alloc_printf(
+    if (afl->argv_timed_out) {
+      queue_fn = alloc_printf(
+        "%s/queue2/id:%06u,%s", afl->out_dir, afl->queued_paths,
+        describe_op(afl, new_bits, NAME_MAX - strlen("id:000000,"), parent_id1, parent_id2, argv_idx));
+    } else {
+      queue_fn = alloc_printf(
         "%s/queue/id:%06u,%s", afl->out_dir, afl->queued_paths,
         describe_op(afl, new_bits, NAME_MAX - strlen("id:000000,"), parent_id1, parent_id2, argv_idx));
+    }
 
 #else
 

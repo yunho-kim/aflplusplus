@@ -1683,6 +1683,10 @@ static void handle_existing_out_dir(afl_state_t *afl) {
   if (delete_files(fn, CASE_PREFIX)) { goto dir_cleanup_failed; }
   ck_free(fn);
 
+  fn = alloc_printf("%s/queue2", afl->out_dir);
+  if (delete_files(fn, CASE_PREFIX)) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
   /* All right, let's do <afl->out_dir>/crashes/id:* and
    * <afl->out_dir>/hangs/id:*. */
 
@@ -1827,6 +1831,14 @@ static void handle_existing_out_dir(afl_state_t *afl) {
   ck_free(fn);
 
   fn = alloc_printf("%s/FRIEND/argvs_init", afl->out_dir);
+  if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
+  fn = alloc_printf("%s/FRIEND/num_func_calls", afl->out_dir);
+  if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
+  fn = alloc_printf("%s/FRIEND/argvs_selected", afl->out_dir);
   if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
   ck_free(fn);
 
@@ -1993,6 +2005,10 @@ void setup_dirs_fds(afl_state_t *afl) {
   /* The set of paths showing variable behavior. */
 
   tmp = alloc_printf("%s/queue/.state/variable_behavior/", afl->out_dir);
+  if (mkdir(tmp, 0700)) { PFATAL("Unable to create '%s'", tmp); }
+  ck_free(tmp);
+
+  tmp = alloc_printf("%s/queue2", afl->out_dir);
   if (mkdir(tmp, 0700)) { PFATAL("Unable to create '%s'", tmp); }
   ck_free(tmp);
 

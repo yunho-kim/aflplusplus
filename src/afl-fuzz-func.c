@@ -146,6 +146,7 @@ void destroy_func(afl_state_t * afl) {
   free(afl->mutated_frag_idx);
   free(afl->close_tcs);
   free(afl->is_changed);
+  free(afl->selected_argvs);
 }
 
 void init_trim_and_func(afl_state_t * afl) {
@@ -1045,7 +1046,7 @@ void write_friend_stats (afl_state_t * afl) {
   s32 fd;
 
   if (afl->func_exec_count_table) {
-    /*
+    
     snprintf(fn, PATH_MAX, "%s/FRIEND/func_exec_table.csv", afl->out_dir);
     fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd < 0) PFATAL("Unable to create '%s'", fn);
@@ -1070,7 +1071,7 @@ void write_friend_stats (afl_state_t * afl) {
       fprintf(f, "\n");
     }
     fclose(f);
-    */
+    
   }
 
   snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_exec_table.csv", afl->out_dir);

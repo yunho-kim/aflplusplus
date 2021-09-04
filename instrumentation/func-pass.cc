@@ -199,6 +199,9 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
   if (getenv("AFL_ARGV") != NULL) argv_mut = 1;
 
+  std::ofstream func2;
+  func2.open("FRIEND_func_info" , std::ofstream::out | std::ofstream::trunc);
+
   for (auto &F : M) {
 
     if (F.getName().equals(StringRef("open"))) {
@@ -249,7 +252,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
     if (!F.getName().str().compare(0,5, "__afl")) continue;
     if (!F.getName().str().compare(0,5, "__cmp")) continue;
 
-    //func << func_id << "," << F.getName().data() << "\n";
+    func2 << func_id << "," << F.getName().data() << "\n";
 
     if (argv_mut && F.getName().equals(StringRef("main"))) {
       BasicBlock & entryblock = F.getEntryBlock();
@@ -342,6 +345,8 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
     func_id ++;
     
   }
+
+  func2.close();
 
   std::ofstream func;
   func.open("FRIEND_func_cmp_id_info" , std::ofstream::out | std::ofstream::trunc);

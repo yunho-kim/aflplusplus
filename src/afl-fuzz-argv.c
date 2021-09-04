@@ -493,8 +493,10 @@ void argv_select(afl_state_t * afl) {
   u32 * num_inputs = (u32 *) calloc(afl->num_argvs, sizeof(u32));
   u32 ** argv_inputs = (u32 **) calloc(afl->num_argvs, sizeof(u32 *));
 
+  fprintf(f, "queue idx, argv idx\n");
   for (idx1 = 0; idx1 < afl->queued_paths; idx1++) {
     u32 argv_idx = afl->queue_buf[idx1]->argv_idx;
+    fprintf(f, "%u, %u\n", idx1, argv_idx);
     if (num_inputs[argv_idx] == 0) {
       argv_inputs[argv_idx] = (u32 *) malloc(sizeof(u32) * 1024);
     } else if (num_inputs[argv_idx] >= 1024) {
@@ -513,10 +515,6 @@ void argv_select(afl_state_t * afl) {
   afl->stage_name = "argv_sel";
   afl->stage_short = "argv_sel";
   afl->stage_max = afl->num_argvs;
-  u8 * cov_bits = calloc(afl->fsrv.map_size, sizeof(u8));
-
-  u8 * func_list = afl->func_list;
-  u32 * func_list2 = calloc(afl->num_func, sizeof(u32));
 
 #define FLIP_BIT(_ar, _b)                 \
 do {                                      \
@@ -526,6 +524,7 @@ do {                                      \
   _arf[(_bf) >> 3] ^= (128 >> ((_bf)&7)); \
                                           \
 } while (0)
+  u8 ** func_calls = (u8 **) malloc(sizeof(u8 *) * afl->num_argvs);
 
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; afl->stage_cur++) {
 
@@ -541,20 +540,21 @@ do {                                      \
     }
 
     close(fd);
-
-    memset(cov_bits, 0, sizeof(u8) * afl->fsrv.map_size);
-    memset(func_list, 0, sizeof(u8) * afl->num_func);
+ 
+    u8 * func_call = (u8 *) calloc(afl->num_func, sizeof(u8));
+    func_calls[afl->stage_cur] = func_call;
     
-    for (idx1 = 0; idx1 < 64; idx1++) {
+    for (idx1 = 0; idx1 < 128; idx1++) {     
       u32 rand_queue_id = argv_inputs[afl->stage_cur][rand_below(afl, num_inputs[afl->stage_cur])];
       struct queue_entry * cur_tc = afl->queue_buf[rand_queue_id];
+      u32 len = cur_tc->len;
       u8 * orig_in = queue_testcase_get(afl, cur_tc);
-      u8 * out_buf = afl_realloc(AFL_BUF_PARAM(out), cur_tc->len);
-      u32 temp_len = cur_tc->len;
-      memcpy (out_buf, orig_in, cur_tc->len);
+      u8 * out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
+      u32 temp_len = len;
+      memcpy (out_buf, orig_in, len);
       struct cmp_entry * entries = afl->shm.branch_map;
 
-      for (idx2 = 0; idx2 < 128; idx2++) {
+      for (idx2 = 0; idx2 < 4; idx2++) {
         u32 use_stacking = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
         for (idx3 = 0; idx3 < use_stacking; ++idx3) {
           switch (rand_below(afl, 15)) {
@@ -852,6 +852,8 @@ do {                                      \
           }
         }
 
+        common_fuzz_stuff(afl, out_buf, len, (u32) -1);
+
         u32 cmp_id;
 
         for (cmp_id = 0; cmp_id < afl->num_cmp ; cmp_id++) {
@@ -869,32 +871,566 @@ do {                                      \
 
         for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id++) {
           if (entries[cmp_id].condition) {
-            func_list[afl->cmp_func_map[cmp_id]] = 1;
+            func_call[afl->cmp_func_map[cmp_id]] = 1;
           }
         }
+
+        if (unlikely(afl->stop_soon)) break;
       }
 
       show_stats(afl);
       if (unlikely(afl->stop_soon)) break;
     }
 
+    if (unlikely(afl->stop_soon)) break;
+  }
+
+  u32 * argv_num_func = (u32 *) calloc(afl->num_argvs, sizeof(u32));
+  u8 * func_set = (u8 *) calloc(afl->num_func, sizeof(u8));
+
+  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+    u32 num_call = 0;
+    u8 * calls = func_calls[idx1];
     for (idx2 = 0; idx2 < afl->num_func; idx2++) {
-      func_list2[idx2] += func_list[idx2];
+      num_call += calls[idx2];
+      func_set[idx2] |= calls[idx2];
+    }
+    argv_num_func[idx1] = num_call;
+  }
+
+  u32 total_covered = 0;
+  for (idx1 = 0; idx1 < afl->num_func; idx1++) {
+    total_covered += func_set[idx1];
+  }
+  
+  memset(func_set, 0, sizeof(u8) * afl->num_func);
+  
+  u8 * argv_set = (u8 *) calloc(afl->num_argvs, sizeof(u8));
+  u32 num_covered = 0;
+  
+  u32 min_call = (u32) -1;
+  u32 min_idx = 0;
+
+  while (num_covered != total_covered) {
+    for (idx1 = 0; idx1 < afl->num_argvs ; idx1++) {
+      if (!argv_set[idx1] && (min_call > argv_num_func[idx1])) {
+        min_call = argv_num_func[idx1];
+        min_idx = idx1;
+      }
     }
 
-    if (unlikely(afl->stop_soon)) break;
+    argv_set[min_idx] = 1;
+    u8 * calls = func_calls[min_idx];
+    for (idx2 = 0; idx2 < afl->num_func; idx2++) {
+      if (calls[idx2] && !func_set[idx2]) {
+        func_set[idx2] = 1;
+        argv_set[min_idx] = 2;
+        num_covered ++;
+      }
+    }
+    if (argv_set[min_idx] == 2) {
+      afl->num_selected_argvs ++;
+    }
+
+    min_call = (u32) -1;
+  }
+
+  afl->selected_argvs = (u32 *) malloc (sizeof(u32) * afl->num_selected_argvs);
+
+  idx2 = 0;
+  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+    if (argv_set[idx1] == 2) {
+      afl->selected_argvs[idx2++] = idx1;
+    }
   }
 
   snprintf(fn, PATH_MAX, "%s/FRIEND/num_func_calls", afl->out_dir);
   fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) PFATAL("Unable to create '%s'", fn);
   f = fdopen(fd, "w");
-  for (idx1 = 0; idx1 < afl->num_func; idx1++) {
-    fprintf(f, "%u,", func_list2[idx1]);
+
+  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+    for (idx2 = 0; idx2 < afl->num_func; idx2++) {
+      fprintf(f, "%u,", func_calls[idx1][idx2]);
+    }
+    fprintf(f, "\n");
   }
   fclose(f);
 
-  
+  snprintf(fn, PATH_MAX, "%s/FRIEND/argvs_selected", afl->out_dir);
+  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  f = fdopen(fd, "w");
+
+  for (idx1 = 0; idx1 < afl->num_selected_argvs; idx1++) {
+    fprintf(f, "%u,", afl->selected_argvs[idx1]);
+  }
+
+  fclose(f);
+
+  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+    free(func_calls[idx1]);
+  }
+  free(func_calls);
+  free(argv_num_func);
+  free(func_set);
+  free(argv_set);
+
+  //initialize
+
+  memset(afl->virgin_bits, 255, afl->fsrv.map_size);
+
+  //remove cached testcases
+  for (idx1 = 0; idx1 < afl->queued_paths; idx1++) {
+    struct queue_entry *q;
+    q = afl->queue_buf[idx1];
+    if (q->testcase_buf) free(q->testcase_buf);
+    q->testcase_buf = NULL;
+  }
+
+  for (idx1 = 0; idx1 < afl->q_testcase_max_cache_entries; idx1++) {
+    afl->q_testcase_cache[idx1] = NULL;
+  }
+
+  afl->q_testcase_cache_count = 0;
+  afl->q_testcase_cache_size = 0;
+  afl->q_testcase_smallest_free = 0;
+  afl->q_testcase_max_cache_count = 0;
+
+  u32 cur_queued_path = 0;
+  struct queue_entry ** tmp_buf = malloc(sizeof (struct queue_entry *) * 128 * afl->num_selected_argvs);
+
+  u32 * saved_queue = (u32 *) malloc (sizeof (u32) * afl->queued_paths);
+  memset(saved_queue, 255, sizeof(u32) * afl->queued_paths);
+
+  for (idx1 = 0; idx1 < 128; idx1++) {
+    if (unlikely(afl->stop_soon)) break;
+
+    for (idx2 = 0; idx2 < afl->num_selected_argvs; idx2++) {
+      u32 argv_idx = afl->selected_argvs[idx2];
+      u32 rand_queue_id = argv_inputs[argv_idx][rand_below(afl, num_inputs[argv_idx])];
+      struct queue_entry * cur_tc = afl->queue_buf[rand_queue_id];
+      u32 len = cur_tc->len;
+      u8 * out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
+      int fd = open(cur_tc->fname, O_RDONLY);
+      if (unlikely(fd < 0)) { PFATAL("Unable to open '%s'", cur_tc->fname); }
+      ck_read(fd, out_buf, len, cur_tc->fname);
+      close(fd);
+      u32 temp_len = len;
+
+      write_to_testcase(afl, out_buf, temp_len, argv_idx);
+      u8 fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
+      
+      //just update bitmap
+      has_new_bits_unclassified(afl, afl->virgin_bits);
+
+      u32 cur_id = cur_queued_path;
+
+      if (saved_queue[cur_tc->id] == (u32) -1) {
+        saved_queue[cur_tc->id] = cur_id;
+
+        s8 * queue_fn = alloc_printf(
+          "%s/queue2/id:%06u,%s", afl->out_dir, cur_queued_path,
+          describe_op(afl, 0, NAME_MAX - strlen("id:000000,"), (u32) -1, (u32) -1, argv_idx));
+
+        s32 fd = open(queue_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", queue_fn); }
+        ck_write(fd, out_buf, temp_len, queue_fn);
+        close(fd);
+
+        struct queue_entry *q = ck_alloc(sizeof(struct queue_entry));
+
+        q->fname = queue_fn;
+        q->len = temp_len;
+        q->depth = 0;
+        q->passed_det = 0;
+        q->trace_mini = NULL;
+        q->testcase_buf = NULL;
+        q->mother = NULL;
+        q->argv_idx = argv_idx;
+
+        tmp_buf[cur_queued_path] = q;
+        q->id = cur_queued_path;
+        cur_queued_path ++;
+
+        q->exec_cksum =
+          hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
+
+        calibrate_case(afl, q, out_buf, afl->queue_cycle - 1, 0);
+        queue_testcase_store_mem(afl, q, out_buf);
+      } else {
+        cur_id = saved_queue[cur_tc->id];
+      }
+
+      u32 use_stacking = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
+      for (idx3 = 0; idx3 < use_stacking; ++idx3) {
+        switch (rand_below(afl, 15)) {
+
+          case 0:
+
+            /* Flip a single bit somewhere. Spooky! */
+
+            FLIP_BIT(out_buf, rand_below(afl, temp_len << 3));
+            break;
+
+          case 1:
+
+            /* Set byte to interesting value. */
+
+            out_buf[rand_below(afl, temp_len)] =
+                interesting_8[rand_below(afl, sizeof(interesting_8))];
+            break;
+
+          case 2:
+
+            /* Set word to interesting value, randomly choosing endian. */
+
+            if (temp_len < 2) { break; }
+
+            if (rand_below(afl, 2)) {
+              *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) =
+                  interesting_16[rand_below(afl, sizeof(interesting_16) >> 1)];
+
+            } else {
+
+              *(u16 *)(out_buf + rand_below(afl, temp_len - 1)) = SWAP16(
+                  interesting_16[rand_below(afl, sizeof(interesting_16) >> 1)]);
+
+            }
+
+            break;
+
+          case 3:
+
+            /* Set dword to interesting value, randomly choosing endian. */
+
+            if (temp_len < 4) { break; }
+
+            if (rand_below(afl, 2)) {
+
+              *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) =
+                  interesting_32[rand_below(afl, sizeof(interesting_32) >> 2)];
+
+            } else {
+
+              *(u32 *)(out_buf + rand_below(afl, temp_len - 3)) = SWAP32(
+                  interesting_32[rand_below(afl, sizeof(interesting_32) >> 2)]);
+
+            }
+
+            break;
+
+          case 4:
+
+            /* Randomly subtract from byte. */
+
+            out_buf[rand_below(afl, temp_len)] -= 1 + rand_below(afl, ARITH_MAX);
+            break;
+
+          case 5:
+
+            /* Randomly add to byte. */
+
+            out_buf[rand_below(afl, temp_len)] += 1 + rand_below(afl, ARITH_MAX);
+            break;
+
+          case 6:
+
+            /* Randomly subtract from word, random endian. */
+
+            if (temp_len < 2) { break; }
+
+            if (rand_below(afl, 2)) {
+
+              u32 pos = rand_below(afl, temp_len - 1);
+              *(u16 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX);
+
+            } else {
+
+              u32 pos = rand_below(afl, temp_len - 1);
+              u16 num = 1 + rand_below(afl, ARITH_MAX);
+
+              *(u16 *)(out_buf + pos) =
+                  SWAP16(SWAP16(*(u16 *)(out_buf + pos)) - num);
+
+            }
+
+            break;
+
+          case 7:
+
+            /* Randomly add to word, random endian. */
+
+            if (temp_len < 2) { break; }
+
+            if (rand_below(afl, 2)) {
+
+              u32 pos = rand_below(afl, temp_len - 1);
+
+              *(u16 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX);
+
+            } else {
+
+              u32 pos = rand_below(afl, temp_len - 1);
+              u16 num = 1 + rand_below(afl, ARITH_MAX);
+
+              *(u16 *)(out_buf + pos) =
+                  SWAP16(SWAP16(*(u16 *)(out_buf + pos)) + num);
+
+            }
+
+            break;
+
+          case 8:
+
+            /* Randomly subtract from dword, random endian. */
+
+            if (temp_len < 4) { break; }
+
+            if (rand_below(afl, 2)) {
+
+              u32 pos = rand_below(afl, temp_len - 3);
+
+              *(u32 *)(out_buf + pos) -= 1 + rand_below(afl, ARITH_MAX);
+
+            } else {
+
+              u32 pos = rand_below(afl, temp_len - 3);
+              u32 num = 1 + rand_below(afl, ARITH_MAX);
+
+              *(u32 *)(out_buf + pos) =
+                  SWAP32(SWAP32(*(u32 *)(out_buf + pos)) - num);
+
+            }
+
+            break;
+
+          case 9:
+
+            /* Randomly add to dword, random endian. */
+
+            if (temp_len < 4) { break; }
+
+            if (rand_below(afl, 2)) {
+
+              u32 pos = rand_below(afl, temp_len - 3);
+
+              *(u32 *)(out_buf + pos) += 1 + rand_below(afl, ARITH_MAX);
+
+            } else {
+
+              u32 pos = rand_below(afl, temp_len - 3);
+              u32 num = 1 + rand_below(afl, ARITH_MAX);
+
+              *(u32 *)(out_buf + pos) =
+                  SWAP32(SWAP32(*(u32 *)(out_buf + pos)) + num);
+
+            }
+
+            break;
+
+          case 10:
+
+            /* Just set a random byte to a random value. Because,
+              why not. We use XOR with 1-255 to eliminate the
+              possibility of a no-op. */
+
+            out_buf[rand_below(afl, temp_len)] ^= 1 + rand_below(afl, 255);
+            break;
+
+          case 11 ... 12: {
+
+            /* Delete bytes. We're making this a bit more likely
+              than insertion (the next option) in hopes of keeping
+              files reasonably small. */
+
+            u32 del_from, del_len;
+
+            if (temp_len < 2) { break; }
+
+            /* Don't delete too much. */
+
+            del_len = choose_block_len(afl, temp_len - 1);
+
+            del_from = rand_below(afl, temp_len - del_len + 1);
+
+            memmove(out_buf + del_from, out_buf + del_from + del_len,
+                    temp_len - del_from - del_len);
+
+            temp_len -= del_len;
+
+            break;
+
+          }
+
+          case 13:
+
+            if (temp_len + HAVOC_BLK_XL < MAX_FILE) {
+
+              /* Clone bytes (75%) or insert a block of constant bytes (25%). */
+
+              u8  actually_clone = rand_below(afl, 4);
+              u32 clone_from, clone_to, clone_len;
+              u8 *new_buf;
+
+              if (likely(actually_clone)) {
+
+                clone_len = choose_block_len(afl, temp_len);
+                clone_from = rand_below(afl, temp_len - clone_len + 1);
+
+              } else {
+
+                clone_len = choose_block_len(afl, HAVOC_BLK_XL);
+                clone_from = 0;
+
+              }
+
+              clone_to = rand_below(afl, temp_len);
+
+              new_buf =
+                  afl_realloc(AFL_BUF_PARAM(out_scratch), temp_len + clone_len);
+              if (unlikely(!new_buf)) { PFATAL("alloc"); }
+
+              /* Head */
+
+              memcpy(new_buf, out_buf, clone_to);
+
+              /* Inserted part */
+
+              if (likely(actually_clone)) {
+
+                memcpy(new_buf + clone_to, out_buf + clone_from, clone_len);
+
+              } else {
+
+                memset(new_buf + clone_to,
+                      rand_below(afl, 2) ? rand_below(afl, 256)
+                                          : out_buf[rand_below(afl, temp_len)],
+                      clone_len);
+
+              }
+
+              /* Tail */
+              memcpy(new_buf + clone_to + clone_len, out_buf + clone_to,
+                    temp_len - clone_to);
+
+              out_buf = new_buf;
+              afl_swap_bufs(AFL_BUF_PARAM(out), AFL_BUF_PARAM(out_scratch));
+              temp_len += clone_len;
+
+            }
+
+            break;
+
+          case 14: {
+
+            /* Overwrite bytes with a randomly selected chunk (75%) or fixed
+              bytes (25%). */
+
+            u32 copy_from, copy_to, copy_len;
+
+            if (temp_len < 2) { break; }
+
+            copy_len = choose_block_len(afl, temp_len - 1);
+
+            copy_from = rand_below(afl, temp_len - copy_len + 1);
+            copy_to = rand_below(afl, temp_len - copy_len + 1);
+
+            if (likely(rand_below(afl, 4))) {
+
+              if (likely(copy_from != copy_to)) {
+
+                memmove(out_buf + copy_to, out_buf + copy_from, copy_len);
+
+              }
+
+            } else {
+
+              memset(out_buf + copy_to,
+                    rand_below(afl, 2) ? rand_below(afl, 256)
+                                        : out_buf[rand_below(afl, temp_len)],
+                    copy_len);
+
+            }
+
+            break;
+
+          }
+        }
+        
+        write_to_testcase(afl, out_buf, temp_len, argv_idx);
+
+        fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
+
+        if (afl->stop_soon) { break; }
+
+        if (unlikely(fault != afl->crash_mode)) { continue; }
+
+        u8 new_bits = has_new_bits_unclassified(afl, afl->virgin_bits);
+
+        if (!new_bits) continue;
+
+        s8 * queue_fn = alloc_printf(
+          "%s/queue2/id:%06u,%s", afl->out_dir, cur_queued_path,
+          describe_op(afl, new_bits, NAME_MAX - strlen("id:000000,"), cur_id, (u32) -1, argv_idx));
+
+        s32 fd = open(queue_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", queue_fn); }
+        ck_write(fd, out_buf, temp_len, queue_fn);
+        close(fd);
+
+        struct queue_entry *q = ck_alloc(sizeof(struct queue_entry));
+
+        q->fname = queue_fn;
+        q->len = temp_len;
+        q->depth = 0;
+        q->passed_det = 0;
+        q->trace_mini = NULL;
+        q->testcase_buf = NULL;
+        q->mother = NULL;
+        q->argv_idx = argv_idx;
+
+        tmp_buf[cur_queued_path] = q;
+        q->id = cur_queued_path;
+        
+
+        q->exec_cksum =
+          hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
+
+        calibrate_case(afl, q, out_buf, afl->queue_cycle - 1, 0);
+        queue_testcase_store_mem(afl, q, out_buf);
+
+        q->parent_id = cur_id;
+        struct queue_entry * parent = tmp_buf[cur_id];
+        if (parent->children == NULL) { 
+          parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_SIZE);
+          parent->children_size = TC_CHILDREN_SIZE;
+        }
+        parent->children[parent->num_children++] = cur_queued_path;
+        if(unlikely(parent->num_children >= parent->children_size)){
+          parent->children_size *= 2;
+          parent->children = realloc(parent->children, parent->children_size * sizeof(u32));
+        }
+
+        cur_queued_path ++;
+      }
+    }
+  }
+
+  memset(afl->top_rated, 0, sizeof(struct queue_entry *) * afl->fsrv.map_size);
+  destroy_queue(afl);
+
+  afl->queue = afl->queue_top = tmp_buf[0];
+  afl->queue_buf = afl_realloc(
+      AFL_BUF_PARAM(queue), cur_queued_path * sizeof(struct queue_entry *));
+
+  memcpy(afl->queue_buf, tmp_buf, sizeof(struct queue_entry *) * cur_queued_path);
+
+  afl->current_entry = 0;
+  afl->queued_paths = cur_queued_path;
+  afl->queue_cur = NULL;
+
+  free(tmp_buf);
 
   for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
     free(argv_inputs[idx1]);
@@ -902,6 +1438,17 @@ do {                                      \
 
   free(argv_inputs);
   free(num_inputs);
-  free(cov_bits);
-  free(func_list2);
+  free(saved_queue);
+
+  //initializeation func part
+  afl->mining_done_idx = 0;
+  for (idx1 = 0; idx1 < afl->num_cmp; idx1++) {
+    struct cmp_queue_entry * cq = afl->cmp_queue_buf[idx1];
+    free(cq->value_changing_tcs);
+    cq->value_changing_tcs = NULL;
+    cq->num_value_changing_tcs = 0;
+    cq->value_changing_tcs_size = 0;
+    cq->num_fuzzed = 0;
+  }
+
 }

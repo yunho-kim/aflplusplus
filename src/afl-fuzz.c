@@ -2155,7 +2155,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
       if (likely(!afl->old_seed_selection)) {
 
-        if (unlikely(prev_queued_paths < afl->queued_paths)) {
+        if (unlikely(prev_queued_paths != afl->queued_paths)) {
 
           // we have new queue entries since the last run, recreate alias table
           prev_queued_paths = afl->queued_paths;
@@ -2188,13 +2188,12 @@ int main(int argc, char **argv_orig, char **envp) {
     } while (skipped_fuzz && afl->queue_cur && !afl->stop_soon);
 
     //argv fuzzing?
-    if (afl->argv_mut && !afl->timed_out) {
+    if (afl->argv_mut && !afl->argv_timed_out) {
       fuzz_one_argv(afl);
 
-      if ((get_cur_time() - afl->start_time) > 3600000) {
-        afl->timed_out = 1;
+      if ((get_cur_time() - afl->start_time) > 36000000) {
+        afl->argv_timed_out = 1;
         argv_select(afl);
-        afl->stop_soon = 1;
       }
       
     }

@@ -233,7 +233,6 @@ struct cmp_queue_entry {
   u32 num_value_changing_tcs;
   u32 value_changing_tcs_size;
   u32 mutating_tc_idx;
-  u32 value_changing_tc_idx;
   u32 num_fuzzed;
   u32 num_skipped;
   u32 id;
@@ -890,7 +889,10 @@ typedef struct afl_state {
   struct argv_word_entry * prog_arg;
   struct argv_word_entry * input_file_arg;
 
-  bool timed_out;
+  bool argv_timed_out;
+
+  u32 * selected_argvs;
+  u32 num_selected_argvs;
 
 //Debug
   FILE * debug_file;

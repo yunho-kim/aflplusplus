@@ -297,7 +297,7 @@ static inline const char *colorfilter(const char *x) {
          "\n[-] PROGRAM ABORT : " cRST   x);                               \
     SAYF(cLRD "\n         Location : " cRST "%s(), %s:%u\n\n", __func__, \
          __FILE__, (u32)__LINE__);                                       \
-    exit(1);                                                             \
+    abort();                                                             \
                                                                          \
   } while (0)
 
@@ -325,7 +325,7 @@ static inline const char *colorfilter(const char *x) {
     SAYF(cLRD "\n    Stop location : " cRST "%s(), %s:%u\n", __func__, \
          __FILE__, (u32)__LINE__);                                     \
     SAYF(cLRD "       OS message : " cRST "%s\n", strerror(errno));    \
-    exit(1);                                                           \
+    abort();                                                           \
                                                                        \
   } while (0)
 
