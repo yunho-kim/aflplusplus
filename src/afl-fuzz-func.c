@@ -1214,6 +1214,9 @@ void fuzz_one_func (afl_state_t *afl) {
   u32 ** func_exec_count_table = afl->func_exec_count_table;
   //float target_cmp_exec = (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][target_cmp_id_in_func];
   u32 * target_func_exec_count = func_exec_count_table[target_func];
+  if (unlikely(target_func_exec_count == NULL)) {
+    func_exec_count_table[target_func] = target_func_exec_count = (u32 *) calloc(afl->num_func, sizeof(u32));
+  }
   float target_func_exec = (float) target_func_exec_count[target_func];
   
   // No D/0
@@ -1249,6 +1252,9 @@ void fuzz_one_func (afl_state_t *afl) {
       u32 val_changed_cmp_id = mining_result[idx1]->changed_val_cmps[idx2];
       u32 val_changed_cmp_func_id = cmp_func_map[val_changed_cmp_id];
       float common_exec_count = (float) target_func_exec_count[val_changed_cmp_func_id];
+      if (unlikely(func_exec_count_table[val_changed_cmp_func_id] == NULL)) {
+        func_exec_count_table[val_changed_cmp_func_id] = (u32 *) calloc(afl->num_func, sizeof(u32));
+      }
       float val_changed_func_exec_count = (float) func_exec_count_table[val_changed_cmp_func_id][val_changed_cmp_func_id];
       if (unlikely(val_changed_func_exec_count == 0.0)) val_changed_func_exec_count = 1.0;
 
@@ -1291,6 +1297,9 @@ void fuzz_one_func (afl_state_t *afl) {
         u32 val_changed_cmp_id = mining_result[idx2]->changed_val_cmps[idx3];
         u32 val_changed_cmp_func_id = cmp_func_map[val_changed_cmp_id];
         float common_exec_count = (float) target_func_exec_count[val_changed_cmp_func_id];
+        if (unlikely(func_exec_count_table[val_changed_cmp_func_id] == NULL)) {
+          func_exec_count_table[val_changed_cmp_func_id] = (u32 *) calloc(afl->num_func, sizeof(u32));
+        }
         float val_changed_func_exec_count = (float) func_exec_count_table[val_changed_cmp_func_id][val_changed_cmp_func_id];
         if (unlikely(val_changed_func_exec_count == 0.0)) val_changed_func_exec_count = 1.0;
 
