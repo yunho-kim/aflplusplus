@@ -203,7 +203,6 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
     if (F.getName().equals(StringRef("open"))) {
       errs() << "found open\n";
       FunctionType * ft = F.getFunctionType();
-      errs() << "num parames : " << ft->getNumParams() << "\n";
       if (ft->getNumParams() >= 2 &&
           ft->getReturnType()->isIntegerTy(32) &&
           ft->getParamType(0)->isPointerTy() &&

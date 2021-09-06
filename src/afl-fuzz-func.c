@@ -307,7 +307,7 @@ void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_id
   }
 
   write_to_testcase(afl, buf, len, q->argv_idx);
-  u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
+  u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout * 2);
 
   if (fault == FSRV_RUN_TMOUT) {
     //what?
@@ -1215,6 +1215,9 @@ void fuzz_one_func (afl_state_t *afl) {
   //float target_cmp_exec = (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][target_cmp_id_in_func];
   u32 * target_func_exec_count = func_exec_count_table[target_func];
   float target_func_exec = (float) target_func_exec_count[target_func];
+  
+  // No D/0
+  if (unlikely(target_func_exec == 0.0)) target_func_exec = 1.0;
   u32 num_frag = cur_tc->num_mining_frag;
   u32 frag_len = cur_tc->mining_frag_len;
 
@@ -1246,9 +1249,10 @@ void fuzz_one_func (afl_state_t *afl) {
       u32 val_changed_cmp_id = mining_result[idx1]->changed_val_cmps[idx2];
       u32 val_changed_cmp_func_id = cmp_func_map[val_changed_cmp_id];
       float common_exec_count = (float) target_func_exec_count[val_changed_cmp_func_id];
+      float val_changed_func_exec_count = (float) func_exec_count_table[val_changed_cmp_func_id][val_changed_cmp_func_id];
+      if (unlikely(val_changed_func_exec_count == 0.0)) val_changed_func_exec_count = 1.0;
 
-      float rel = common_exec_count * common_exec_count / target_func_exec
-        / ((float) func_exec_count_table[val_changed_cmp_func_id][val_changed_cmp_func_id]);
+      float rel = common_exec_count * common_exec_count / target_func_exec / val_changed_func_exec_count;
       
       frag_score[idx1] += rel;
       num_frag_score_sum[idx1] += 1.0;
@@ -1287,9 +1291,10 @@ void fuzz_one_func (afl_state_t *afl) {
         u32 val_changed_cmp_id = mining_result[idx2]->changed_val_cmps[idx3];
         u32 val_changed_cmp_func_id = cmp_func_map[val_changed_cmp_id];
         float common_exec_count = (float) target_func_exec_count[val_changed_cmp_func_id];
+        float val_changed_func_exec_count = (float) func_exec_count_table[val_changed_cmp_func_id][val_changed_cmp_func_id];
+        if (unlikely(val_changed_func_exec_count == 0.0)) val_changed_func_exec_count = 1.0;
 
-        float rel = common_exec_count * common_exec_count / target_func_exec
-          / ((float) func_exec_count_table[val_changed_cmp_func_id][val_changed_cmp_func_id]);
+        float rel = common_exec_count * common_exec_count / target_func_exec / val_changed_func_exec_count;
         
         frag_score[idx2] += rel;
         num_frag_score_sum[idx2] += 1.0;
