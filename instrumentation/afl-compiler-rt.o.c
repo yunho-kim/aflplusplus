@@ -1869,21 +1869,21 @@ void __afl_parse_argv(int* argc, char ***argv) {
 }
 
 FILE * __afl_fopen_wrapper(const char * pathname, const char * mode) {
-  if (strchr(mode, 'w') || strchr(mode, 'a')) {
+  if (strchr(mode, 'w')) {
     return fopen("/dev/null", mode);
   }
   return fopen(pathname, mode);
 }
 
 FILE * __afl_freopen_wrapper(const char * pathname, const char * mode, FILE * stream) {
-  if (strchr(mode, 'w') || strchr(mode, 'a')) {
+  if (strchr(mode, 'w')) {
     return freopen("/dev/null", mode, stream);
   }
   return freopen(pathname, mode, stream);
 }
 
 int __afl_open_wrapper(const char *pathname, int flags, ...) {
-  if (flags & (O_WRONLY|O_RDWR)) {
+  if (flags & O_WRONLY) {
     return open("/dev/null", flags);
   }
   return open(pathname, flags);
