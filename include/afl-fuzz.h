@@ -891,9 +891,6 @@ typedef struct afl_state {
 
   bool argv_timed_out;
 
-  u32 * selected_argvs;
-  u32 num_selected_argvs;
-
 //Debug
   FILE * debug_file;
 

@@ -334,9 +334,7 @@ u8 *describe_op(afl_state_t *afl, u8 new_bits, size_t max_description_len, u32 p
 
     }
 
-    if (afl->argv_mut) {
-      sprintf(ret + strlen(ret), ",argv:%06u", argv_idx);
-    }
+    sprintf(ret + strlen(ret), ",argv:%06u", argv_idx);
 
     sprintf(ret + strlen(ret), ",time:%llu",
             get_cur_time() + afl->prev_run_time - afl->start_time);

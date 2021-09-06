@@ -99,3 +99,7 @@ out_*
 *.code-workspace
 
 keywords
+
+tools/man
+tools/keywords
+tools/tmp

@@ -195,10 +195,6 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
   DenseMap<Value *, std::string *> valueMap;
 
-  char argv_mut = 0;
-
-  if (getenv("AFL_ARGV") != NULL) argv_mut = 1;
-
   std::ofstream func2;
   func2.open("FRIEND_func_info" , std::ofstream::out | std::ofstream::trunc);
 
@@ -254,7 +250,8 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
     func2 << func_id << "," << F.getName().data() << "\n";
 
-    if (argv_mut && F.getName().equals(StringRef("main"))) {
+    //argv driver
+    if (F.getName().equals(StringRef("main"))) {
       BasicBlock & entryblock = F.getEntryBlock();
       IRBuilder<> IRB(&(*entryblock.begin()));
       Value * argc = F.getArg(0);

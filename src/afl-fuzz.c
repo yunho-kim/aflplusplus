@@ -1603,87 +1603,82 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
-  if (afl->argv_mut) {
-    afl->init_argv = (s8 **) malloc (3 * sizeof(s8*));
-    afl->init_argv[0] = use_argv[0];
-    afl->init_argv[1] = afl->fsrv.argv_file;
-    afl->init_argv[2] = NULL;
+  afl->init_argv = (s8 **) malloc (3 * sizeof(s8*));
+  afl->init_argv[0] = use_argv[0];
+  afl->init_argv[1] = afl->fsrv.argv_file;
+  afl->init_argv[2] = NULL;
 
 
-    u32 new_argc = 0;
-    u32 idx1, idx2;
+  u32 new_argc = 0;
+  u32 idx1, idx2;
 
-    while (use_argv[new_argc]) {
-      new_argc++;
+  while (use_argv[new_argc]) {
+    new_argc++;
+  }
+
+  struct argv_entry * cur_argv_entry = malloc(sizeof(struct argv_entry));
+
+  struct argv_word_entry ** cur_args = malloc (sizeof(struct argv_word_entry *) * (new_argc + 1));
+  cur_argv_entry->args = cur_args;
+
+  idx1 = 0;
+  while (use_argv[idx1]) {
+    //add keywords
+    u32 len = strlen(use_argv[idx1]);
+    
+    //TODO : <-word>=<word>?
+    u32 word_buf_idx = use_argv[idx1][0] != '-';
+    u32 word_hash = 0;
+    for (idx2 = 0; idx2 < len; idx2++) {
+      word_hash += use_argv[idx1][idx2] << idx2;
+    }
+    word_hash = word_hash % 1024;
+
+    struct argv_word_entry * cur_argv_word_entry = malloc(sizeof(struct argv_word_entry));
+    if (afl->argv_words[word_hash]) {
+      struct argv_word_entry * ptr = afl->argv_words[word_hash];
+      while(ptr->next) {
+        ptr = ptr->next;
+      }
+      ptr->next = cur_argv_word_entry;
+    } else {
+      afl->argv_words[word_hash] = cur_argv_word_entry;
+    }
+    cur_argv_word_entry->next = NULL;
+    cur_argv_word_entry->tmp_next = NULL;
+    cur_argv_word_entry->tmp_prev = NULL;
+    cur_argv_word_entry->is_tmp = 0;
+
+    afl->argv_words_bufs[word_buf_idx][afl->num_argv_word_buf_words[word_buf_idx]++] = cur_argv_word_entry;
+    afl->num_argv_words ++;
+
+    cur_argv_word_entry->word = (s8 *) malloc(sizeof(s8) * (len + 1));
+    memcpy(cur_argv_word_entry->word, use_argv[idx1], len);
+    cur_argv_word_entry->word[len] = '\0';
+
+    cur_args[idx1] = cur_argv_word_entry;
+
+    if (idx1 == 0) {
+      afl->prog_arg = cur_argv_word_entry;
+    } else if (strstr(use_argv[idx1], "cur_input")) {
+      afl->input_file_arg = cur_argv_word_entry;
     }
 
-    struct argv_entry * cur_argv_entry = malloc(sizeof(struct argv_entry));
+    idx1++;
+  }
 
-    struct argv_word_entry ** cur_args = malloc (sizeof(struct argv_word_entry *) * (new_argc + 1));
-    cur_argv_entry->args = cur_args;
+  fprintf(afl->debug_file, "prog arg : %s\n", afl->prog_arg->word);
+  fprintf(afl->debug_file, "input_file arg : %s\n", afl->input_file_arg->word);
 
-    idx1 = 0;
-    while (use_argv[idx1]) {
-      //add keywords
-      u32 len = strlen(use_argv[idx1]);
-      
-      //TODO : <-word>=<word>?
-      u32 word_buf_idx = use_argv[idx1][0] != '-';
-      u32 word_hash = 0;
-      for (idx2 = 0; idx2 < len; idx2++) {
-        word_hash += use_argv[idx1][idx2] << idx2;
-      }
-      word_hash = word_hash % 1024;
+  cur_args[idx1] = NULL;
 
-      struct argv_word_entry * cur_argv_word_entry = malloc(sizeof(struct argv_word_entry));
-      if (afl->argv_words[word_hash]) {
-        struct argv_word_entry * ptr = afl->argv_words[word_hash];
-        while(ptr->next) {
-          ptr = ptr->next;
-        }
-        ptr->next = cur_argv_word_entry;
-      } else {
-        afl->argv_words[word_hash] = cur_argv_word_entry;
-      }
-      cur_argv_word_entry->next = NULL;
-      cur_argv_word_entry->tmp_next = NULL;
-      cur_argv_word_entry->tmp_prev = NULL;
-      cur_argv_word_entry->is_tmp = 0;
+  afl->argvs_buf[0] = cur_argv_entry;
 
-      afl->argv_words_bufs[word_buf_idx][afl->num_argv_word_buf_words[word_buf_idx]++] = cur_argv_word_entry;
-      afl->num_argv_words ++;
+  afl->num_argvs++;
 
-      cur_argv_word_entry->word = (s8 *) malloc(sizeof(s8) * (len + 1));
-      memcpy(cur_argv_word_entry->word, use_argv[idx1], len);
-      cur_argv_word_entry->word[len] = '\0';
-
-      cur_args[idx1] = cur_argv_word_entry;
-
-      if (idx1 == 0) {
-        afl->prog_arg = cur_argv_word_entry;
-      } else if (strstr(use_argv[idx1], "cur_input")) {
-        afl->input_file_arg = cur_argv_word_entry;
-      }
-
-      idx1++;
-    }
-
-    fprintf(afl->debug_file, "prog arg : %s\n", afl->prog_arg->word);
-    fprintf(afl->debug_file, "input_file arg : %s\n", afl->input_file_arg->word);
-
-    cur_args[idx1] = NULL;
-
-    afl->argvs_buf[0] = cur_argv_entry;
-
-    afl->num_argvs++;
-
-    for (idx1 = 0; idx1 < afl->queued_paths; idx1++) {
-      struct queue_entry * q = afl->queue_buf[idx1];
-      q->argv_idx = 0;
-    }
-
-  } else {
-    afl->init_argv = (s8 **) use_argv;
+  for (idx1 = 0; idx1 < afl->queued_paths; idx1++) {
+    struct queue_entry * q = afl->queue_buf[idx1];
+    q->argv_idx = 0;
   }
   
   afl->fsrv.trace_bits =
@@ -2191,7 +2186,7 @@ int main(int argc, char **argv_orig, char **envp) {
     if (afl->argv_mut && !afl->argv_timed_out) {
       fuzz_one_argv(afl);
 
-      if ((get_cur_time() - afl->start_time) > 36000000) {
+      if ((get_cur_time() - afl->start_time) > 120000) {
         afl->argv_timed_out = 1;
         argv_select(afl);
       }

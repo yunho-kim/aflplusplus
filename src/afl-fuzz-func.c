@@ -146,7 +146,6 @@ void destroy_func(afl_state_t * afl) {
   free(afl->mutated_frag_idx);
   free(afl->close_tcs);
   free(afl->is_changed);
-  free(afl->selected_argvs);
 }
 
 void init_trim_and_func(afl_state_t * afl) {
