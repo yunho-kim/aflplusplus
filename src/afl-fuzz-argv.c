@@ -23,65 +23,67 @@ void init_argv(afl_state_t * afl) {
 
   afl->tmp_words = (struct argv_word_entry **) malloc(TMP_WORD_SIZE * sizeof(struct argv_word_entry *));
 
-  snprintf(fn, PATH_MAX, "%s/keywords.txt", afl->func_infos_dir);
-  f = fopen(fn, "r");
-  if (f == NULL) PFATAL("Can't open keywords file");
-  
-  u8 buffer[KEYWORD_MAX];
-  memset(buffer, 0, KEYWORD_MAX);
-  int res;
-  while((res = fscanf(f, "%s\n", buffer)) != EOF) {
-    size_t len = strlen(buffer);
-    s8 * tmp = (s8 *) malloc(sizeof(s8) * (len + 1));
-    memcpy(tmp, buffer, len);
-    tmp[len] = 0;
-
-    u32 hash = 0;
-    bool has_minus = false;
-    bool has_equal_middle = false;
-    bool has_equal_last = buffer[len - 1] == '=';
-
-    for (idx1 = 0; idx1 < len; idx1++) {
-      s8 tmp_char = buffer[idx1];
-      hash = hash + (tmp_char << idx1);
-      has_minus |= (tmp_char == '-');
-      has_equal_middle |= (tmp_char == '=');
-    }
-    hash = hash % 1024;
-
-    struct argv_word_entry * tmp_entry = (struct argv_word_entry *) calloc(1, sizeof (struct argv_word_entry));
+  if(afl->argv_mut) {
+    snprintf(fn, PATH_MAX, "%s/keywords.txt", afl->func_infos_dir);
+    f = fopen(fn, "r");
+    if (f == NULL) PFATAL("Can't open keywords file");
     
-    if (afl->argv_words[hash] == NULL) {
-      afl->argv_words[hash] = tmp_entry;
-    } else {
-      struct argv_word_entry * ptr = afl->argv_words[hash];
-      while (ptr->next != NULL) {
-        ptr = ptr->next;
+    u8 buffer[KEYWORD_MAX];
+    memset(buffer, 0, KEYWORD_MAX);
+    int res;
+    while((res = fscanf(f, "%s\n", buffer)) != EOF) {
+      size_t len = strlen(buffer);
+      s8 * tmp = (s8 *) malloc(sizeof(s8) * (len + 1));
+      memcpy(tmp, buffer, len);
+      tmp[len] = 0;
+
+      u32 hash = 0;
+      bool has_minus = false;
+      bool has_equal_middle = false;
+      bool has_equal_last = buffer[len - 1] == '=';
+
+      for (idx1 = 0; idx1 < len; idx1++) {
+        s8 tmp_char = buffer[idx1];
+        hash = hash + (tmp_char << idx1);
+        has_minus |= (tmp_char == '-');
+        has_equal_middle |= (tmp_char == '=');
       }
-      ptr->next = tmp_entry;
-    }
-    u32 buf_index = 1;
-    if (has_minus && has_equal_last) {
-      buf_index = 3;
-    } else if (has_minus && has_equal_middle) {
-      buf_index = 2;
-    } else if (has_minus) {
-      buf_index = 0;
+      hash = hash % 1024;
+
+      struct argv_word_entry * tmp_entry = (struct argv_word_entry *) calloc(1, sizeof (struct argv_word_entry));
+      
+      if (afl->argv_words[hash] == NULL) {
+        afl->argv_words[hash] = tmp_entry;
+      } else {
+        struct argv_word_entry * ptr = afl->argv_words[hash];
+        while (ptr->next != NULL) {
+          ptr = ptr->next;
+        }
+        ptr->next = tmp_entry;
+      }
+      u32 buf_index = 1;
+      if (has_minus && has_equal_last) {
+        buf_index = 3;
+      } else if (has_minus && has_equal_middle) {
+        buf_index = 2;
+      } else if (has_minus) {
+        buf_index = 0;
+      }
+
+      afl->argv_words_bufs[buf_index][afl->num_argv_word_buf_words[buf_index]++] = tmp_entry;
+      afl->num_argv_words ++;
+
+      if (unlikely(afl->num_argv_word_buf_words[buf_index] >= afl->argv_words_buf_size[buf_index])) {
+        afl->argv_words_buf_size[buf_index] *= 2;
+        afl->argv_words_bufs[buf_index] = realloc (afl->argv_words_bufs[buf_index], sizeof(struct argv_word_entry *) * afl->argv_words_buf_size[0]);
+      }
+
+      tmp_entry->word = tmp;
+      memset(buffer, 0, len);
     }
 
-    afl->argv_words_bufs[buf_index][afl->num_argv_word_buf_words[buf_index]++] = tmp_entry;
-    afl->num_argv_words ++;
-
-    if (unlikely(afl->num_argv_word_buf_words[buf_index] >= afl->argv_words_buf_size[buf_index])) {
-      afl->argv_words_buf_size[buf_index] *= 2;
-      afl->argv_words_bufs[buf_index] = realloc (afl->argv_words_bufs[buf_index], sizeof(struct argv_word_entry *) * afl->argv_words_buf_size[0]);
-    }
-
-    tmp_entry->word = tmp;
-    memset(buffer, 0, len);
+    fclose(f);
   }
-
-  fclose(f);
 }
 
 void destroy_argv(afl_state_t * afl) {
