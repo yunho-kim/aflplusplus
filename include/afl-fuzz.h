@@ -891,6 +891,7 @@ typedef struct afl_state {
 
   bool argv_timed_out;
   bool rand_close_tc;
+  bool rand_funcrel;
 
 //Debug
   FILE * debug_file;

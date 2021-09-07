@@ -1259,6 +1259,9 @@ void fuzz_one_func (afl_state_t *afl) {
       if (unlikely(val_changed_func_exec_count == 0.0)) val_changed_func_exec_count = 1.0;
 
       float rel = common_exec_count * common_exec_count / target_func_exec / val_changed_func_exec_count;
+      if (unlikely(afl->rand_funcrel)) {
+        rel = ((float) rand_below(afl, 1000)) / 1000.0;
+      }
       
       frag_score[idx1] += rel;
       num_frag_score_sum[idx1] += 1.0;
@@ -1314,6 +1317,9 @@ void fuzz_one_func (afl_state_t *afl) {
         if (unlikely(val_changed_func_exec_count == 0.0)) val_changed_func_exec_count = 1.0;
 
         float rel = common_exec_count * common_exec_count / target_func_exec / val_changed_func_exec_count;
+        if (unlikely(afl->rand_funcrel)) {
+          rel = ((float) rand_below(afl, 1000)) / 1000.0;
+        }
         
         frag_score[idx2] += rel;
         num_frag_score_sum[idx2] += 1.0;
