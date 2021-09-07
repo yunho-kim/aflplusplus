@@ -890,6 +890,7 @@ typedef struct afl_state {
   struct argv_word_entry * input_file_arg;
 
   bool argv_timed_out;
+  bool rand_close_tc;
 
 //Debug
   FILE * debug_file;

@@ -1274,6 +1274,16 @@ void fuzz_one_func (afl_state_t *afl) {
 
   get_close_tcs(afl, cur_tc_id, close_tcs, &num_close_tc, CLOSE_TC_THRESHOLD, frag_len);
 
+  if (unlikely(afl->rand_close_tc)) {
+    u32 tmp_num_close_tc = 0;
+    while (tmp_num_close_tc < num_close_tc) {
+      u32 rand_tc_id = rand_below(afl, afl->queued_paths);
+      if (afl->queue_buf[rand_tc_id]->is_mined == (u32) -1) {
+        close_tcs[tmp_num_close_tc++] = rand_tc_id;
+      }
+    }
+  }
+
   // Eval frags
   for (idx1 = 0; idx1 < num_close_tc; idx1++) {
     if (NUM_CLOSE_TC_TO_USE >= rand_below(afl, num_close_tc)) {

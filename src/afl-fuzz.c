@@ -363,7 +363,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   while ((opt = getopt(
               argc, argv,
-              "+ab:B:c:CdD:e:E:hi:I:f:F:l:L:m:M:nNo:p:RQs:S:t:T:UV:Wx:Z")) > 0) {
+              "+ab:B:c:CdD:e:E:hi:I:f:F:l:L:m:M:nNo:p:R:Qs:S:t:T:UV:Wx:Z")) > 0) {
 
     switch (opt) {
 
@@ -1007,9 +1007,11 @@ int main(int argc, char **argv_orig, char **envp) {
 
       case 'R':
 
-        FATAL(
-            "Radamsa is now a custom mutator, please use that "
-            "(custom_mutators/radamsa/).");
+        if (!stricmp(optarg, "close")) {
+          afl->rand_close_tc = true;
+        } else {
+          FATAL("UNKNOWN -R flag");
+        }
 
         break;
 
