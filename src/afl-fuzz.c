@@ -1011,6 +1011,8 @@ int main(int argc, char **argv_orig, char **envp) {
           afl->rand_close_tc = true;
         } if (!stricmp(optarg, "funcrel")) {
           afl->rand_funcrel = true;
+        } if (!stricmp(optarg, "argv")) {
+          afl->random_argv = true;
         } else {
           FATAL("UNKNOWN -R flag");
         }

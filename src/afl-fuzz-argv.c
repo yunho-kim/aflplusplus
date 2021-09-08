@@ -1069,6 +1069,26 @@ do {                                      \
   free(argv_rel);
   free(selected_argvs_bits);
 
+  if (unlikely(afl->random_argv)) {
+    for (idx1 = 0; idx1 < num_selected; idx1++) {
+      bool added = false;
+      while (!added) {
+        u32 rand_argv_idx = rand_below(afl, afl->num_argvs);
+        bool exists = false;
+        for (idx2 = 0; idx2 < idx1; idx2++) {
+          if (selected_argvs[idx2] == rand_argv_idx) {
+            exists = true;
+            break;
+          }
+        }
+        if (!exists) {
+          selected_argvs[idx1] = rand_argv_idx;
+          added = true;
+        }
+      }
+    }
+  }
+
   snprintf(fn, PATH_MAX, "%s/FRIEND/num_func_calls", afl->out_dir);
   fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) PFATAL("Unable to create '%s'", fn);
