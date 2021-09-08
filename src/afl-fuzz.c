@@ -2190,7 +2190,7 @@ int main(int argc, char **argv_orig, char **envp) {
     if (afl->argv_mut && !afl->argv_timed_out) {
       fuzz_one_argv(afl);
 
-      if ((get_cur_time() - afl->start_time) > 120000) {
+      if ((get_cur_time() - afl->start_time) > 3600000) {
         afl->argv_timed_out = 1;
         argv_select(afl);
       }
