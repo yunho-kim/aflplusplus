@@ -108,6 +108,71 @@ void destroy_argv(afl_state_t * afl) {
   free(afl->argvs_hash);
 }
 
+static void update_func_rel(afl_state_t * afl, u8 * buf, u32 len) {
+   u32 cmp_id;
+  struct cmp_entry * entries = afl->shm.branch_map;
+
+  for (cmp_id = 0; cmp_id < afl->num_cmp ; cmp_id++) {
+    entries[cmp_id].condition = 0;
+  }
+
+  write_to_testcase(afl, buf, len, (u32) -1);
+  u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout * 2);
+
+  if (fault == FSRV_RUN_TMOUT) {
+    //what?
+    WARNF("input in the queue timed out on func log");
+    return;
+  }
+
+  u8 precondition, postcondition;
+  struct cmp_queue_entry * cur_queue_entry;
+  memset(afl->func_list, 0, sizeof(u8) * afl->num_func);
+
+  //update branch coverage
+  for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id++) {
+    if (entries[cmp_id].condition) {
+
+      afl->func_list[afl->cmp_func_map[cmp_id]] = 1;
+
+      cur_queue_entry = afl->cmp_queue_buf[cmp_id];
+      precondition = cur_queue_entry->condition;
+
+      if (precondition == 3) continue;
+
+      cur_queue_entry->condition |= entries[cmp_id].condition;
+      postcondition = cur_queue_entry->condition;
+
+      if ((precondition == 0) && (postcondition != 3)) {
+        afl->covered_branch++;
+      } else if (postcondition == 3) {
+        if (precondition == 0) {
+          afl->covered_branch += 2;
+        } else {
+          afl->covered_branch ++;
+        }
+      }
+    }
+  }
+
+  //update func rel/ cmp rel
+  u32 idx1, idx2;
+  for (idx1 = 0; idx1 < afl->num_func; idx1++) {
+    if (afl->func_list[idx1]) {
+      if (unlikely(afl->func_exec_count_table[idx1] == NULL)) {
+        afl->func_exec_count_table[idx1] = (u32 *) calloc(sizeof (u32), afl->num_func);
+        if (unlikely(afl->func_exec_count_table[idx1] == NULL))
+          PFATAL("Can't alloc func_exec_count_table[idx1]");
+      }
+
+      u32 * cur_func_exec_table = afl->func_exec_count_table[idx1];
+      for (idx2 = 0; idx2 < afl->num_func; idx2++) {
+        cur_func_exec_table[idx2] += afl->func_list[idx2]; 
+      }
+    }
+  }
+}
+
 void fuzz_one_argv(afl_state_t * afl) {
   u32 len;
   u32 idx1, idx2;
@@ -484,7 +549,7 @@ void argv_select(afl_state_t * afl) {
  
   //status record
   char fn[PATH_MAX];
-  u32 idx1, idx2, idx3, idx4;
+  u32 idx1, idx2, idx3;
   snprintf(fn, PATH_MAX, "%s/FRIEND/argvs_init", afl->out_dir);
   s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) PFATAL("Unable to create '%s'", fn);
@@ -968,45 +1033,58 @@ do {                                      \
 
   */
 
+  //func rel update
+  u32 ** func_exec_count = (u32 **) afl->func_exec_count_table;
+
+  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+    u8 * func_call = func_calls[idx1];
+    for (idx2 = 0; idx2 < afl->num_func; idx2++) {
+      if (func_call[idx2] && unlikely(func_exec_count[idx2] == NULL)) {
+        func_exec_count[idx2] = calloc(afl->num_func, sizeof(u32));
+        func_exec_count[idx2][idx2] = 1;
+      }
+    }
+  }
+
   float ** argv_rel = (float **) malloc(sizeof (float *) * afl->num_argvs);
   for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
     argv_rel[idx1] = (float *) malloc(sizeof(float) * afl->num_argvs);
   }
 
-  u32 ** func_exec_count = (u32 **) afl->func_exec_count_table;
-
   float min_rel = FLT_MAX;
   float max_rel = FLT_MIN;
   u32 min_rel_idx1 = 0, min_rel_idx2 = 0;
 
-  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
-    float * tmp = argv_rel[idx1];
-    u32 argv_1 = idx1;
+  u32 argv_1, argv_2;
+  for (argv_1 = 0; argv_1 < afl->num_argvs; argv_1++) {
+    float * tmp = argv_rel[argv_1];
     u8 * argv_1_func_call = func_calls[argv_1];
-    tmp[idx1] = 0.0;
-    for (idx2 = idx1 + 1; idx2 < afl->num_argvs; idx2++) {
+    tmp[argv_1] = 0.0;
+    for (argv_2 = argv_1 + 1; argv_2 < afl->num_argvs; argv_2++) {
       float rel_sum = 0.0;
       float num_rel = 0.0;
-      u32 argv_2 = idx2;
       u8 * argv_2_func_call = func_calls[argv_2];
-      for (idx3 = 0; idx3 < afl->num_func; idx3++) {
-        if (argv_1_func_call[idx3]) {
-          float func_idx3_count = (float) func_exec_count[idx3][idx3];
-          for (idx4 = 0; idx4 < afl->num_func; idx4 ++) {
-            if (argv_2_func_call[idx4]) {
-              float idx3_idx4_count = (float) func_exec_count[idx3][idx4];
-              rel_sum += idx3_idx4_count * idx3_idx4_count / func_idx3_count / ((float) func_exec_count[idx4][idx4]);
+      for (idx1 = 0; idx1 < afl->num_func; idx1++) {
+        if (argv_1_func_call[idx1]) {
+          float func_idx1_count = (float) func_exec_count[idx1][idx1];
+          if (unlikely(func_idx1_count == 0.0)) func_idx1_count = 1.0;
+          for (idx2 = 0; idx2 < afl->num_func; idx2 ++) {
+            if (argv_2_func_call[idx2]) {
+              float idx1_idx2_count = (float) func_exec_count[idx1][idx2];
+              float idx2_idx2_count = (float) func_exec_count[idx2][idx2];
+              if (unlikely (idx2_idx2_count == 0.0)) idx2_idx2_count = 1.0;
+              rel_sum += idx1_idx2_count * idx1_idx2_count / func_idx1_count / idx2_idx2_count;
               num_rel += 1.0;
             }
           }
         }
       }
       float rel_res = rel_sum / num_rel;
-      tmp[idx2] = argv_rel[idx2][idx1] = rel_res;
+      tmp[argv_2] = argv_rel[argv_2][argv_1] = rel_res;
       if (rel_res < min_rel) { 
         min_rel = rel_res;
-        min_rel_idx1 = idx1;
-        min_rel_idx2 = idx2;
+        min_rel_idx1 = argv_1;
+        min_rel_idx2 = argv_2;
       } else if (rel_res > max_rel) {
         max_rel = rel_res;
       }
@@ -1205,6 +1283,8 @@ do {                                      \
 
         calibrate_case(afl, q, out_buf, afl->queue_cycle - 1, 0);
         queue_testcase_store_mem(afl, q, out_buf);
+
+        update_func_rel(afl, out_buf, temp_len);
       } else {
         cur_id = saved_queue[cur_tc->id];
       }
@@ -1546,6 +1626,8 @@ do {                                      \
 
         calibrate_case(afl, q, out_buf, afl->queue_cycle - 1, 0);
         queue_testcase_store_mem(afl, q, out_buf);
+
+        update_func_rel(afl, out_buf, temp_len);
 
         q->parent_id = cur_id;
         struct queue_entry * parent = tmp_buf[cur_id];

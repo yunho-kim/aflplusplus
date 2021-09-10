@@ -2065,6 +2065,20 @@ char * __afl_mkdtemp_wrapper (char * template) {
 }
 
 void __afl_delete_file_dirs() {
+  if (unlikely(__afl_branch_map == NULL)) {
+    fprintf(stderr, "%u files and %u dirs\n", __afl_num_write_files, __afl_num_write_dirs);
+    u32 idx1;
+    for (idx1 = 0; idx1 < __afl_num_write_files; idx1++) {
+      fprintf(stderr, "%s\n", __afl_write_files[idx1]);
+      unlink(__afl_write_files[idx1]);
+    }
+    fprintf(stderr, "dirs:\n");
+    for (idx1 = 0; idx1 < __afl_num_write_dirs; idx1++) {
+      fprintf(stderr, "%s\n", __afl_write_dirs[idx1]);
+      delete_files(__afl_write_dirs[idx1]);
+    }
+    return;
+  }
   u32 idx1;
   for (idx1 = 0; idx1 < __afl_num_write_files; idx1++) {
     unlink(__afl_write_files[idx1]);
