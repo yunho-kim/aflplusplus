@@ -1869,6 +1869,7 @@ void __afl_parse_argv(int* argc, char ***argv) {
 }
 
 FILE * __afl_fopen_wrapper(const char * pathname, const char * mode) {
+  // fprintf(stderr, "[o] fopen wrapper: %s\n", pathname); // CREATE FILE LOG
   if (strchr(mode, 'w')) {
     return fopen("/dev/null", mode);
   }
@@ -1876,6 +1877,7 @@ FILE * __afl_fopen_wrapper(const char * pathname, const char * mode) {
 }
 
 FILE * __afl_freopen_wrapper(const char * pathname, const char * mode, FILE * stream) {
+  // fprintf(stderr, "[o] freopen wrapper: %s\n", pathname); // CREATE FILE LOG
   if (strchr(mode, 'w')) {
     return freopen("/dev/null", mode, stream);
   }
@@ -1883,6 +1885,7 @@ FILE * __afl_freopen_wrapper(const char * pathname, const char * mode, FILE * st
 }
 
 int __afl_open_wrapper(const char *pathname, int flags, ...) {
+  // fprintf(stderr, "[o] open wrapper: %s\n", pathname); // CREATE FILE LOG
   if (flags & O_WRONLY) {
     return open("/dev/null", flags);
   }
@@ -1890,5 +1893,34 @@ int __afl_open_wrapper(const char *pathname, int flags, ...) {
 }
 
 int __afl_creat_wrapper (const char * filename, mode_t mode) {
+  // fprintf(stderr, "[o] creat wrapper: %s\n", filename); // CREATE FILE LOG
   return creat("/dev/null", mode);
+}
+
+int __afl_mkstemp_wrapper (char * filename) {
+  // fprintf(stderr, "[o] mkstemp wrapper: %s\n", filename); // CREATE FILE LOG
+  int ret = mkstemp(filename);
+  unlink(filename);
+  return ret;
+}
+
+int __afl_mkostemp_wrapper (char * filename, int flag) {
+  // fprintf(stderr, "[o] mkostemp wrapper: %s\n", filename); // CREATE FILE LOG
+  int ret = mkostemp(filename, flag);
+  unlink(filename);
+  return ret;
+}
+
+int __afl_mkstemps_wrapper (char * filename, int suffixLen) {
+  // fprintf(stderr, "[o] mkstemps wrapper: %s\n", filename); // CREATE FILE LOG
+  int ret = mkstemps(filename, suffixLen);
+  unlink(filename);
+  return ret;
+}
+
+int __afl_mkostemps_wrapper (char * filename, int suffixLen, int flag) {
+  // fprintf(stderr, "[o] mkostemps wrapper: %s\n", filename); // CREATE FILE LOG
+  int ret = mkostemps(filename, suffixLen, flag);
+  unlink(filename);
+  return ret;
 }

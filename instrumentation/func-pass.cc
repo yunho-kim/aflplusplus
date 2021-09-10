@@ -187,6 +187,10 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   FunctionType * open_ft = FunctionType::get(Int32Ty, parm_types, true);
   Value * open_wrapperHook = M.getOrInsertFunction("__afl_open_wrapper", open_ft).getCallee();
   Value * creat_wrapperHook = M.getOrInsertFunction("__afl_creat_wrapper", Int32Ty, Int8PtrTy, Int32Ty).getCallee();
+  Value * mkstemp_wrapperHook = M.getOrInsertFunction("__afl_mkstemp_wrapper", Int32Ty, Int8PtrTy).getCallee();
+  Value * mkostemp_wrapperHook = M.getOrInsertFunction("__afl_mkostemp_wrapper", Int32Ty, Int8PtrTy, Int32Ty).getCallee();
+  Value * mkstemps_wrapperHook = M.getOrInsertFunction("__afl_mkstemps_wrapper", Int32Ty, Int8PtrTy, Int32Ty).getCallee();
+  Value * mkostemps_wrapperHook = M.getOrInsertFunction("__afl_mkostemps_wrapper", Int32Ty, Int8PtrTy, Int32Ty, Int32Ty).getCallee();
 
   unsigned int func_id = 0;
   unsigned int cmp_id = 0;
@@ -238,6 +242,50 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
       ft->getParamType(0)->isPointerTy() &&
       ft->getParamType(1)->isIntegerTy(32)) {
         F.replaceAllUsesWith(creat_wrapperHook);
+        continue;
+      }
+    } else if (F.getName().equals(StringRef("mkstemp"))) {
+      // replacing mkstemp(char * template)
+      FunctionType * ft = F.getFunctionType();
+      if (ft->getNumParams() == 1 &&
+      ft->getReturnType()->isIntegerTy(32) &&
+      ft->getParamType(0)->isPointerTy()) {
+        // fprintf(stderr, "replacing mkstemp\n"); // CREATE FILE LOG
+        F.replaceAllUsesWith(mkstemp_wrapperHook);
+        continue;
+      }
+    } else if (F.getName().equals(StringRef("mkostemp"))) {
+      // replacing mkostemp(char * template, int flag)
+      FunctionType * ft = F.getFunctionType();
+      if (ft->getNumParams() == 2 &&
+      ft->getReturnType()->isIntegerTy(32) &&
+      ft->getParamType(0)->isPointerTy() &&
+      ft->getParamType(1)->isIntegerTy(32)) {
+        // fprintf(stderr, "replacing mkostemp\n");  // CREATE FILE LOG
+        F.replaceAllUsesWith(mkostemp_wrapperHook);
+        continue;
+      }
+    } else if (F.getName().equals(StringRef("mkstemps"))) {
+      // replacing mkstemps(char * template, int flag)
+      FunctionType * ft = F.getFunctionType();
+      if (ft->getNumParams() == 2 &&
+      ft->getReturnType()->isIntegerTy(32) &&
+      ft->getParamType(0)->isPointerTy() &&
+      ft->getParamType(1)->isIntegerTy(32)) {
+        // fprintf(stderr, "replacing mkstemps\n");  // CREATE FILE LOG
+        F.replaceAllUsesWith(mkstemps_wrapperHook);
+        continue;
+      }
+    } else if (F.getName().equals(StringRef("mkostemps"))) {
+      // replacing mkstemps(char * template, int flag)
+      FunctionType * ft = F.getFunctionType();
+      if (ft->getNumParams() == 2 &&
+      ft->getReturnType()->isIntegerTy(32) &&
+      ft->getParamType(0)->isPointerTy() &&
+      ft->getParamType(1)->isIntegerTy(32) &&
+      ft->getParamType(2)->isIntegerTy(32)) {
+        // fprintf(stderr, "replacing mkostemps\n"); // CREATE FILE LOG
+        F.replaceAllUsesWith(mkostemps_wrapperHook);
         continue;
       }
     }
@@ -358,7 +406,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
 
   if (getenv("AFL_PRINT_IR") != NULL) {
     std::error_code Errinfo;
-    raw_fd_ostream result_ir("FRIEND_result.ir", Errinfo, sys::fs::OpenFlags::OF_Text);
+    raw_fd_ostream result_ir("FRIEND_result.ir-enhc", Errinfo, sys::fs::OpenFlags::OF_Text);
 
     func_id = 0;
     cmp_id = 0;
