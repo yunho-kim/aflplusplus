@@ -64,7 +64,7 @@ void init_func(afl_state_t* afl) {
     afl->cmp_queue_buf[i]->id = i;
   }
 
-  afl->mutated_frag_idx = (u32 *) malloc(sizeof (u32) * (1 << HAVOC_STACK_POW2_FUNC));
+  afl->mutated_frag_idx = (u32 *) malloc(sizeof (u32) * (1 << HAVOC_STACK_POW2));
   afl->close_tcs = (u32 *) malloc(sizeof (u32) * CLOSE_TCS_SIZE);
 
   /*
@@ -604,7 +604,7 @@ do {                                      \
 
     for (idx2 = 0; idx2 < num_repeat; idx2++) {
 
-      u32 use_stacking = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2_FUNC));
+      u32 use_stacking = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2));
       u32 rand_value;
 
       for (idx3 = 0; idx3 < use_stacking; ++idx3) {
@@ -1391,7 +1391,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
     if (afl->stop_soon) break;
 
-    u32 use_stacking1 = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2_FUNC));
+    u32 use_stacking1 = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2));
     u32 rand_value;
     afl->stage_cur_val = use_stacking1;
 
@@ -1409,7 +1409,7 @@ void fuzz_one_func (afl_state_t *afl) {
 
       afl->mutated_frag_idx[idx1] = frag_begin_idx;
 
-      u32 use_stacking2 = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2_FUNC));
+      u32 use_stacking2 = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2));
 
       for (idx2 = 0; idx2 < use_stacking2 ; idx2++) {
 

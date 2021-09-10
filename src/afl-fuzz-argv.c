@@ -216,7 +216,7 @@ void fuzz_one_argv(afl_state_t * afl) {
 
   for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
     
-    u32 use_stacking1 = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2_FUNC));
+    u32 use_stacking1 = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2));
     afl->stage_cur_val = use_stacking1;
 
     struct argv_word_entry * rand_word;
@@ -630,7 +630,7 @@ do {                                      \
       struct cmp_entry * entries = afl->shm.branch_map;
 
       for (idx2 = 0; idx2 < 4; idx2++) {
-        u32 use_stacking = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
+        u32 use_stacking = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2));
         for (idx3 = 0; idx3 < use_stacking; ++idx3) {
           switch (rand_below(afl, 15)) {
 
@@ -1289,7 +1289,7 @@ do {                                      \
         cur_id = saved_queue[cur_tc->id];
       }
 
-      u32 use_stacking = 1 << (1 + rand_below(afl, afl->havoc_stack_pow2));
+      u32 use_stacking = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2));
       for (idx3 = 0; idx3 < use_stacking; ++idx3) {
         switch (rand_below(afl, 15)) {
 
@@ -1584,65 +1584,65 @@ do {                                      \
 
           }
         }
-        
-        write_to_testcase(afl, out_buf, temp_len, argv_idx);
-
-        fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
-
-        if (afl->stop_soon) { break; }
-
-        if (unlikely(fault != afl->crash_mode)) { continue; }
-
-        u8 new_bits = has_new_bits_unclassified(afl, afl->virgin_bits);
-
-        if (!new_bits) continue;
-
-        s8 * queue_fn = alloc_printf(
-          "%s/queue2/id:%06u,%s", afl->out_dir, cur_queued_path,
-          describe_op(afl, new_bits, NAME_MAX - strlen("id:000000,"), cur_id, (u32) -1, argv_idx));
-
-        s32 fd = open(queue_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
-        if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", queue_fn); }
-        ck_write(fd, out_buf, temp_len, queue_fn);
-        close(fd);
-
-        struct queue_entry *q = ck_alloc(sizeof(struct queue_entry));
-
-        q->fname = queue_fn;
-        q->len = temp_len;
-        q->depth = 0;
-        q->passed_det = 0;
-        q->trace_mini = NULL;
-        q->testcase_buf = NULL;
-        q->mother = NULL;
-        q->argv_idx = argv_idx;
-
-        tmp_buf[cur_queued_path] = q;
-        q->id = cur_queued_path;
-        
-
-        q->exec_cksum =
-          hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
-
-        calibrate_case(afl, q, out_buf, afl->queue_cycle - 1, 0);
-        queue_testcase_store_mem(afl, q, out_buf);
-
-        update_func_rel(afl, out_buf, temp_len);
-
-        q->parent_id = cur_id;
-        struct queue_entry * parent = tmp_buf[cur_id];
-        if (parent->children == NULL) { 
-          parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_SIZE);
-          parent->children_size = TC_CHILDREN_SIZE;
-        }
-        parent->children[parent->num_children++] = cur_queued_path;
-        if(unlikely(parent->num_children >= parent->children_size)){
-          parent->children_size *= 2;
-          parent->children = realloc(parent->children, parent->children_size * sizeof(u32));
-        }
-
-        cur_queued_path ++;
       }
+
+      write_to_testcase(afl, out_buf, temp_len, argv_idx);
+
+      fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
+
+      if (afl->stop_soon) { break; }
+
+      if (unlikely(fault != afl->crash_mode)) { continue; }
+
+      u8 new_bits = has_new_bits_unclassified(afl, afl->virgin_bits);
+
+      if (!new_bits) continue;
+
+      s8 * queue_fn = alloc_printf(
+        "%s/queue2/id:%06u,%s", afl->out_dir, cur_queued_path,
+        describe_op(afl, new_bits, NAME_MAX - strlen("id:000000,"), cur_id, (u32) -1, argv_idx));
+
+      fd = open(queue_fn, O_WRONLY | O_CREAT | O_EXCL, 0600);
+      if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", queue_fn); }
+      ck_write(fd, out_buf, temp_len, queue_fn);
+      close(fd);
+
+      struct queue_entry *q = ck_alloc(sizeof(struct queue_entry));
+
+      q->fname = queue_fn;
+      q->len = temp_len;
+      q->depth = 0;
+      q->passed_det = 0;
+      q->trace_mini = NULL;
+      q->testcase_buf = NULL;
+      q->mother = NULL;
+      q->argv_idx = argv_idx;
+
+      tmp_buf[cur_queued_path] = q;
+      q->id = cur_queued_path;
+      
+
+      q->exec_cksum =
+        hash64(afl->fsrv.trace_bits, afl->fsrv.map_size, HASH_CONST);
+
+      calibrate_case(afl, q, out_buf, afl->queue_cycle - 1, 0);
+      queue_testcase_store_mem(afl, q, out_buf);
+
+      update_func_rel(afl, out_buf, temp_len);
+
+      q->parent_id = cur_id;
+      struct queue_entry * parent = tmp_buf[cur_id];
+      if (parent->children == NULL) { 
+        parent->children = (u32 *) malloc (sizeof(u32) * TC_CHILDREN_SIZE);
+        parent->children_size = TC_CHILDREN_SIZE;
+      }
+      parent->children[parent->num_children++] = cur_queued_path;
+      if(unlikely(parent->num_children >= parent->children_size)){
+        parent->children_size *= 2;
+        parent->children = realloc(parent->children, parent->children_size * sizeof(u32));
+      }
+
+      cur_queued_path ++;
     }
   }
 

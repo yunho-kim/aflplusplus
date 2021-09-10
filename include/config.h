@@ -508,8 +508,6 @@
 //Maximum # of close tcs for each tc, used in tc_graph_entry
 #define CLOSE_TCS_SIZE 256
 
-#define HAVOC_STACK_POW2_FUNC 4
-
 #define CMP_BUF_SIZE 512
 
 #define NUM_CLOSE_TC_TO_USE 32
