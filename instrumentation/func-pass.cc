@@ -38,6 +38,7 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Pass.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Transforms/Utils/ModuleUtils.h"
 
 #if LLVM_VERSION_MAJOR > 3 || \
     (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR > 4)
@@ -188,9 +189,11 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   Value * open_wrapperHook = M.getOrInsertFunction("__afl_open_wrapper", open_ft).getCallee();
   Value * creat_wrapperHook = M.getOrInsertFunction("__afl_creat_wrapper", Int32Ty, Int8PtrTy, Int32Ty).getCallee();
   Value * mkstemp_wrapperHook = M.getOrInsertFunction("__afl_mkstemp_wrapper", Int32Ty, Int8PtrTy).getCallee();
-  Value * mkostemp_wrapperHook = M.getOrInsertFunction("__afl_mkostemp_wrapper", Int32Ty, Int8PtrTy, Int32Ty).getCallee();
   Value * mkstemps_wrapperHook = M.getOrInsertFunction("__afl_mkstemps_wrapper", Int32Ty, Int8PtrTy, Int32Ty).getCallee();
-  Value * mkostemps_wrapperHook = M.getOrInsertFunction("__afl_mkostemps_wrapper", Int32Ty, Int8PtrTy, Int32Ty, Int32Ty).getCallee();
+  //Value * mkostemp_wrapperHook = M.getOrInsertFunction("__afl_mkostemp_wrapper", Int32Ty, Int8PtrTy, Int32Ty).getCallee();
+  //Value * mkostemps_wrapperHook = M.getOrInsertFunction("__afl_mkostemps_wrapper", Int32Ty, Int8PtrTy, Int32Ty, Int32Ty).getCallee();
+  Value * mkdtemp_wrapperHook = M.getOrInsertFunction("__afl_mkdtemp_wrapper", Int32Ty, Int8PtrTy).getCallee();
+  Value * delete_files = M.getOrInsertFunction("__afl_delete_file_dirs", VoidTy).getCallee();
 
   unsigned int func_id = 0;
   unsigned int cmp_id = 0;
@@ -254,17 +257,6 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
         F.replaceAllUsesWith(mkstemp_wrapperHook);
         continue;
       }
-    } else if (F.getName().equals(StringRef("mkostemp"))) {
-      // replacing mkostemp(char * template, int flag)
-      FunctionType * ft = F.getFunctionType();
-      if (ft->getNumParams() == 2 &&
-      ft->getReturnType()->isIntegerTy(32) &&
-      ft->getParamType(0)->isPointerTy() &&
-      ft->getParamType(1)->isIntegerTy(32)) {
-        // fprintf(stderr, "replacing mkostemp\n");  // CREATE FILE LOG
-        F.replaceAllUsesWith(mkostemp_wrapperHook);
-        continue;
-      }
     } else if (F.getName().equals(StringRef("mkstemps"))) {
       // replacing mkstemps(char * template, int flag)
       FunctionType * ft = F.getFunctionType();
@@ -274,6 +266,17 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
       ft->getParamType(1)->isIntegerTy(32)) {
         // fprintf(stderr, "replacing mkstemps\n");  // CREATE FILE LOG
         F.replaceAllUsesWith(mkstemps_wrapperHook);
+        continue;
+      }
+    } /*else if (F.getName().equals(StringRef("mkostemp"))) {
+      // replacing mkostemp(char * template, int flag)
+      FunctionType * ft = F.getFunctionType();
+      if (ft->getNumParams() == 2 &&
+      ft->getReturnType()->isIntegerTy(32) &&
+      ft->getParamType(0)->isPointerTy() &&
+      ft->getParamType(1)->isIntegerTy(32)) {
+        // fprintf(stderr, "replacing mkostemp\n");  // CREATE FILE LOG
+        F.replaceAllUsesWith(mkostemp_wrapperHook);
         continue;
       }
     } else if (F.getName().equals(StringRef("mkostemps"))) {
@@ -287,6 +290,14 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
         // fprintf(stderr, "replacing mkostemps\n"); // CREATE FILE LOG
         F.replaceAllUsesWith(mkostemps_wrapperHook);
         continue;
+      }
+    } */else if (F.getName().equals(StringRef("mkdtemp"))) {
+      FunctionType * ft = F.getFunctionType();
+      if (ft->getNumParams() == 1 &&
+        ft->getReturnType()->isPointerTy() &&
+        ft->getParamType(0)->isPointerTy()
+      ) {
+        F.replaceAllUsesWith(mkdtemp_wrapperHook);
       }
     }
 
@@ -391,6 +402,8 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   }
 
   func2.close();
+
+  llvm::appendToGlobalDtors(M, dyn_cast<Function>(delete_files), 0);
 
   std::ofstream func;
   func.open("FRIEND_func_cmp_id_info" , std::ofstream::out | std::ofstream::trunc);
