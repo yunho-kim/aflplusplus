@@ -192,7 +192,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
   Value * mkstemps_wrapperHook = M.getOrInsertFunction("__afl_mkstemps_wrapper", Int32Ty, Int8PtrTy, Int32Ty).getCallee();
   //Value * mkostemp_wrapperHook = M.getOrInsertFunction("__afl_mkostemp_wrapper", Int32Ty, Int8PtrTy, Int32Ty).getCallee();
   //Value * mkostemps_wrapperHook = M.getOrInsertFunction("__afl_mkostemps_wrapper", Int32Ty, Int8PtrTy, Int32Ty, Int32Ty).getCallee();
-  Value * mkdtemp_wrapperHook = M.getOrInsertFunction("__afl_mkdtemp_wrapper", Int32Ty, Int8PtrTy).getCallee();
+  Value * mkdtemp_wrapperHook = M.getOrInsertFunction("__afl_mkdtemp_wrapper", Int8PtrTy, Int8PtrTy).getCallee();
   Value * delete_files = M.getOrInsertFunction("__afl_delete_file_dirs", VoidTy).getCallee();
 
   unsigned int func_id = 0;
