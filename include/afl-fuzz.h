@@ -892,6 +892,7 @@ typedef struct afl_state {
   bool rand_close_tc;
   bool rand_funcrel;
   bool random_argv;
+  bool funcrel_file_mut;
 
 //Debug
   FILE * debug_file;

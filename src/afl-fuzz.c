@@ -363,7 +363,7 @@ int main(int argc, char **argv_orig, char **envp) {
 
   while ((opt = getopt(
               argc, argv,
-              "+ab:B:c:CdD:e:E:hi:I:f:F:l:L:m:M:nNo:p:R:Qs:S:t:T:UV:Wx:Z")) > 0) {
+              "+ab:B:c:CdD:e:E:hi:I:fF:l:L:m:M:nNo:p:R:Qs:S:t:T:UV:Wx:Z")) > 0) {
 
     switch (opt) {
 
@@ -591,12 +591,17 @@ int main(int argc, char **argv_orig, char **envp) {
         afl->foreign_sync_cnt++;
         break;
 
-      case 'f':                                              /* target file */
-
+      case 'f':
+        afl->funcrel_file_mut = true;
+        break;
+      
+      //case 'f':                                              /* target file */
+      /*
         if (afl->fsrv.out_file) { FATAL("Multiple -f options not supported"); }
         afl->fsrv.out_file = ck_strdup(optarg);
         afl->fsrv.use_stdin = 0;
         break;
+      */
 
       case 'x':                                               /* dictionary */
 
@@ -2207,7 +2212,7 @@ int main(int argc, char **argv_orig, char **envp) {
         afl->cmp_queue_cur = afl->cmp_queue_cur->next;
       }
 
-      if (likely(afl->cmp_queue_cur)) {
+      if (afl->funcrel_file_mut && likely(afl->cmp_queue_cur)) {
         struct cmp_queue_entry * cq_cur = afl->cmp_queue_cur; 
         //ITERATE through tcs
         u32 num_tcs = cq_cur->num_value_changing_tcs;
@@ -2246,7 +2251,7 @@ int main(int argc, char **argv_orig, char **envp) {
     }
 
     u32 idx = 0;
-    while (((afl->mining_done_idx + 1) < afl->queued_paths) && idx < MINING_LIMIT && !afl->stop_soon) {
+    while (afl->funcrel_file_mut && ((afl->mining_done_idx + 1) < afl->queued_paths) && (idx < MINING_LIMIT) && !afl->stop_soon) {
       if (afl->queue_buf[afl->mining_done_idx]->is_mined < MAX_MINING_TRY)
         mining_wrapper(afl, afl->mining_done_idx);
       afl->mining_done_idx++;
