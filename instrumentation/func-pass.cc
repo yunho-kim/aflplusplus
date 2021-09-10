@@ -253,7 +253,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
       if (ft->getNumParams() == 1 &&
       ft->getReturnType()->isIntegerTy(32) &&
       ft->getParamType(0)->isPointerTy()) {
-        // fprintf(stderr, "replacing mkstemp\n"); // CREATE FILE LOG
+        fprintf(stderr, "replacing mkstemp\n"); // CREATE FILE LOG
         F.replaceAllUsesWith(mkstemp_wrapperHook);
         continue;
       }
@@ -264,7 +264,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
       ft->getReturnType()->isIntegerTy(32) &&
       ft->getParamType(0)->isPointerTy() &&
       ft->getParamType(1)->isIntegerTy(32)) {
-        // fprintf(stderr, "replacing mkstemps\n");  // CREATE FILE LOG
+        fprintf(stderr, "replacing mkstemps\n");  // CREATE FILE LOG
         F.replaceAllUsesWith(mkstemps_wrapperHook);
         continue;
       }
@@ -297,6 +297,7 @@ bool FuncLogInstructions::hookInstrs(Module &M) {
         ft->getReturnType()->isPointerTy() &&
         ft->getParamType(0)->isPointerTy()
       ) {
+        fprintf(stderr, "replacing mkdtemp\n");
         F.replaceAllUsesWith(mkdtemp_wrapperHook);
       }
     }

@@ -1918,7 +1918,7 @@ FILE * __afl_freopen_wrapper(const char * pathname, const char * mode, FILE * st
 int __afl_open_wrapper(const char *pathname, int flags, ...) {
   // fprintf(stderr, "[o] open wrapper: %s\n", pathname); // CREATE FILE LOG
   int res = open(pathname, flags);
-  if ((flags & O_WRONLY) && (res > 0)) {
+  if ((flags & (O_WRONLY | O_RDWR)) && (res > 0)) {
     if (likely(__afl_num_write_files < AFL_NUM_FILES)) {
       size_t len = strlen(pathname);
       __afl_write_files[__afl_num_write_files] = malloc(sizeof (u8) * (len + 1));
