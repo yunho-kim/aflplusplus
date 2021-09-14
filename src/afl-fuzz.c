@@ -1014,11 +1014,11 @@ int main(int argc, char **argv_orig, char **envp) {
 
         if (!stricmp(optarg, "close")) {
           afl->rand_close_tc = true;
-        } if (!stricmp(optarg, "funcrel")) {
+        } else if (!stricmp(optarg, "funcrel")) {
           afl->rand_funcrel = true;
-        } if (!stricmp(optarg, "argv")) {
+        } else if (!stricmp(optarg, "argv")) {
           afl->random_argv = true;
-        } if (!stricmp(optarg, "keep")) {
+        } else if (!stricmp(optarg, "keep")) {
           afl->argv_timeout = (u64) -1;
         } else {
           FATAL("UNKNOWN -R flag");
