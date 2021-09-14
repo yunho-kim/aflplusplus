@@ -1018,6 +1018,8 @@ int main(int argc, char **argv_orig, char **envp) {
           afl->rand_funcrel = true;
         } if (!stricmp(optarg, "argv")) {
           afl->random_argv = true;
+        } if (!stricmp(optarg, "keep")) {
+          afl->argv_timeout = (u64) -1;
         } else {
           FATAL("UNKNOWN -R flag");
         }
@@ -1056,6 +1058,10 @@ int main(int argc, char **argv_orig, char **envp) {
     memcpy(buf, trim, trim_len);
     snprintf(afl->func_binary, PATH_MAX, "%s/%s.func", afl->func_infos_dir, buf);
     free(buf);
+  }
+
+  if (afl->argv_timeout == 0) {
+    afl->argv_timeout = 3600000;
   }
 
   afl->disable_trim = 1;
@@ -2195,7 +2201,7 @@ int main(int argc, char **argv_orig, char **envp) {
     if (afl->argv_mut && !afl->argv_timed_out) {
       fuzz_one_argv(afl);
 
-      if ((get_cur_time() - afl->start_time) > 3600000) {
+      if ((get_cur_time() - afl->start_time) > afl->argv_timeout) {
         afl->argv_timed_out = 1;
         argv_select(afl);
       }
