@@ -11,7 +11,15 @@ if tc_path[0] != "/":
   tc_path = os.getcwd() + "/" + tc_path
   print("using tc_path : {}".format(tc_path))
   
-argv_id = int(tc_path.split("/")[-1].split(",")[2].split(":")[1])
+argv_id = None
+for entry in tc_path.split("/")[-1].split(","):
+  if "argv" in entry:
+    argv_id = int(entry.split(":")[1])
+
+
+if argv_id == None :
+  print("can't get argv id")
+  exit(1)
 
 with open (sys.argv[2], "r") as f1:
   for line in f1:
@@ -23,8 +31,9 @@ with open (sys.argv[2], "r") as f1:
     argv_idx = int(line.split(" : ")[0])
     if argv_id == argv_idx :
       argv = " : ".join(line.split(" : ")[1:])
+      break
 
-input_name = "/home/cheong/friend/../results/{}/default/.cur_input".format(tcs.split("/")[-4])
+input_name = "/home/cheong/friend/../results/{}/default/.cur_input".format(tc_path.split("/")[-4])
 
 
 argv = argv.replace(input_name, tc_path)
