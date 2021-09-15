@@ -922,6 +922,23 @@ common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len, u32 argv_idx) {
 
   if (fault == FSRV_RUN_TMOUT) {
 
+    u32 idx = 0;
+    while (afl->shm.filen_map[idx]) {
+      char * strptr = afl->shm.filen_map + idx + 1;
+      switch (afl->shm.filen_map[idx]) {
+        case 't':
+          unlink(strptr);
+          break;
+        case 'd':
+          delete_files(strptr, NULL);
+          break;
+        case 'r':
+          break;
+      }
+      idx += strlen(strptr) + 2;
+    }
+    memset(afl->shm.filen_map, 0, 1000);
+
     if (afl->subseq_tmouts++ > TMOUT_LIMIT) {
 
       ++afl->cur_skipped_paths;

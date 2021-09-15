@@ -15,6 +15,7 @@ argv_id = None
 for entry in tc_path.split("/")[-1].split(","):
   if "argv" in entry:
     argv_id = int(entry.split(":")[1])
+    break
 
 
 if argv_id == None :
@@ -43,6 +44,7 @@ for idx in range(len(argv)):
   if ".afl" in argv[idx] and "subjects_friend" in argv[idx]:
     argv[idx] = sys.argv[1]
   
-
-with open("__tmp.sh", "w") as f1:
-  f1.write(" ".join(argv))
+with open("__tmp_argv", "wb") as f1:
+  for a in argv:
+    f1.write(str.encode(a))
+    f1.write(bytes(1))

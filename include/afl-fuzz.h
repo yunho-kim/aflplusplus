@@ -1273,6 +1273,7 @@ void   setup_signal_handlers(void);
 void   save_cmdline(afl_state_t *, u32, char **);
 void   read_foreign_testcases(afl_state_t *, int);
 u32 choose_block_len(afl_state_t *afl, u32 limit);
+u8 delete_files(u8 *path, u8 *prefix);
 
 /* CmpLog */
 

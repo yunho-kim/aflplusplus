@@ -312,6 +312,22 @@ void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_id
   if (fault == FSRV_RUN_TMOUT) {
     //what?
     WARNF("input in the queue timed out on func log");
+    u32 idx = 0;
+    while (afl->shm.filen_map[idx]) {
+      char * strptr = afl->shm.filen_map + idx + 1;
+      switch (afl->shm.filen_map[idx]) {
+        case 't':
+          unlink(strptr);
+          break;
+        case 'd':
+          delete_files(strptr, NULL);
+          break;
+        case 'r':
+          break;
+      }
+      idx += strlen(strptr) + 2;
+    }
+    memset(afl->shm.filen_map, 0, 1000);
     return;
   }
 
@@ -531,6 +547,22 @@ static void mining_bytes(afl_state_t *afl, u8 * out_buf, u32 len) {
   if (fault == FSRV_RUN_TMOUT) {
     //what?
     WARNF("input in the queue timed out on func log");
+    u32 idx = 0;
+    while (afl->shm.filen_map[idx]) {
+      char * strptr = afl->shm.filen_map + idx + 1;
+      switch (afl->shm.filen_map[idx]) {
+        case 't':
+          unlink(strptr);
+          break;
+        case 'd':
+          delete_files(strptr, NULL);
+          break;
+        case 'r':
+          break;
+      }
+      idx += strlen(strptr) + 2;
+    }
+    memset(afl->shm.filen_map, 0, 1000);
     return;
   }
 
@@ -885,6 +917,22 @@ do {                                      \
 
       if (fault == FSRV_RUN_TMOUT) {
         memcpy(out_buf2 + cur_offset, out_buf + cur_offset, cur_len);
+        u32 idx = 0;
+        while (afl->shm.filen_map[idx]) {
+          char * strptr = afl->shm.filen_map + idx + 1;
+          switch (afl->shm.filen_map[idx]) {
+            case 't':
+              unlink(strptr);
+              break;
+            case 'd':
+              delete_files(strptr, NULL);
+              break;
+            case 'r':
+              break;
+          }
+          idx += strlen(strptr) + 2;
+        }
+        memset(afl->shm.filen_map, 0, 1000);
         continue;
       }
 

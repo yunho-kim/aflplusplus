@@ -122,6 +122,22 @@ static void update_func_rel(afl_state_t * afl, u8 * buf, u32 len) {
   if (fault == FSRV_RUN_TMOUT) {
     //what?
     WARNF("input in the queue timed out on func log");
+    u32 idx = 0;
+    while (afl->shm.filen_map[idx]) {
+      char * strptr = afl->shm.filen_map + idx + 1;
+      switch (afl->shm.filen_map[idx]) {
+        case 't':
+          unlink(strptr);
+          break;
+        case 'd':
+          delete_files(strptr, NULL);
+          break;
+        case 'r':
+          break;
+      }
+      idx += strlen(strptr) + 2;
+    }
+    memset(afl->shm.filen_map, 0, 1000);
     return;
   }
 
@@ -500,6 +516,22 @@ void fuzz_one_argv(afl_state_t * afl) {
     u8 fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
 
     if (fault == FSRV_RUN_TMOUT) {
+      u32 idx = 0;
+      while (afl->shm.filen_map[idx]) {
+        char * strptr = afl->shm.filen_map + idx + 1;
+        switch (afl->shm.filen_map[idx]) {
+          case 't':
+            unlink(strptr);
+            break;
+          case 'd':
+            delete_files(strptr, NULL);
+            break;
+          case 'r':
+            break;
+        }
+        idx += strlen(strptr) + 2;
+      }
+      memset(afl->shm.filen_map, 0, 1000);
       continue;
     }
 
@@ -941,6 +973,22 @@ do {                                      \
         if (fault == FSRV_RUN_TMOUT) {
           //what?
           WARNF("input in the queue timed out on func log");
+          u32 idx = 0;
+          while (afl->shm.filen_map[idx]) {
+            char * strptr = afl->shm.filen_map + idx + 1;
+            switch (afl->shm.filen_map[idx]) {
+              case 't':
+                unlink(strptr);
+                break;
+              case 'd':
+                delete_files(strptr, NULL);
+                break;
+              case 'r':
+                break;
+            }
+            idx += strlen(strptr) + 2;
+          }
+          memset(afl->shm.filen_map, 0, 1000);
           continue;
         }
 

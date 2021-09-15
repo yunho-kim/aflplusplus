@@ -133,7 +133,7 @@ void afl_shm_deinit(sharedmem_t *shm) {
   if (shm->cmplog_mode) { shmctl(shm->cmplog_shm_id, IPC_RMID, NULL); }
 #endif
   shmctl(shm->func_shm_id, IPC_RMID, NULL);
-
+  shmctl(shm->filen_shm_id, IPC_RMID, NULL);
   shm->map = NULL;
 
 }
@@ -150,6 +150,7 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
   shm->map = NULL;
   shm->cmp_map = NULL;
   shm->branch_map = NULL;
+  shm->filen_map = NULL;
 
 #ifdef USEMMAP
 
@@ -277,6 +278,17 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
       }
       PFATAL("shmget() failed func");
     }
+
+    shm->filen_shm_id = shmget(IPC_PRIVATE, 1000, IPC_CREAT | IPC_EXCL | 0600);
+    
+    if (shm->filen_shm_id < 0) {
+      shmctl(shm->shm_id, IPC_RMID, NULL);
+      if (shm->cmplog_mode) {
+        shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);
+      }
+      shmctl(shm->func_shm_id, IPC_RMID, NULL);
+      PFATAL("shmget() failed func");
+    }
   }
 
   if (!non_instrumented_mode) {
@@ -308,6 +320,10 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
     shm_str = alloc_printf("%d", shm->func_shm_id);
     setenv(AFL_FUNC_SHM_ENV_VAR, shm_str, 1);
     ck_free(shm_str);
+
+    shm_str = alloc_printf("%d", shm->filen_shm_id);
+    setenv(AFL_FILEN_SHM_ENV_VAR, shm_str, 1);
+    ck_free(shm_str);
   }
 
   shm->map = shmat(shm->shm_id, NULL, 0);
@@ -315,14 +331,11 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
   if (shm->map == (void *)-1 || !shm->map) {
 
     shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
-
     if (shm->cmplog_mode) {
-
       shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
-
     }
-
-    PFATAL("shmat() failed");
+    shmctl(shm->func_shm_id, IPC_RMID, NULL);
+    shmctl(shm->filen_shm_id, IPC_RMID, NULL);
 
   }
 
@@ -333,8 +346,9 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
     if (shm->cmp_map == (void *)-1 || !shm->cmp_map) {
 
       shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
-
       shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
+      shmctl(shm->func_shm_id, IPC_RMID, NULL);
+      shmctl(shm->filen_shm_id, IPC_RMID, NULL);
 
       PFATAL("shmat() failed");
 
@@ -351,8 +365,21 @@ u8 *afl_shm_init(sharedmem_t *shm, size_t map_size,
         shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
       }
       shmctl(shm->func_shm_id, IPC_RMID, NULL);
+      shmctl(shm->filen_shm_id, IPC_RMID, NULL);
+    }
+
+    shm->filen_map = shmat(shm->filen_shm_id, NULL, 0);
+
+    if (shm->filen_map == (void *) -1 || !shm->filen_map) {
+      shmctl(shm->shm_id, IPC_RMID, NULL);  // do not leak shmem
+      if (shm->cmplog_mode) {
+        shmctl(shm->cmplog_shm_id, IPC_RMID, NULL);  // do not leak shmem
+      }
+      shmctl(shm->func_shm_id, IPC_RMID, NULL);
+      shmctl(shm->filen_shm_id, IPC_RMID, NULL);
     }
   }
+
 
 #endif
 

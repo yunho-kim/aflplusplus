@@ -499,6 +499,8 @@
 /* func shm id */
 #define AFL_FUNC_SHM_ENV_VAR "__AFL_FUNC_SHM_ID"
 
+#define AFL_FILEN_SHM_ENV_VAR "__AFL_FILEN_SHM_ID"
+
 //maximum # of children to record
 #define TC_CHILDREN_SIZE 64
 
