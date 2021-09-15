@@ -1168,6 +1168,21 @@ void write_friend_stats (afl_state_t * afl) {
   }
   fclose(f);
 
+  snprintf(fn, PATH_MAX, "%s/FRIEND/argvs", afl->out_dir);
+  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) PFATAL("Unable to create '%s'", fn);
+  f = fdopen(fd, "w");
+  for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+    struct argv_word_entry ** argv = afl->argvs_buf[idx1]->args;
+    idx2 = 0;
+    while(argv[idx2]) {
+      fprintf(f, "%s ", argv[idx2]->word);
+      idx2++;
+    }
+    fprintf(f, "\n");
+  }
+  fclose(f);
+
   return;
 }
 
