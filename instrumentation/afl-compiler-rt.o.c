@@ -2080,7 +2080,7 @@ void __afl_delete_file_dirs() {
     while (idx < __afl_write_file_len) {
       char * strptr = __afl_write_files + idx + 1;
       switch (__afl_write_files[idx]) {
-        case 't': {
+        case 'f': {
           fprintf(stderr, "%s\n", strptr);
           unlink(strptr);
           break;
@@ -2099,7 +2099,7 @@ void __afl_delete_file_dirs() {
   while (idx < __afl_write_file_len) {
     char * strptr = __afl_write_files + idx + 1;
     switch (__afl_write_files[idx]) {
-      case 't': {
+      case 'f': {
         unlink(strptr);
         break;
       }

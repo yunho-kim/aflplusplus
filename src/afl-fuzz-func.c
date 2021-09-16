@@ -317,7 +317,7 @@ void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_id
     while (afl->shm.filen_map[idx]) {
       char * strptr = afl->shm.filen_map + idx + 1;
       switch (afl->shm.filen_map[idx]) {
-        case 't':
+        case 'f':
           unlink(strptr);
           break;
         case 'd':
@@ -553,7 +553,7 @@ static void mining_bytes(afl_state_t *afl, u8 * out_buf, u32 len) {
     while (afl->shm.filen_map[idx]) {
       char * strptr = afl->shm.filen_map + idx + 1;
       switch (afl->shm.filen_map[idx]) {
-        case 't':
+        case 'f':
           unlink(strptr);
           break;
         case 'd':
@@ -924,7 +924,7 @@ do {                                      \
         while (afl->shm.filen_map[idx]) {
           char * strptr = afl->shm.filen_map + idx + 1;
           switch (afl->shm.filen_map[idx]) {
-            case 't':
+            case 'f':
               unlink(strptr);
               break;
             case 'd':

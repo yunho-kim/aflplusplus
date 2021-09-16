@@ -126,8 +126,9 @@ static void update_func_rel(afl_state_t * afl, u8 * buf, u32 len) {
     u32 idx = 0;
     while (afl->shm.filen_map[idx]) {
       char * strptr = afl->shm.filen_map + idx + 1;
+      fprintf(afl->debug_file, "trying to remove %c, %s", afl->shm.filen_map[idx], strptr);
       switch (afl->shm.filen_map[idx]) {
-        case 't':
+        case 'f':
           unlink(strptr);
           break;
         case 'd':
@@ -521,7 +522,7 @@ void fuzz_one_argv(afl_state_t * afl) {
       while (afl->shm.filen_map[idx]) {
         char * strptr = afl->shm.filen_map + idx + 1;
         switch (afl->shm.filen_map[idx]) {
-          case 't':
+          case 'f':
             unlink(strptr);
             break;
           case 'd':
@@ -979,7 +980,7 @@ do {                                      \
           while (afl->shm.filen_map[idx]) {
             char * strptr = afl->shm.filen_map + idx + 1;
             switch (afl->shm.filen_map[idx]) {
-              case 't':
+              case 'f':
                 unlink(strptr);
                 break;
               case 'd':

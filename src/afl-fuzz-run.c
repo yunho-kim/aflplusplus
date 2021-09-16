@@ -927,7 +927,7 @@ common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len, u32 argv_idx) {
     while (afl->shm.filen_map[idx]) {
       char * strptr = afl->shm.filen_map + idx + 1;
       switch (afl->shm.filen_map[idx]) {
-        case 't':
+        case 'f':
           unlink(strptr);
           break;
         case 'd':
