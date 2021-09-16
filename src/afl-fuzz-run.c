@@ -913,6 +913,7 @@ u8 __attribute__((hot))
 common_fuzz_stuff(afl_state_t *afl, u8 *out_buf, u32 len, u32 argv_idx) {
 
   u8 fault;
+  memset(afl->shm.filen_map, 0, 1000);
 
   write_to_testcase(afl, out_buf, len, argv_idx);
 

@@ -307,6 +307,7 @@ void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_id
   }
 
   write_to_testcase(afl, buf, len, q->argv_idx);
+  memset(afl->shm.filen_map, 0, 1000);
   u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout * 2);
 
   if (fault == FSRV_RUN_TMOUT) {
@@ -541,6 +542,7 @@ static void mining_bytes(afl_state_t *afl, u8 * out_buf, u32 len) {
   }
 
   write_to_testcase(afl, out_buf, len, cur_q->argv_idx);
+  memset(afl->shm.filen_map, 0, 1000);
 
   u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout * 5);
 
@@ -912,6 +914,7 @@ do {                                      \
       for (idx3 = 0; idx3 < afl->num_cmp; idx3++) {
         entries[idx3].condition = 0;
       }
+      memset(afl->shm.filen_map, 0, 1000);
 
       fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);      
 

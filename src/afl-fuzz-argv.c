@@ -115,6 +115,7 @@ static void update_func_rel(afl_state_t * afl, u8 * buf, u32 len) {
   for (cmp_id = 0; cmp_id < afl->num_cmp ; cmp_id++) {
     entries[cmp_id].condition = 0;
   }
+  memset(afl->shm.filen_map, 0, 1000);
 
   write_to_testcase(afl, buf, len, (u32) -1);
   u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout * 2);
@@ -137,7 +138,6 @@ static void update_func_rel(afl_state_t * afl, u8 * buf, u32 len) {
       }
       idx += strlen(strptr) + 2;
     }
-    memset(afl->shm.filen_map, 0, 1000);
     return;
   }
 
@@ -512,6 +512,7 @@ void fuzz_one_argv(afl_state_t * afl) {
     }
 
     close(fd);
+    memset(afl->shm.filen_map, 0, 1000);
 
     u8 fault = fuzz_run_target(afl, &afl->fsrv, afl->fsrv.exec_tmout);
 
@@ -966,6 +967,7 @@ do {                                      \
         for (cmp_id = 0; cmp_id < afl->num_cmp ; cmp_id++) {
           entries[cmp_id].condition = 0;
         }
+        memset(afl->shm.filen_map, 0, 1000);
 
         write_to_testcase(afl, out_buf, temp_len, (u32) -1);
         u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout);
