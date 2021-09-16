@@ -97,13 +97,9 @@ u32 __afl_map_size = MAP_SIZE;
 u32 __afl_dictionary_len;
 u64 __afl_map_addr;
 
-#define AFL_NUM_FILES 10000
-u32 __afl_num_write_files;
-u8* __afl_write_files[AFL_NUM_FILES];
-
-#define AFL_NUM_DIR 1000
-u32 __afl_num_write_dirs;
-u8* __afl_write_dirs[AFL_NUM_DIR];
+char __afl_write_files_initial[1000];
+char * __afl_write_files = __afl_write_files_initial;
+u32 __afl_write_file_len;
 
 // for the __AFL_COVERAGE_ON/__AFL_COVERAGE_OFF features to work:
 int __afl_selective_coverage __attribute__((weak));
@@ -553,6 +549,20 @@ static void __afl_map_shm(void) {
     __afl_branch_map = shmat(shm_id, NULL, 0);
 
     if (__afl_branch_map == (void *)-1) _exit(1);
+  }
+
+  id_str = getenv(AFL_FILEN_SHM_ENV_VAR);
+
+  if (getenv("AFL_DEBUG")) {
+    fprintf(stderr, "DEBUG: filen id_str %s\n",
+            id_str == NULL ? "<null>" : id_str);
+  }
+
+  if(id_str) {
+    u32 shm_id = atoi(id_str);
+    __afl_write_files = shmat(shm_id, NULL, 0);
+
+    if (__afl_write_files == (void *)-1) _exit(1);
   }
 
 }
@@ -1243,7 +1253,7 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
 
 void __cmp_log_hook(uint32_t cmpid, uint32_t condition, uint32_t value) {
   if (unlikely(!__afl_branch_map)) {
-    fprintf(stderr, "cmpid : %u, condition : %u\n", cmpid, condition);
+    //fprintf(stderr, "cmpid : %u, condition : %u\n", cmpid, condition);
     return;
   }
 
@@ -1883,10 +1893,10 @@ FILE * __afl_fopen_wrapper(const char * pathname, const char * mode) {
   FILE * res = fopen(pathname, mode);
   if (strchr(mode, 'w') && res) {
     size_t len = strlen(pathname);
-    if (likely(__afl_num_write_files < AFL_NUM_FILES)) {
-      __afl_write_files[__afl_num_write_files] = malloc(sizeof (u8) * (len + 1));
-      memcpy(__afl_write_files[__afl_num_write_files], pathname, len + 1);
-      __afl_num_write_files++;
+    if (likely((__afl_write_file_len + len + 2) < 1000)) {
+      __afl_write_files[__afl_write_file_len] = 'f';
+      memcpy(__afl_write_files + (__afl_write_file_len + 1), pathname, len + 1);
+      __afl_write_file_len += len + 2;
     } else {
       fclose(res);
       unlink(pathname);
@@ -1901,11 +1911,11 @@ FILE * __afl_freopen_wrapper(const char * pathname, const char * mode, FILE * st
 
   FILE * res = freopen(pathname, mode, stream);
   if (strchr(mode, 'w') && res) {
-    if (likely(__afl_num_write_files < AFL_NUM_FILES)) {
-      size_t len = strlen(pathname);
-      __afl_write_files[__afl_num_write_files] = malloc(sizeof (u8) * (len + 1));
-      memcpy(__afl_write_files[__afl_num_write_files], pathname, len + 1);
-      __afl_num_write_files++;
+    size_t len = strlen(pathname);
+    if (likely((__afl_write_file_len + len + 2) < 1000)) {
+      __afl_write_files[__afl_write_file_len] = 'f';
+      memcpy(__afl_write_files + (__afl_write_file_len + 1), pathname, len + 1);
+      __afl_write_file_len += len + 2;
     } else {
       fclose(res);
       unlink(pathname);
@@ -1919,11 +1929,11 @@ int __afl_open_wrapper(const char *pathname, int flags, ...) {
   // fprintf(stderr, "[o] open wrapper: %s\n", pathname); // CREATE FILE LOG
   int res = open(pathname, flags);
   if ((flags & (O_WRONLY | O_RDWR)) && (res > 0)) {
-    if (likely(__afl_num_write_files < AFL_NUM_FILES)) {
-      size_t len = strlen(pathname);
-      __afl_write_files[__afl_num_write_files] = malloc(sizeof (u8) * (len + 1));
-      memcpy(__afl_write_files[__afl_num_write_files], pathname, len + 1);
-      __afl_num_write_files++;
+    size_t len = strlen(pathname);
+    if (likely((__afl_write_file_len + len + 2) < 1000)) {
+      __afl_write_files[__afl_write_file_len] = 'f';
+      memcpy(__afl_write_files + (__afl_write_file_len + 1), pathname, len + 1);
+      __afl_write_file_len += len + 2;
     } else {
       close(res);
       unlink(pathname);
@@ -1937,11 +1947,11 @@ int __afl_creat_wrapper (const char * filename, mode_t mode) {
   // fprintf(stderr, "[o] creat wrapper: %s\n", filename); // CREATE FILE LOG
   int res = creat(filename, mode);
   if (res > 0) {
-    if (likely(__afl_num_write_files < AFL_NUM_FILES)) {
-      size_t len = strlen(filename);
-      __afl_write_files[__afl_num_write_files] = malloc(sizeof (u8) * (len + 1));
-      memcpy(__afl_write_files[__afl_num_write_files], filename, len + 1);
-      __afl_num_write_files++;
+    size_t len = strlen(filename);
+    if (likely((__afl_write_file_len + len + 2) < 1000)) {
+      __afl_write_files[__afl_write_file_len] = 'f';
+      memcpy(__afl_write_files + (__afl_write_file_len + 1), filename, len + 1);
+      __afl_write_file_len += len + 2;
     } else {
       close(res);
       unlink(filename);
@@ -1955,11 +1965,11 @@ int __afl_mkstemp_wrapper (char * filename) {
   // fprintf(stderr, "[o] mkstemp wrapper: %s\n", filename); // CREATE FILE LOG
   int ret = mkstemp(filename);
   if (ret > 0) {
-    if (likely(__afl_num_write_files < AFL_NUM_FILES)) {
-      size_t len = strlen(filename);
-      __afl_write_files[__afl_num_write_files] = malloc(sizeof (u8) * (len + 1));
-      memcpy(__afl_write_files[__afl_num_write_files], filename, len + 1);
-      __afl_num_write_files++;
+    size_t len = strlen(filename);
+    if (likely((__afl_write_file_len + len + 2) < 1000)) {
+      __afl_write_files[__afl_write_file_len] = 'f';
+      memcpy(__afl_write_files + (__afl_write_file_len + 1), filename, len + 1);
+      __afl_write_file_len += len + 2;
     } else {
       unlink(filename);
       return -1;
@@ -1972,11 +1982,11 @@ int __afl_mkstemps_wrapper (char * filename, int suffixLen) {
   // fprintf(stderr, "[o] mkstemps wrapper: %s\n", filename); // CREATE FILE LOG
   int ret = mkstemps(filename, suffixLen);
   if (ret > 0) {
-    if (likely(__afl_num_write_files < AFL_NUM_FILES)) {
-      size_t len = strlen(filename);
-      __afl_write_files[__afl_num_write_files] = malloc(sizeof (u8) * (len + 1));
-      memcpy(__afl_write_files[__afl_num_write_files], filename, len + 1);
-      __afl_num_write_files++;
+    size_t len = strlen(filename);
+    if (likely((__afl_write_file_len + len + 2) < 1000)) {
+      __afl_write_files[__afl_write_file_len] = 'f';
+      memcpy(__afl_write_files + (__afl_write_file_len + 1), filename, len + 1);
+      __afl_write_file_len += len + 2;
     } else {
       unlink(filename);
       return -1;
@@ -2052,11 +2062,11 @@ char * __afl_mkdtemp_wrapper (char * template) {
   // fprintf(stderr, "[o] mkostemps wrapper: %s\n", filename); // CREATE FILE LOG
   char * ret = mkdtemp(template);
   if (ret != NULL) {
-    if (likely(__afl_num_write_dirs < AFL_NUM_DIR)) {
-      size_t len = strlen(template);
-      __afl_write_dirs[__afl_num_write_dirs] = malloc(sizeof (u8) * (len + 1));
-      memcpy(__afl_write_dirs[__afl_num_write_dirs], template, len + 1);
-      __afl_num_write_dirs++;
+    size_t len = strlen(template);
+    if (likely((__afl_write_file_len + len + 2) < 1000)) {
+      __afl_write_files[__afl_write_file_len] = 'd';
+      memcpy(__afl_write_files + (__afl_write_file_len + 1), template, len + 1);
+      __afl_write_file_len += len + 2;
     } else {
       delete_files(template);
     }
@@ -2065,25 +2075,40 @@ char * __afl_mkdtemp_wrapper (char * template) {
 }
 
 void __afl_delete_file_dirs() {
+  u32 idx = 0;
   if (unlikely(__afl_branch_map == NULL)) {
-    fprintf(stderr, "%u files and %u dirs\n", __afl_num_write_files, __afl_num_write_dirs);
-    u32 idx1;
-    for (idx1 = 0; idx1 < __afl_num_write_files; idx1++) {
-      fprintf(stderr, "%s\n", __afl_write_files[idx1]);
-      unlink(__afl_write_files[idx1]);
-    }
-    fprintf(stderr, "dirs:\n");
-    for (idx1 = 0; idx1 < __afl_num_write_dirs; idx1++) {
-      fprintf(stderr, "%s\n", __afl_write_dirs[idx1]);
-      delete_files(__afl_write_dirs[idx1]);
+    while (idx < __afl_write_file_len) {
+      char * strptr = __afl_write_files + idx + 1;
+      switch (__afl_write_files[idx]) {
+        case 't': {
+          fprintf(stderr, "%s\n", strptr);
+          unlink(strptr);
+          break;
+        }
+        case 'd' : {
+          fprintf(stderr, "%s\n", strptr);
+          delete_files(strptr);
+          break;
+        }
+      }
+      __afl_write_files[idx] = 'r';
+      idx += strlen(strptr) + 2;
     }
     return;
   }
-  u32 idx1;
-  for (idx1 = 0; idx1 < __afl_num_write_files; idx1++) {
-    unlink(__afl_write_files[idx1]);
-  }
-  for (idx1 = 0; idx1 < __afl_num_write_dirs; idx1++) {
-    delete_files(__afl_write_dirs[idx1]);
+  while (idx < __afl_write_file_len) {
+    char * strptr = __afl_write_files + idx + 1;
+    switch (__afl_write_files[idx]) {
+      case 't': {
+        unlink(strptr);
+        break;
+      }
+      case 'd' : {
+        delete_files(strptr);
+        break;
+      }
+    }
+    __afl_write_files[idx] = 'r';
+    idx += strlen(strptr) + 2;
   }
 }
