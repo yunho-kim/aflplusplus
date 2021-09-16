@@ -1019,7 +1019,7 @@ int main(int argc, char **argv_orig, char **envp) {
         } else if (!stricmp(optarg, "argv")) {
           afl->random_argv = true;
         } else if (!stricmp(optarg, "keep")) {
-          afl->keep_mut_argv = false;
+          afl->keep_mut_argv = true;
         } else {
           FATAL("UNKNOWN -R flag");
         }
