@@ -1124,7 +1124,11 @@ do {                                      \
               float idx1_idx2_count = (float) func_exec_count[idx1][idx2];
               float idx2_idx2_count = (float) func_exec_count[idx2][idx2];
               if (unlikely (idx2_idx2_count == 0.0)) idx2_idx2_count = 1.0;
-              rel_sum += idx1_idx2_count * idx1_idx2_count / func_idx1_count / idx2_idx2_count;
+              if (unlikely(afl->rand_funcrel)) {
+                rel_sum += ((float) rand_below(afl, 1000)) / 1000.0;
+              } else {
+                rel_sum += idx1_idx2_count * idx1_idx2_count / func_idx1_count / idx2_idx2_count;
+              }
               num_rel += 1.0;
             }
           }
