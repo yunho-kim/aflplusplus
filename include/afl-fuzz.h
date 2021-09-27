@@ -894,6 +894,7 @@ typedef struct afl_state {
   bool random_argv;
   bool funcrel_file_mut;
   bool keep_mut_argv;
+  bool multi_argvs;
 
 //Debug
   FILE * debug_file;

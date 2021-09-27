@@ -84,11 +84,85 @@ void init_argv(afl_state_t * afl) {
 
     fclose(f);
   }
+
+  if (afl->multi_argvs) {
+    snprintf(fn, PATH_MAX, "%s/argvs.txt", afl->func_infos_dir);
+    f = fopen(fn, "r");
+    if (f == NULL) PFATAL("Can't open argvs.txt file");
+    
+    u8 buffer[10000];
+    memset(buffer, 0, 10000);
+
+    u8 * res = fgets(buffer, 10000, f);
+    if (res == NULL) PFATAL("Can't read argvs.txt file");
+    size_t len = strlen(buffer);
+    if (len >= 10000) {
+      WARNF("Too big argv file");
+    }
+
+    while ((res = fgets(buffer, 10000, f)) != NULL) {
+      u32 len = strlen(buffer);
+      if (buffer[len-1] == '\n') {
+        buffer[len-1] = 0;
+        len = len - 1;
+      }
+
+      fprintf(stderr, "len : %u, buffer : %s\n", len, buffer);
+
+      u8 * token = strtok(buffer, " ");
+
+      struct argv_entry * tmp_argv = malloc(sizeof(struct argv_entry) * 1);
+      u32 tmp_size = 20;
+      struct argv_word_entry ** tmp_arg_word = calloc(tmp_size, sizeof(struct argv_word_entry *));
+      tmp_argv->args = tmp_arg_word;
+      tmp_argv->next = NULL;
+
+      u32 num_argv_word = 0;
+      while (token != NULL) {
+        tmp_arg_word[num_argv_word] = calloc(1, sizeof(struct argv_word_entry));
+        u32 len = strlen(token);
+        tmp_arg_word[num_argv_word]->word = (s8 *) malloc (sizeof(s8) * (len + 1));
+        memcpy(tmp_arg_word[num_argv_word]->word, token, len);
+        tmp_arg_word[num_argv_word]->word[len] = 0;
+
+        token = strtok(NULL, " ");
+        num_argv_word ++;
+        if (num_argv_word >= (tmp_size - 1)) {
+          tmp_size *= 2;
+          tmp_arg_word = realloc(tmp_arg_word, sizeof(struct argv_word_entry *) * tmp_size);
+        }
+      }
+      tmp_arg_word[num_argv_word] = NULL;
+
+      {
+        fprintf(stderr, "new argv : ");
+        u32 idx2 = 0;
+        while(tmp_argv->args[idx2] != NULL) {
+          fprintf(stderr, "%s ", tmp_argv->args[idx2]->word);
+          idx2++; 
+        }
+      }
+
+      afl->argvs_buf[afl->num_argvs++] = tmp_argv;
+      memset(buffer, 0, len);
+    }
+    fprintf(stderr, "# of argv : %u\n",afl->num_argvs);
+
+    fclose(f);
+  }
 }
 
 void destroy_argv(afl_state_t * afl) {
   u32 idx1, idx2;
   for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+    if (afl->multi_argvs) {
+      idx2 = 0;
+      while (afl->argvs_buf[idx1]->args[idx2] != NULL) {
+        free(afl->argvs_buf[idx1]->args[idx2]->word);
+        free(afl->argvs_buf[idx1]->args[idx2]); 
+        idx2++;
+      }
+    }
     free(afl->argvs_buf[idx1]->args);
     free(afl->argvs_buf[idx1]);
   }

@@ -1020,6 +1020,8 @@ int main(int argc, char **argv_orig, char **envp) {
           afl->random_argv = true;
         } else if (!stricmp(optarg, "keep")) {
           afl->keep_mut_argv = true;
+        } else if (!stricmp(optarg, "multi")) {
+          afl->multi_argvs = true;
         } else {
           FATAL("UNKNOWN -R flag");
         }
@@ -1569,6 +1571,42 @@ int main(int argc, char **argv_orig, char **envp) {
 
   }
 
+  if (afl->multi_argvs) {
+    u32 idx1;
+    u8  cwd[PATH_MAX];
+    if (getcwd(cwd, (size_t)sizeof(cwd)) == NULL) { PFATAL("getcwd() failed"); }
+
+    for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+      u32 idx2 = 0;
+      while (afl->argvs_buf[idx1]->args[idx2] != NULL) {
+        s8 * argv_str = afl->argvs_buf[idx1]->args[idx2]->word;
+        u8 *aa_loc = strstr(argv_str, "@@");
+        if (aa_loc) {
+          u8 *n_arg;
+          *aa_loc = 0;
+
+          if (afl->fsrv.out_file[0] == '/') {
+
+            n_arg = alloc_printf("%s%s%s", argv_str, afl->fsrv.out_file, aa_loc + 2);
+
+          } else {
+
+            n_arg = alloc_printf("%s%s/%s%s", argv_str, cwd, afl->fsrv.out_file, aa_loc + 2);
+
+          }
+
+          free(argv_str);
+          afl->argvs_buf[idx1]->args[idx2]->word = n_arg;
+
+        }
+
+        idx2++;
+      }
+    }
+  }
+
+
+
   if (!afl->fsrv.out_file) { setup_stdio_file(afl); }
 
   if (afl->cmplog_binary) {
@@ -1620,7 +1658,6 @@ int main(int argc, char **argv_orig, char **envp) {
   afl->init_argv[0] = use_argv[0];
   afl->init_argv[1] = afl->fsrv.argv_file;
   afl->init_argv[2] = NULL;
-
 
   u32 new_argc = 0;
   u32 idx1, idx2;
@@ -1685,14 +1722,44 @@ int main(int argc, char **argv_orig, char **envp) {
 
   cur_args[idx1] = NULL;
 
-  afl->argvs_buf[0] = cur_argv_entry;
-
-  afl->num_argvs++;
-
-  for (idx1 = 0; idx1 < afl->queued_paths; idx1++) {
-    struct queue_entry * q = afl->queue_buf[idx1];
-    q->argv_idx = 0;
+  if (afl->multi_argvs) {
+    free(cur_argv_entry->args);
+    free(cur_argv_entry);
+  } else {
+    afl->argvs_buf[0] = cur_argv_entry;
+    afl->num_argvs++;
   }
+
+  {
+    //argv initialize
+    for (idx1 = 0; idx1 < afl->queued_paths; idx1++) {
+      struct queue_entry * q = afl->queue_buf[idx1];
+      q->argv_idx = 0;
+    }
+
+    if (afl->multi_argvs) {
+      u32 num_q = afl->queued_paths;
+      fprintf(stderr, "num init iinupt : %u, %u\n", num_q, afl->num_argvs);
+      for (idx1 = 1; idx1 < afl->num_argvs; idx1++) {
+        for (idx2 = 0; idx2 < num_q; idx2++) {
+          struct queue_entry * ref_q = afl->queue_buf[idx2];
+          u8 * fname = alloc_printf("%s/queue/id:%06u,argv:%06u", afl->out_dir, afl->queued_paths, idx1);
+          u8 * mem = malloc(sizeof(u8) * ref_q->len);
+          s32 fd = open(ref_q->fname, O_RDONLY);
+          if (unlikely(fd < 0)) { PFATAL("Unable to open '%s'", ref_q->fname); }
+          ck_read(fd, mem, ref_q->len, ref_q->fname);
+          close(fd);
+          fd = open(fname, O_WRONLY | O_CREAT | O_EXCL, 0600);
+          if (unlikely(fd < 0)) { PFATAL("Unable to create '%s'", fname); }
+          ck_write(fd, mem, ref_q->len, fname);
+          close(fd);
+          add_to_queue(afl, fname, ref_q->len, ref_q->passed_det, idx1);
+        }
+      }
+    }
+  }
+
+  //afl->stop_soon = 1;
   
   afl->fsrv.trace_bits =
       afl_shm_init(&afl->shm, afl->fsrv.map_size, afl->non_instrumented_mode, afl->num_cmp);
@@ -2207,7 +2274,7 @@ int main(int argc, char **argv_orig, char **envp) {
     }
 
     //havoc_func
-    if (likely(afl->cmp_queue) && likely(!afl->stop_soon)) {
+    if (afl->funcrel_file_mut && likely(afl->cmp_queue) && likely(!afl->stop_soon)) {
       if (unlikely(afl->cmp_queue_cur == NULL)) {
         afl->cmp_queue_cur = afl->cmp_queue;
       }
@@ -2216,7 +2283,7 @@ int main(int argc, char **argv_orig, char **envp) {
         afl->cmp_queue_cur = afl->cmp_queue_cur->next;
       }
 
-      if (afl->funcrel_file_mut && likely(afl->cmp_queue_cur)) {
+      if (likely(afl->cmp_queue_cur)) {
         struct cmp_queue_entry * cq_cur = afl->cmp_queue_cur; 
         //ITERATE through tcs
         u32 num_tcs = cq_cur->num_value_changing_tcs;
