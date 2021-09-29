@@ -112,12 +112,13 @@ void init_argv(afl_state_t * afl) {
       u8 * token = strtok(buffer, " ");
 
       struct argv_entry * tmp_argv = malloc(sizeof(struct argv_entry) * 1);
-      u32 tmp_size = 20;
+      u32 tmp_size = 24;
       struct argv_word_entry ** tmp_arg_word = calloc(tmp_size, sizeof(struct argv_word_entry *));
       tmp_argv->args = tmp_arg_word;
       tmp_argv->next = NULL;
 
-      u32 num_argv_word = 0;
+      
+      u32 num_argv_word = 1; //will put argv[0] later
       while (token != NULL) {
         tmp_arg_word[num_argv_word] = calloc(1, sizeof(struct argv_word_entry));
         u32 len = strlen(token);
@@ -134,15 +135,6 @@ void init_argv(afl_state_t * afl) {
       }
       tmp_arg_word[num_argv_word] = NULL;
 
-      {
-        fprintf(stderr, "new argv : ");
-        u32 idx2 = 0;
-        while(tmp_argv->args[idx2] != NULL) {
-          fprintf(stderr, "%s ", tmp_argv->args[idx2]->word);
-          idx2++; 
-        }
-      }
-
       afl->argvs_buf[afl->num_argvs++] = tmp_argv;
       memset(buffer, 0, len);
     }
@@ -156,7 +148,7 @@ void destroy_argv(afl_state_t * afl) {
   u32 idx1, idx2;
   for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
     if (afl->multi_argvs) {
-      idx2 = 0;
+      idx2 = 1;
       while (afl->argvs_buf[idx1]->args[idx2] != NULL) {
         free(afl->argvs_buf[idx1]->args[idx2]->word);
         free(afl->argvs_buf[idx1]->args[idx2]); 

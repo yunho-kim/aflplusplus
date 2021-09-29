@@ -1577,7 +1577,7 @@ int main(int argc, char **argv_orig, char **envp) {
     if (getcwd(cwd, (size_t)sizeof(cwd)) == NULL) { PFATAL("getcwd() failed"); }
 
     for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
-      u32 idx2 = 0;
+      u32 idx2 = 1;
       while (afl->argvs_buf[idx1]->args[idx2] != NULL) {
         s8 * argv_str = afl->argvs_buf[idx1]->args[idx2]->word;
         u8 *aa_loc = strstr(argv_str, "@@");
@@ -1738,6 +1738,13 @@ int main(int argc, char **argv_orig, char **envp) {
     }
 
     if (afl->multi_argvs) {
+      //update argv with prog arg (argv[0])
+      for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+        struct argv_entry * argv_ptr = afl->argvs_buf[idx1];
+        argv_ptr->args[0] = afl->prog_arg;
+      }
+
+      //put argv * input
       u32 num_q = afl->queued_paths;
       fprintf(stderr, "num init iinupt : %u, %u\n", num_q, afl->num_argvs);
       for (idx1 = 1; idx1 < afl->num_argvs; idx1++) {
@@ -2322,7 +2329,8 @@ int main(int argc, char **argv_orig, char **envp) {
     }
 
     u32 idx = 0;
-    while (afl->funcrel_file_mut && ((afl->mining_done_idx + 1) < afl->queued_paths) && (idx < MINING_LIMIT) && !afl->stop_soon) {
+    while (afl->funcrel_file_mut &&
+      ((afl->mining_done_idx + 1) < afl->queued_paths) && (idx < MINING_LIMIT) && !afl->stop_soon) {
       if (afl->queue_buf[afl->mining_done_idx]->is_mined < MAX_MINING_TRY)
         mining_wrapper(afl, afl->mining_done_idx);
       afl->mining_done_idx++;

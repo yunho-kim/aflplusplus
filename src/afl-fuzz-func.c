@@ -177,7 +177,8 @@ void init_trim_and_func(afl_state_t * afl) {
 
     update_tc_graph_and_branch_cov(afl, tc_idx, (u32) -1, in_buf, len);
 
-    mining_wrapper(afl, tc_idx);
+    if (afl->funcrel_file_mut)
+      mining_wrapper(afl, tc_idx);
    
   }
 
