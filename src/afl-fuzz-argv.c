@@ -93,12 +93,7 @@ void init_argv(afl_state_t * afl) {
     u8 buffer[10000];
     memset(buffer, 0, 10000);
 
-    u8 * res = fgets(buffer, 10000, f);
-    if (res == NULL) PFATAL("Can't read argvs.txt file");
-    size_t len = strlen(buffer);
-    if (len >= 10000) {
-      WARNF("Too big argv file");
-    }
+    u8 * res;
 
     while ((res = fgets(buffer, 10000, f)) != NULL) {
       u32 len = strlen(buffer);

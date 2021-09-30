@@ -1764,9 +1764,16 @@ int main(int argc, char **argv_orig, char **envp) {
         }
       }
     }
-  }
 
-  //afl->stop_soon = 1;
+    for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+      idx2 = 0;
+      while(afl->argvs_buf[idx1]->args[idx2]) {
+        fprintf(afl->debug_file, "%s ", afl->argvs_buf[idx1]->args[idx2]->word);
+        idx2++;
+      }
+      fprintf(afl->debug_file, "\n");
+    }
+  }
   
   afl->fsrv.trace_bits =
       afl_shm_init(&afl->shm, afl->fsrv.map_size, afl->non_instrumented_mode, afl->num_cmp);
