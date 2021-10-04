@@ -20,7 +20,7 @@ keywords = [b"usage", b"Usage", b"Invalid argument", b"Trailing options were fou
   b"too many `"
   ]
 
-WHITE = ["yara"]
+WHITE = ["pdftopng", "pdftops"]
 
 facto = [1]
 
@@ -35,6 +35,8 @@ for fn in glob.glob("{}/*".format(sys.argv[1])):
    
   out_fn = "{}/{}".format(sys.argv[2], subject_n)
 
+
+  argvs = []
   words = []
   with open (fn, "r") as f1:
     for line in f1:
@@ -59,9 +61,12 @@ for fn in glob.glob("{}/*".format(sys.argv[1])):
   with open (out_fn, "w") as f1:
     num_argv = 0
     try:
-      with open("./init/{}".format(subject_n), "r") as f2:
+      with open("./init_keywords/{}".format(subject_n), "r") as f2:
         for line in f2:
+          if len(line.strip()) == 0 :
+            continue
           f1.write(line)
+          argvs.append(line.strip())
           num_argv += 1
     except:
       print ("can't open {}".format(subject_n))
@@ -87,6 +92,9 @@ for fn in glob.glob("{}/*".format(sys.argv[1])):
         continue
       with open ("logs/{}_{}".format(subject_n, num_argv), "wb") as f3:
         f3.write(out)
+     
+      if " ".join(argv) in argvs:
+        continue
       num_argv += 1
       f1.write(" ".join(argv) + "\n")
       print(num_argv)
