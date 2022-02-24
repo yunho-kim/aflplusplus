@@ -528,7 +528,7 @@
 
 #define TMP_WORD_SIZE 32
 
-#define ARGV_MUT_TIMEOUT 3600 * 1000
+#define ARGV_MUT_TIMEOUT 3 * 1000
 
 #endif                                                  /* ! _HAVE_CONFIG_H */
 

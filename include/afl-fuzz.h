@@ -168,6 +168,7 @@ struct queue_entry {
 
   u8 colorized,                         /* Do not run redqueen stage again  */
       cal_failed;                       /* Calibration failed?              */
+  u8 incr_branch_cov;
   bool trim_done,                       /* Trimmed?                         */
       was_fuzzed,                       /* historical, but needed for MOpt  */
       passed_det,                       /* Deterministic stages passed?     */
@@ -888,13 +889,14 @@ typedef struct afl_state {
   struct argv_word_entry * prog_arg;
   struct argv_word_entry * input_file_arg;
 
+  bool select_all_argv;
   bool argv_timed_out;
-  bool rand_close_tc;
-  bool rand_funcrel;
   bool random_argv;
   bool funcrel_file_mut;
   bool keep_mut_argv;
   bool multi_argvs;
+
+  u8 * branch_cov;
 
 //Debug
   FILE * debug_file;
@@ -1283,16 +1285,17 @@ u8 common_fuzz_cmplog_stuff(afl_state_t *afl, u8 *out_buf, u32 len);
 /* Func */
 void init_func(afl_state_t *);
 void write_friend_stats(afl_state_t *);
-void fuzz_one_func(afl_state_t *);
 void destroy_func(afl_state_t *);
 void init_trim_and_func(afl_state_t *);
 void update_tc_graph_and_branch_cov(afl_state_t *, u32, u32, u8 *, u32);
 void mining_wrapper(afl_state_t *, u32);
+void update_only_branch_cov(afl_state_t *, u32, u8 *, u32);
 
+/* argv */
 void fuzz_one_argv(afl_state_t * afl);
 void init_argv(afl_state_t * afl);
 void destroy_argv(afl_state_t * afl);
-void argv_select(afl_state_t * afl);
+void select_argv(afl_state_t * afl);
 
 /* RedQueen */
 u8 input_to_state_stage(afl_state_t *afl, u8 *orig_buf, u8 *buf, u32 len);

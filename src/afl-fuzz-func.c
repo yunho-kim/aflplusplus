@@ -176,9 +176,7 @@ void init_trim_and_func(afl_state_t * afl) {
     //q->trim_done = 1;
 
     update_tc_graph_and_branch_cov(afl, tc_idx, (u32) -1, in_buf, len);
-
-    if (afl->funcrel_file_mut)
-      mining_wrapper(afl, tc_idx);
+    mining_wrapper(afl, tc_idx);
    
   }
 
@@ -275,6 +273,53 @@ static u32 func_choose_block_len(afl_state_t *afl, u32 limit, u32 len) {
 
   return min_value + rand_below(afl, MIN(max_value, limit) - min_value + 1);
 
+}
+
+void update_only_branch_cov(afl_state_t * afl, u32 tc_idx, u8 * buf, u32 len) {
+  struct queue_entry * q = afl->queue_buf[tc_idx];
+  u32 cmp_id;
+  struct cmp_entry * entries = afl->shm.branch_map;
+
+  for (cmp_id = 0; cmp_id < afl->num_cmp ; cmp_id++) {
+    entries[cmp_id].condition = 0;
+  }
+
+  write_to_testcase(afl, buf, len, q->argv_idx);
+  u8 fault = fuzz_run_target(afl, &afl->func_fsrv, afl->fsrv.exec_tmout * 2);
+  if (fault == FSRV_RUN_TMOUT) {
+    WARNF("input in the queue timed out on func log");
+    return;
+  }
+
+  u8 precondition, postcondition;
+
+  //update branch coverage
+  for (cmp_id = 0; cmp_id < afl->num_cmp; cmp_id++) {
+    if (entries[cmp_id].condition) {
+
+      precondition = afl->branch_cov[cmp_id];
+
+      if (precondition == 3) continue;
+
+      afl->branch_cov[cmp_id] |= entries[cmp_id].condition;
+      postcondition = afl->branch_cov[cmp_id];
+
+      if ((precondition == 0) && (postcondition != 3)) {
+        //new target
+        afl->covered_branch++;
+      } else if (postcondition == 3) {
+        if (precondition == 0) {
+          afl->covered_branch += 2;
+        } else {
+          afl->covered_branch ++;
+        }
+      }
+
+      q->incr_branch_cov = 1;
+    }
+  }
+
+  return;
 }
 
 void update_tc_graph_and_branch_cov(afl_state_t * afl, u32 tc_idx, u32 parent_idx, u8 * buf, u32 len) {
@@ -1125,26 +1170,28 @@ void write_friend_stats (afl_state_t * afl) {
     
   }
 
-  snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_exec_table.csv", afl->out_dir);
-  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-  if (fd < 0) PFATAL("Unable to create '%s'", fn);
-  f = fdopen(fd, "w");
-  for (idx1 = 0; idx1 < afl->num_func; idx1++) {
-    if (afl->func_cmp_exec_count_table[idx1]) {
-      struct func_cmp_info * cur_func_info = afl->func_cmp_map[idx1];
-      u32 num_cmp = cur_func_info->cmp_id_end - cur_func_info->cmp_id_begin;
-      fprintf(f, "Func : %u, %u:%u,\n", idx1, cur_func_info->cmp_id_begin, cur_func_info->cmp_id_end);
-      for (idx2 = 0; idx2 < num_cmp; idx2++) {
-        for(idx3 = 0; idx3 < num_cmp; idx3++) {
-          fprintf(f, "%u,", afl->func_cmp_exec_count_table[idx1][idx2][idx3]);
+  if (afl->func_cmp_exec_count_table) {
+    snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_exec_table.csv", afl->out_dir);
+    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+    f = fdopen(fd, "w");
+    for (idx1 = 0; idx1 < afl->num_func; idx1++) {
+      if (afl->func_cmp_exec_count_table[idx1]) {
+        struct func_cmp_info * cur_func_info = afl->func_cmp_map[idx1];
+        u32 num_cmp = cur_func_info->cmp_id_end - cur_func_info->cmp_id_begin;
+        fprintf(f, "Func : %u, %u:%u,\n", idx1, cur_func_info->cmp_id_begin, cur_func_info->cmp_id_end);
+        for (idx2 = 0; idx2 < num_cmp; idx2++) {
+          for(idx3 = 0; idx3 < num_cmp; idx3++) {
+            fprintf(f, "%u,", afl->func_cmp_exec_count_table[idx1][idx2][idx3]);
+          }
+          fprintf(f,"\n");
         }
-        fprintf(f,"\n");
+      } else {
+        fprintf(f, "Func : %u, no exec\n", idx1);
       }
-    } else {
-      fprintf(f, "Func : %u, no exec\n", idx1);
     }
+    fclose(f);
   }
-  fclose(f);
 
   // FRIEND related stats
   snprintf(fn, PATH_MAX, "%s/FRIEND/FRIEND.stat", afl->out_dir);
@@ -1160,27 +1207,30 @@ void write_friend_stats (afl_state_t * afl) {
     (double)afl->tc_len_sum / afl->queued_paths);
   fclose(f);
 
-  snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_queue.stat", afl->out_dir);
-  fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-  if (fd < 0) PFATAL("Unable to create '%s'", fn);
-  f = fdopen(fd, "w");
+  if (afl->cmp_queue) {
+    snprintf(fn, PATH_MAX, "%s/FRIEND/cmp_queue.stat", afl->out_dir);
+    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+    f = fdopen(fd, "w");
 
-  struct cmp_queue_entry * q = afl->cmp_queue->next;
+    struct cmp_queue_entry * q = afl->cmp_queue->next;
 
-  q = afl->cmp_queue;
-  fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
-  fprintf(f, "cmpid, condition, mutating tc idx,"
-             " # of changing tcs, num_fuzzed, num_skipped\n");
+    q = afl->cmp_queue;
+    fprintf(f, "cmp queue size :%u\n", afl->cmp_queue_size);
+    fprintf(f, "cmpid, condition, mutating tc idx,"
+              " # of changing tcs, num_fuzzed, num_skipped\n");
 
-  while (q != NULL) {
-    fprintf(f, "%u,%u,%u,%u,%u,%u\n",
-      q->id, q->condition,q->mutating_tc_idx,
-      q->num_value_changing_tcs, q->num_fuzzed, q->num_skipped);
-    q = q->next;
+    while (q != NULL) {
+      fprintf(f, "%u,%u,%u,%u,%u,%u\n",
+        q->id, q->condition,q->mutating_tc_idx,
+        q->num_value_changing_tcs, q->num_fuzzed, q->num_skipped);
+      q = q->next;
+    }
+
+    fclose(f);
   }
 
-  fclose(f);
-
+  
   snprintf(fn, PATH_MAX, "%s/FRIEND/findings.stat", afl->out_dir);
   fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (fd < 0) PFATAL("Unable to create '%s'", fn);
@@ -1236,464 +1286,4 @@ void write_friend_stats (afl_state_t * afl) {
   fclose(f);
 
   return;
-}
-
-void fuzz_one_func (afl_state_t *afl) {
-
-  u32 len, temp_len;
-  u32 idx1, idx2, idx3;
-  u8 *out_buf, *orig_in;
-  u64 havoc_queued = 0, orig_hit_cnt, new_hit_cnt;
-  u32 perf_score = 100;
-
-  struct cmp_queue_entry * cq = afl->cmp_queue_cur;
-
-  struct queue_entry * cur_tc = afl->queue_cur;
-  u32 cur_tc_id = afl->current_entry;
-
-  len = (u32) cur_tc->len;
-  
-  orig_in = queue_testcase_get(afl, cur_tc);
-
-  out_buf = afl_realloc(AFL_BUF_PARAM(out), len);
-  if (unlikely(!out_buf)) { PFATAL("alloc"); }
-
-  memcpy(out_buf, orig_in, len);
-
-  perf_score = calculate_score(afl, cur_tc);
-
-  u32 target_cmp_id = cq->id;
-
-  if (cur_tc->is_mined < MAX_MINING_TRY) {
-    mining_wrapper(afl, cur_tc_id);
-  }
-
-  if (cur_tc->is_mined != (u32) -1) {
-    return;
-  }
-
-  //get related funcs
-  memset(afl->func_list, 0, sizeof(u8) * afl->num_func);
-  u32 * cmp_func_map = afl->cmp_func_map;
-  u32 target_func = cmp_func_map[target_cmp_id];
-  //u32 target_func_begin_id = afl->func_cmp_map[target_func]->cmp_id_begin;
-  //u32 target_cmp_id_in_func = target_cmp_id - target_func_begin_id;
-  u32 ** func_exec_count_table = afl->func_exec_count_table;
-  //float target_cmp_exec = (float) afl->func_cmp_exec_count_table[target_func][target_cmp_id_in_func][target_cmp_id_in_func];
-  u32 * target_func_exec_count = func_exec_count_table[target_func];
-  if (unlikely(target_func_exec_count == NULL)) {
-    func_exec_count_table[target_func] = target_func_exec_count = (u32 *) calloc(afl->num_func, sizeof(u32));
-  }
-  float target_func_exec = (float) target_func_exec_count[target_func];
-  
-  // No D/0
-  if (unlikely(target_func_exec == 0.0)) target_func_exec = 1.0;
-  u32 num_frag = cur_tc->num_mining_frag;
-  u32 frag_len = cur_tc->mining_frag_len;
-
-  if (unlikely(num_frag == 0)) {
-    return;
-  }
-
-  if (num_frag > afl->frag_score_size) {
-    afl->frag_score = (float *) realloc(afl->frag_score, num_frag * sizeof(float));
-    afl->num_frag_score_sum = (float *) realloc(afl->num_frag_score_sum, num_frag * sizeof(float));
-    afl->frag_buf = (u32 *) realloc (afl->frag_buf, num_frag * sizeof(u32) * 4);
-    afl->frag_score_size = num_frag;
-  }
-
-  u32 frag_buf_size = num_frag * 4;
-
-  float * frag_score = afl->frag_score;
-  float * num_frag_score_sum = afl->num_frag_score_sum;
-  u32 * frag_buf = afl->frag_buf;
-  
-  memset(frag_score, 0, sizeof(float) * num_frag);
-  memset(num_frag_score_sum, 0, sizeof(float) * num_frag);
-
-  struct byte_cmp_set ** mining_result = mining_deserialize(afl, cur_tc_id);
-
-  for (idx1 = 0; idx1 < num_frag; idx1++) {
-    u32 num_cmp = mining_result[idx1]->num_changed_val_cmps;
-    for (idx2 = 0; idx2 < num_cmp; idx2++) {
-      u32 val_changed_cmp_id = mining_result[idx1]->changed_val_cmps[idx2];
-      u32 val_changed_cmp_func_id = cmp_func_map[val_changed_cmp_id];
-      float common_exec_count = (float) target_func_exec_count[val_changed_cmp_func_id];
-      if (unlikely(func_exec_count_table[val_changed_cmp_func_id] == NULL)) {
-        func_exec_count_table[val_changed_cmp_func_id] = (u32 *) calloc(afl->num_func, sizeof(u32));
-      }
-      float val_changed_func_exec_count = (float) func_exec_count_table[val_changed_cmp_func_id][val_changed_cmp_func_id];
-      if (unlikely(val_changed_func_exec_count == 0.0)) val_changed_func_exec_count = 1.0;
-
-      float rel = common_exec_count * common_exec_count / target_func_exec / val_changed_func_exec_count;
-      if (unlikely(afl->rand_funcrel)) {
-        rel = ((float) rand_below(afl, 1000)) / 1000.0;
-      }
-      
-      frag_score[idx1] += rel;
-      num_frag_score_sum[idx1] += 1.0;
-    }
-  }
-
-  mining_deserialize_free(mining_result, num_frag);
-  
-
-  u32 * close_tcs = afl->close_tcs;
-  memset(close_tcs, 255, sizeof(u32) * CLOSE_TCS_SIZE);
-  u32 num_close_tc = 0;
-
-  get_close_tcs(afl, cur_tc_id, close_tcs, &num_close_tc, CLOSE_TC_THRESHOLD, frag_len);
-
-  if (unlikely(afl->rand_close_tc)) {
-    u32 tmp_num_close_tc = 0;
-    while (tmp_num_close_tc < num_close_tc) {
-      u32 rand_tc_id = rand_below(afl, afl->queued_paths);
-      if (afl->queue_buf[rand_tc_id]->is_mined == (u32) -1) {
-        close_tcs[tmp_num_close_tc++] = rand_tc_id;
-      }
-    }
-  }
-
-  // Eval frags
-  for (idx1 = 0; idx1 < num_close_tc; idx1++) {
-    if (NUM_CLOSE_TC_TO_USE >= rand_below(afl, num_close_tc)) {
-      continue;
-    }
-
-    u32 cur_mined_tc_id = close_tcs[idx1];
-
-    struct queue_entry * mined_entry = afl->queue_buf[cur_mined_tc_id];
-
-    mining_result = mining_deserialize(afl, cur_mined_tc_id);
-
-    u32 cur_num_frag = num_frag;
-    if (num_frag > mined_entry->num_mining_frag) {
-      cur_num_frag = mined_entry->num_mining_frag;
-    }
-
-    for (idx2 = 0; idx2 < cur_num_frag; idx2++) {
-      u32 num_cmp = mining_result[idx2]->num_changed_val_cmps;
-      for (idx3 = 0; idx3 < num_cmp; idx3++) {
-        u32 val_changed_cmp_id = mining_result[idx2]->changed_val_cmps[idx3];
-        u32 val_changed_cmp_func_id = cmp_func_map[val_changed_cmp_id];
-        float common_exec_count = (float) target_func_exec_count[val_changed_cmp_func_id];
-        if (unlikely(func_exec_count_table[val_changed_cmp_func_id] == NULL)) {
-          func_exec_count_table[val_changed_cmp_func_id] = (u32 *) calloc(afl->num_func, sizeof(u32));
-        }
-        float val_changed_func_exec_count = (float) func_exec_count_table[val_changed_cmp_func_id][val_changed_cmp_func_id];
-        if (unlikely(val_changed_func_exec_count == 0.0)) val_changed_func_exec_count = 1.0;
-
-        float rel = common_exec_count * common_exec_count / target_func_exec / val_changed_func_exec_count;
-        if (unlikely(afl->rand_funcrel)) {
-          rel = ((float) rand_below(afl, 1000)) / 1000.0;
-        }
-        
-        frag_score[idx2] += rel;
-        num_frag_score_sum[idx2] += 1.0;
-      }
-    }
-
-    mining_deserialize_free(mining_result, mined_entry->num_mining_frag);
-  }
-
-  orig_hit_cnt = afl->queued_paths + afl->unique_crashes;
-  havoc_queued = afl->queued_paths;
-
-  afl->stage_name = "havoc_func";
-  afl->stage_short = "havoc_func";
-  afl->stage_max = HAVOC_CYCLES * perf_score / afl->havoc_div / 100;
-
-  if (afl->stage_max < HAVOC_MIN) { afl->stage_max = HAVOC_MIN; }
-
-  afl->stage_max /= 2;
-
-  float min_score = FLT_MAX;
-  float max_score = FLT_MIN;
-  float score_sum = 0.0;
-  u32 max_frag = 0;
-  for (idx1 = 0; idx1 < num_frag; idx1++) {
-    if (num_frag_score_sum[idx1]) {
-      float score = frag_score[idx1] / num_frag_score_sum[idx1];
-      frag_score[idx1] = score;
-      score_sum += score;
-      if (score < min_score) {
-        min_score = score;
-      }
-      if (score > max_score) {
-        max_score = score;
-        max_frag = idx1;
-      }
-    }
-  }
-
-  for (idx1 = 0; idx1 < num_frag; idx1++) {
-    if (!num_frag_score_sum[idx1]) {
-      frag_score[idx1] = min_score;
-      score_sum += min_score;
-    }
-  }
-
-  score_sum = score_sum - (float) num_frag * min_score;
-
-  u32 frag_buf_idx = 0;
-
-  for (idx1 = 0; idx1 < num_frag; idx1++) {
-    u32 num_prop = (u32) ((float) frag_buf_size * (frag_score[idx1] - min_score) / score_sum) + frag_buf_idx + 1;
-    if (unlikely(num_prop > frag_buf_size)) {
-      num_prop = frag_buf_size;
-    }
-    while (frag_buf_idx < num_prop) {
-      frag_buf[frag_buf_idx++] = idx1;
-    }
-  }
-
-  while (frag_buf_idx < frag_buf_size) {
-    frag_buf[frag_buf_idx++] = max_frag;
-  }
-
-  u32 mut_frag_idx = 0, frag_begin_idx = 0;
-  temp_len = len;
-
-  for (afl->stage_cur = 0; afl->stage_cur < afl->stage_max; ++afl->stage_cur) {
-
-    if (afl->stop_soon) break;
-
-    u32 use_stacking1 = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2));
-    u32 rand_value;
-    afl->stage_cur_val = use_stacking1;
-
-    for (idx1 = 0; idx1 < use_stacking1; idx1++) {
-
-      mut_frag_idx = frag_buf[rand_below(afl, frag_buf_size)];
-
-      frag_begin_idx = mut_frag_idx * frag_len;
-      temp_len = frag_len;
-
-      if (unlikely(frag_begin_idx + frag_len > len)) {
-        temp_len = len - frag_begin_idx;
-        if (unlikely(temp_len < 4)) continue;
-      }
-
-      afl->mutated_frag_idx[idx1] = frag_begin_idx;
-
-      u32 use_stacking2 = 1 << (1 + rand_below(afl, HAVOC_STACK_POW2));
-
-      for (idx2 = 0; idx2 < use_stacking2 ; idx2++) {
-
-        switch (rand_below(afl, 11)) {
-
-          case 0:
-
-            /* Flip a single bit somewhere. Spooky! */
-            
-            rand_value = (frag_begin_idx << 3) + rand_below(afl, temp_len << 3);
-            FLIP_BIT(out_buf, rand_value);
-            break;
-
-          case 1:
-
-            /* Set byte to interesting value. */
-            rand_value = frag_begin_idx + rand_below(afl, temp_len);
-            out_buf[rand_value] =
-                interesting_8[rand_below(afl, sizeof(interesting_8))];
-                //num_mutated_bytes++;
-            break;
-
-          case 2:
-
-            /* Set word to interesting value, randomly choosing endian. */
-
-            if (rand_below(afl, 2)) {
-
-              rand_value = frag_begin_idx + rand_below(afl, temp_len);
-              if(unlikely(rand_value >= len - 1)) rand_value = len - 2;
-              *(u16 *)(out_buf + rand_value) =
-                  interesting_16[rand_below(afl, sizeof(interesting_16) >> 1)];
-                  //num_mutated_bytes+=2;
-
-            } else {
-
-              rand_value = frag_begin_idx + rand_below(afl, temp_len);
-              if(unlikely(rand_value >= len - 1)) rand_value = len - 2;
-              *(u16 *)(out_buf + rand_value) = SWAP16(
-                  interesting_16[rand_below(afl, sizeof(interesting_16) >> 1)]);
-                  //num_mutated_bytes+=2;
-
-            }
-
-            break;
-
-          case 3:
-
-            /* Set dword to interesting value, randomly choosing endian. */
-
-            rand_value = frag_begin_idx + rand_below(afl, temp_len);
-            if(unlikely(rand_value >= len - 3)) rand_value = len - 4;
-
-            if (rand_below(afl, 2)) {
-              *(u32 *)(out_buf + rand_value) =
-                  interesting_32[rand_below(afl, sizeof(interesting_32) >> 2)];
-            } else {
-              *(u32 *)(out_buf + rand_value) = SWAP32(
-                  interesting_32[rand_below(afl, sizeof(interesting_32) >> 2)]);
-            }
-
-            break;
-
-          case 4:
-
-            /* Randomly subtract from byte. */
-            rand_value = frag_begin_idx + rand_below(afl, temp_len);
-            out_buf[rand_value] -= 1 + rand_below(afl, ARITH_MAX);
-            break;
-
-          case 5:
-
-            /* Randomly add to byte. */
-            rand_value = frag_begin_idx + rand_below(afl, temp_len);
-            out_buf[rand_value] += 1 + rand_below(afl, ARITH_MAX);
-            break;
-
-          case 6:
-
-            /* Randomly subtract from word, random endian. */
-            rand_value = frag_begin_idx + rand_below(afl, temp_len);
-            if(unlikely(rand_value >= len - 1)) rand_value = len - 2;
-            if (rand_below(afl, 2)) {
-
-              *(u16 *)(out_buf + rand_value) -= 1 + rand_below(afl, ARITH_MAX);
-              //num_mutated_bytes+=2;
-
-            } else {
-
-              u16 num = 1 + rand_below(afl, ARITH_MAX);
-              *(u16 *)(out_buf + rand_value) =
-                  SWAP16(SWAP16(*(u16 *)(out_buf + rand_value)) - num);
-                  //num_mutated_bytes+=2;
-
-            }
-
-            break;
-
-          case 7:
-
-            /* Randomly add to word, random endian. */
-            
-            rand_value = frag_begin_idx + rand_below(afl, temp_len);
-            if(unlikely(rand_value >= len - 1)) rand_value = len - 2;
-            if (rand_below(afl, 2)) {
-
-              *(u16 *)(out_buf + rand_value) += 1 + rand_below(afl, ARITH_MAX);
-              //num_mutated_bytes+=2;
-
-            } else {
-
-              u16 num = 1 + rand_below(afl, ARITH_MAX);
-
-              *(u16 *)(out_buf + rand_value) =
-                  SWAP16(SWAP16(*(u16 *)(out_buf + rand_value)) + num);
-                  //num_mutated_bytes+=2;
-
-            }
-
-            break;
-
-          case 8:
-
-            /* Randomly subtract from dword, random endian. */
-
-            rand_value = frag_begin_idx + rand_below(afl, temp_len);
-            if(unlikely(rand_value >= len - 3)) rand_value = len - 4;
-            
-            if (rand_below(afl, 2)) {
-
-              *(u32 *)(out_buf + rand_value) -= 1 + rand_below(afl, ARITH_MAX);
-              //num_mutated_bytes+=4;
-
-            } else {
-
-              u32 num = 1 + rand_below(afl, ARITH_MAX);
-
-              *(u32 *)(out_buf + rand_value) =
-                  SWAP32(SWAP32(*(u32 *)(out_buf + rand_value)) - num);
-                  //num_mutated_bytes+=4;
-
-            }
-
-            break;
-
-          case 9:
-
-            /* Randomly add to dword, random endian. */
-
-            rand_value = frag_begin_idx + rand_below(afl, temp_len);
-            if(unlikely(rand_value >= len - 3)) rand_value = len - 4;
-
-            if (rand_below(afl, 2)) {
-
-              *(u32 *)(out_buf + rand_value) += 1 + rand_below(afl, ARITH_MAX);
-              //num_mutated_bytes+=4;
-
-            } else {
-
-              u32 num = 1 + rand_below(afl, ARITH_MAX);
-
-              *(u32 *)(out_buf + rand_value) =
-                  SWAP32(SWAP32(*(u32 *)(out_buf + rand_value)) + num);
-                  //num_mutated_bytes+=4;
-
-            }
-
-            break;
-
-          case 10:
-
-            /* Just set a random byte to a random value. Because,
-              why not. We use XOR with 1-255 to eliminate the
-              possibility of a no-op. */
-
-            rand_value = frag_begin_idx + rand_below(afl, temp_len);
-            out_buf[rand_value] ^= 1 + rand_below(afl, 255);
-            break;
-        }
-      }
-    } // end of for (idx1 = 0; idx1 < use_stacking1; idx1++)
-
-    common_fuzz_stuff(afl, out_buf, len, cur_tc->argv_idx);
-
-    /* out_buf might have been mangled a bit, so let's restore it to its
-       original size and shape. */
-
-    for (idx1 = 0; idx1 < use_stacking1; idx1++) {
-
-      frag_begin_idx = afl->mutated_frag_idx[idx1];
-      temp_len = frag_len;
-      
-      if (unlikely(frag_begin_idx + frag_len > len)) {
-        temp_len = len - frag_begin_idx;
-        if (unlikely(temp_len < 4)) continue;
-      }
-
-      memcpy(out_buf + frag_begin_idx, orig_in + frag_begin_idx, temp_len);
-    }
-
-    if (afl->queued_paths != havoc_queued) {
-
-      if (perf_score <= afl->havoc_max_mult * 100) {
-
-        afl->stage_max *= 2;
-        perf_score *= 2;
-
-      }
-
-      havoc_queued = afl->queued_paths;
-
-    }
-  }
-
-  new_hit_cnt = afl->queued_paths + afl->unique_crashes - orig_hit_cnt;
-
-  afl->stage_finds[STAGE_HAVOC_FUNC] += new_hit_cnt;
-  afl->stage_cycles[STAGE_HAVOC_FUNC] += afl->stage_max;
-  return ;
 }

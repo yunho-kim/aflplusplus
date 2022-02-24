@@ -1012,12 +1012,10 @@ int main(int argc, char **argv_orig, char **envp) {
 
       case 'R':
 
-        if (!stricmp(optarg, "close")) {
-          afl->rand_close_tc = true;
-        } else if (!stricmp(optarg, "funcrel")) {
-          afl->rand_funcrel = true;
-        } else if (!stricmp(optarg, "argv")) {
+        if (!stricmp(optarg, "rnd")) {
           afl->random_argv = true;
+        } else if (!stricmp(optarg, "all")) {
+          afl->select_all_argv = true;
         } else if (!stricmp(optarg, "keep")) {
           afl->keep_mut_argv = true;
         } else if (!stricmp(optarg, "multi")) {
@@ -1469,7 +1467,28 @@ int main(int argc, char **argv_orig, char **envp) {
     printf("DEBUG: rand %06d is %u\n", counter, rand_below(afl, 65536));
   #endif
 
-  init_func(afl);
+  if (afl->funcrel_file_mut) {
+    init_func(afl);
+  } else {
+    char fn[PATH_MAX];
+
+    FILE * f;
+  
+    snprintf(fn, PATH_MAX, "%s/FRIEND_func_cmp_id_info", afl->func_infos_dir);
+    f = fopen(fn, "r");
+    if (f == NULL) PFATAL("Can't open func txt file");
+
+    int res;
+    res = fscanf(f, "%u,%u\n", &afl->num_func, &afl->num_cmp);
+    if (res == EOF) PFATAL("Can't read func txt file");
+
+    fclose(f);
+
+    snprintf(fn, PATH_MAX, "%s/FRIEND_debug.txt", afl->out_dir);
+    s32 fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    afl->debug_file = fdopen(fd, "w");
+  }
+
   init_argv(afl);
 
   setup_custom_mutators(afl);
@@ -1966,7 +1985,7 @@ int main(int argc, char **argv_orig, char **envp) {
   memset(afl->virgin_tmout, 255, map_size);
   memset(afl->virgin_crash, 255, map_size);
 
-  memset(afl->shm.filen_map, 0, 1000);
+  afl->branch_cov = calloc(afl->num_cmp, sizeof(u8));
 
   perform_dry_run(afl);
 
@@ -2040,7 +2059,9 @@ int main(int argc, char **argv_orig, char **envp) {
   // real start time, we reset, so this works correctly with -V
   afl->start_time = get_cur_time();
 
-  init_trim_and_func(afl);
+  if (afl->funcrel_file_mut) {
+    init_trim_and_func(afl);
+  }
 
   u32 runs_in_current_cycle = (u32)-1;
   u32 prev_queued_paths = 0;
@@ -2282,57 +2303,9 @@ int main(int argc, char **argv_orig, char **envp) {
 
       if (!afl->keep_mut_argv && ((get_cur_time() - afl->start_time) > ARGV_MUT_TIMEOUT)) {
         afl->argv_timed_out = 1;
-        argv_select(afl);
+        select_argv(afl);
       }
       
-    }
-
-    //havoc_func
-    if (afl->funcrel_file_mut && likely(afl->cmp_queue) && likely(!afl->stop_soon)) {
-      if (unlikely(afl->cmp_queue_cur == NULL)) {
-        afl->cmp_queue_cur = afl->cmp_queue;
-      }
-
-      while (afl->cmp_queue_cur && (afl->cmp_queue_cur->num_value_changing_tcs == 0)) {
-        afl->cmp_queue_cur = afl->cmp_queue_cur->next;
-      }
-
-      if (likely(afl->cmp_queue_cur)) {
-        struct cmp_queue_entry * cq_cur = afl->cmp_queue_cur; 
-        //ITERATE through tcs
-        u32 num_tcs = cq_cur->num_value_changing_tcs;
-
-        if (unlikely(!cq_cur->num_fuzzed)) {
-          cq_cur->mutating_tc_idx = rand_below(afl, num_tcs);
-        }
-
-        u32 tc_idx = cq_cur->value_changing_tcs[cq_cur->mutating_tc_idx++];
-        if (unlikely(cq_cur->mutating_tc_idx >= num_tcs))
-          cq_cur->mutating_tc_idx = 0;
-
-        u32 tmp = afl->current_entry;
-
-        afl->current_entry = tc_idx;
-        afl->queue_cur = afl->queue_buf[tc_idx];
-        
-        fuzz_one_func(afl);
-
-        cq_cur->num_fuzzed++;
-
-        while (afl->cmp_queue_cur->next != NULL) {
-          if (afl->cmp_queue_cur->next->condition == 3) {
-            //remove target
-            afl->cmp_queue_cur->next = afl->cmp_queue_cur->next->next;
-            afl->cmp_queue_size--;
-          } else {
-            break;
-          }
-        }
-        afl->cmp_queue_cur = afl->cmp_queue_cur->next;
-
-        afl->current_entry = tmp;
-        afl->queue_cur = afl->queue_buf[tmp];
-      }
     }
 
     u32 idx = 0;
@@ -2436,7 +2409,9 @@ stop_fuzzing:
 
   fclose(afl->fsrv.plot_file);
   write_friend_stats(afl);
-  destroy_func(afl);
+  if (afl->funcrel_file_mut) {
+    destroy_func(afl);
+  }
   destroy_queue(afl);
   destroy_argv(afl);
   destroy_extras(afl);
