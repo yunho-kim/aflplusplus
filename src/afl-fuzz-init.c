@@ -1834,6 +1834,10 @@ static void handle_existing_out_dir(afl_state_t *afl) {
   if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
   ck_free(fn);
 
+  fn = alloc_printf("%s/FRIEND/argvs_ratio", afl->out_dir);
+  if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
+  ck_free(fn);
+
   fn = alloc_printf("%s/FRIEND/num_func_calls", afl->out_dir);
   if (unlink(fn) && errno != ENOENT) { goto dir_cleanup_failed; }
   ck_free(fn);

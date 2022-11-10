@@ -304,17 +304,13 @@ void update_only_branch_cov(afl_state_t * afl, u32 tc_idx, u8 * buf, u32 len) {
       afl->branch_cov[cmp_id] |= entries[cmp_id].condition;
       postcondition = afl->branch_cov[cmp_id];
 
-      if ((precondition == 0) && (postcondition != 3)) {
-        //new target
-        afl->covered_branch++;
-      } else if (postcondition == 3) {
-        if (precondition == 0) {
-          afl->covered_branch += 2;
-        } else {
-          afl->covered_branch ++;
-        }
-      }
+      if (precondition == postcondition) continue;
 
+      if (precondition == 0 && postcondition == 3) {
+        afl->covered_branch += 2;
+      } else {
+        afl->covered_branch ++;
+      }
       q->incr_branch_cov = 1;
     }
   }

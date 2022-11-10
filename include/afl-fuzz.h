@@ -160,6 +160,8 @@ struct queue_entry {
   u32 children_size;
   u32 mining_frag_len;
   u32 num_mining_frag;
+  u32 incr_branch_cov;
+
 
   u32 len;                              /* Input length                     */
   u32 id;                               /* entry number in queue_buf        */
@@ -168,7 +170,6 @@ struct queue_entry {
 
   u8 colorized,                         /* Do not run redqueen stage again  */
       cal_failed;                       /* Calibration failed?              */
-  u8 incr_branch_cov;
   bool trim_done,                       /* Trimmed?                         */
       was_fuzzed,                       /* historical, but needed for MOpt  */
       passed_det,                       /* Deterministic stages passed?     */

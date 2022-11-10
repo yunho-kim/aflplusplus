@@ -1963,9 +1963,11 @@ havoc_stage:
 
   }
 
-  if (afl->stage_max < HAVOC_MIN) { afl->stage_max = HAVOC_MIN; }
+  if (!afl->argv_timed_out) {
+    afl->stage_max = afl->stage_max / 1000;
+  }
 
-  afl->stage_max /= 4;
+  if (afl->stage_max < HAVOC_MIN) { afl->stage_max = HAVOC_MIN; }
 
   temp_len = len;
 
@@ -2671,7 +2673,7 @@ havoc_stage:
     /* If we're finding new stuff, let's run for a bit longer, limits
        permitting. */
 
-    if (afl->queued_paths != havoc_queued) {
+    if (afl->argv_timed_out && (afl->queued_paths != havoc_queued)) {
 
       if (perf_score <= afl->havoc_max_mult * 100) {
 

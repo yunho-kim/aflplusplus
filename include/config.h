@@ -156,7 +156,7 @@
 
 /* Absolute minimum number of havoc cycles (after all adjustments): */
 
-#define HAVOC_MIN 12U
+#define HAVOC_MIN 4U
 
 /* Power Schedule Divisor */
 #define POWER_BETA 1U
@@ -528,7 +528,7 @@
 
 #define TMP_WORD_SIZE 32
 
-#define ARGV_MUT_TIMEOUT 3 * 1000
+#define ARGV_MUT_TIMEOUT 3600 * 1000
 
 #endif                                                  /* ! _HAVE_CONFIG_H */
 

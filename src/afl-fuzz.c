@@ -2278,6 +2278,12 @@ int main(int argc, char **argv_orig, char **envp) {
 
       }
 
+      
+      //argv fuzzing?
+      if (afl->argv_mut && !afl->argv_timed_out) {
+        fuzz_one_argv(afl);
+      }
+
       skipped_fuzz = fuzz_one(afl);
       
       if (unlikely(!afl->stop_soon && exit_1)) { afl->stop_soon = 2; }
@@ -2297,26 +2303,12 @@ int main(int argc, char **argv_orig, char **envp) {
       }
     } while (skipped_fuzz && afl->queue_cur && !afl->stop_soon);
 
-    //argv fuzzing?
     if (afl->argv_mut && !afl->argv_timed_out) {
-      fuzz_one_argv(afl);
-
-      if (!afl->keep_mut_argv && ((get_cur_time() - afl->start_time) > ARGV_MUT_TIMEOUT)) {
-        afl->argv_timed_out = 1;
-        select_argv(afl);
-      }
-      
-    }
-
-    u32 idx = 0;
-    while (afl->funcrel_file_mut &&
-      ((afl->mining_done_idx + 1) < afl->queued_paths) && (idx < MINING_LIMIT) && !afl->stop_soon) {
-      if (afl->queue_buf[afl->mining_done_idx]->is_mined < MAX_MINING_TRY)
-        mining_wrapper(afl, afl->mining_done_idx);
-      afl->mining_done_idx++;
-      idx++;
-      if (afl->stop_soon) {break;}
-    }
+       if (!afl->keep_mut_argv && ((get_cur_time() - afl->start_time) > ARGV_MUT_TIMEOUT)) {
+         afl->argv_timed_out = 1;
+         select_argv(afl);
+       }        
+     }
 
     if (likely(!afl->stop_soon && afl->sync_id)) {
 

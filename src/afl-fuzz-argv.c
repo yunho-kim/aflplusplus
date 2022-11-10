@@ -697,15 +697,46 @@ void select_argv(afl_state_t * afl) {
       selected_argvs[num_selected++] = idx1;
     }
   } else {
+    float * ratios = calloc(afl->num_argvs, sizeof(float));
+
+    snprintf(fn, PATH_MAX, "%s/FRIEND/argvs_ratio", afl->out_dir);
+    fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) PFATAL("Unable to create '%s'", fn);
+    f = fdopen(fd, "w");
+    
+    float ratio_sum = 0.0;
+    
     for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+      if (num_inputs[idx1] == 0) {
+        continue;
+      }
+
+      u32 num_br_increased = 0;
       for (idx2 = 0; idx2 < num_inputs[idx1]; idx2++) {
         u32 tc_idx = argv_inputs[idx1][idx2];
-        if (afl->queue_buf[tc_idx]->incr_branch_cov) {
-          selected_argvs[num_selected++] = idx1;
-          break;
-        }
+        num_br_increased += afl->queue_buf[tc_idx]->incr_branch_cov;
+      }
+
+
+      float br_increased_ratio = ((float) num_br_increased) / ((float) num_inputs[idx1]);
+      ratios[idx1] = br_increased_ratio;
+      fprintf(f, "%u : %u/%u=%f\n", idx1, num_br_increased, num_inputs[idx1], br_increased_ratio);
+      ratio_sum += br_increased_ratio;
+    }
+
+    float threshold_ratio = ratio_sum / ((float) afl->num_argvs);
+
+    fprintf(f, "threshold : %f\n", threshold_ratio);
+
+    for (idx1 = 0; idx1 < afl->num_argvs; idx1++) {
+      if (ratios[idx1] >= threshold_ratio) {
+        selected_argvs[num_selected++] = idx1;
       }
     }
+
+    fclose(f);
+
+    free(ratios);
 
     if (unlikely(afl->random_argv)) {
       u32 num_random_selected = 0;
@@ -734,7 +765,7 @@ void select_argv(afl_state_t * afl) {
   f = fdopen(fd, "w");
 
   for (idx1 = 0; idx1 < num_selected; idx1++) {
-    fprintf(f, "%u,", selected_argvs[idx1]);
+    fprintf(f, "%u\n", selected_argvs[idx1]);
   }
 
   fclose(f);
